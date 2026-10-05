@@ -26,9 +26,16 @@ get wrong (multi-track discs, link address, regex blowups, linker quirks).
 ## Read this first: how complete this skill is
 
 **Requirements: Docker and Python 3, on any OS.** Everything else (Ghidra, the Hitachi tools) runs
-in containers.
+in containers. Without Docker: `DC_LOCAL=1` runs the Hitachi tools through `wibo` on your PATH
+(Linux x86_64) and Ghidra from `GHIDRA_INSTALL_DIR` (Ghidra 12.x + JDK 21).
 
-**Evidence base: one game (Crazy Taxi, Europe).** 2,389 functions, 430 named (385 from SDK
+**The SDK folder can have any layout** (the reference decomp's `bin/ shc/ shinobi/`, or the
+Kochise repository's `.../R10.1_000518/Utl/Dev/Hitachi` + `Lib`): scripts find `asmsh.exe`,
+`lbr.exe`, `lnk.exe` and the `.lib` files by name. Point `SDK_PATH` at the SDK's top folder.
+
+**Evidence base: one game (Crazy Taxi, Europe), tested against the suggested SDK source**
+(`Kochise/dreamcast-docs`, SDK R10.1, as cloned: byte-identical build, 385 SDK names) **and a
+second SDK copy laid out like the reference decomp's (same results).** Earlier wording: 2,389 functions, 430 named (385 from SDK
 signatures, 30 from a reference decomp), 2,390 files, byte-identical rebuild with the SDK's own
 assembler and linker. The C side of the loop (step 7) is described, not yet exercised here.
 Everything it uses is in this skill's own folder.
@@ -64,17 +71,19 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
      -scriptPath /scripts -preScript DcPre.java -postScript DcReport.java /work/report.txt
    ```
    Import at the base `linkbase.py` picked: at the wrong one Ghidra finds a fraction of the code.
+   Never copy the `.java` scripts into `<work>`: Ghidra then finds two copies and fails to load them.
 4. **Names**:
-   - SDK-wide: for each SDK `.lib`, `lbr.exe` lists its modules; `lnk.exe` links them all into one
-     ELF (`elf`, `print <x>.map`, `output <x>.elf`, `input <lib>(<module>)`...); the map's `ENT`
-     symbols are the names. Import the ELFs, `ExportSigs.java` in folder mode, concatenate.
+   - SDK-wide: `scripts/sdk_sigs.sh <SDK folder> <out>` -> `<out>/katana-sdk.sigs`. Any SDK layout:
+     the Hitachi tools and the `.lib` files are found by name. Build once per SDK, keep it local.
      Details and gotchas: `references/sdk-signatures.md`.
    - Reference decomp: its link script's `define _NAME(ADDR)` lines -> `ExportSigs.java`.
    - Apply both with `ApplySigs.java <sigs> <out> apply` (unique matches only), then
      `DcReport.java` for the final list.
-5. **The repo**: a new directory, by default a **sibling of the directory you work from**, named
-   from the IP.BIN title: lowercase, spaces to hyphens, plus `-decomp` (`CRAZY TAXI` ->
-   `../crazy-taxi-decomp`). Ask before using another location.
+5. **The repo: ask the user where to put it.** Suggest a default (a sibling of the current folder,
+   named from the IP.BIN title: lowercase, spaces to hyphens, plus `-decomp`, e.g.
+   `CRAZY TAXI` -> `<parent>/crazy-taxi-decomp`), always written as an **absolute path**. Create it,
+   then confirm the resolved absolute path back to the user in one line. From here on, every path
+   you show (commands, summaries, the final report) is absolute: never `cd <name>` alone.
    **Split**: `scripts/split_asm.py <1ST_READ.BIN> <base> <report> <repo>`: one `.src` per function,
    data words, exported labels, `objects.txt` in link order.
 6. **Build**: copy `template/` into the repo, write the base to `BASE`, put the original
@@ -101,7 +110,7 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
 9. **GitHub (optional)**: print, do not run, the commands for the user:
 
    ```
-   cd <repo> && git init && git add -A && git commit -m "Kick off: byte-matching split, <n> named"
+   cd "<absolute repo path>" && git init && git add -A && git commit -m "Kick off: byte-matching split, <n> named"
    gh repo create <owner>/<repo dir name> --public --source . --push
    ```
 
@@ -121,6 +130,7 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
 | `scripts/ghidra/*.java` | seed + report (`DcPre`, `DcReport`), signatures (`ExportSigs`, `ApplySigs`), queries (`Query`) |
 | `references/sdk-signatures.md` | naming library code from a reference decomp or the SDK's libraries |
 | `references/memory-map.md` | Dreamcast addresses worth labelling on sight |
+| `scripts/sdk_sigs.sh` | signature table for every exported function in an SDK's libraries |
 | `scripts/text_map.py` | strings with pointers, file text density, font path, image candidates |
 | `scripts/split_asm.py` | split an executable into per-function asmsh sources + link order |
 | `template/build.sh` | assemble, link (`start P(<base>)`), `elf2bin`, compare with the original |
