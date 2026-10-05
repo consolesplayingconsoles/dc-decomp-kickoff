@@ -35,6 +35,9 @@ Hitachi tools through `wibo` on PATH and Ghidra from `GHIDRA_INSTALL_DIR` (Ghidr
 Kochise repository's `.../R10.1_000518/Utl/Dev/Hitachi` + `Lib`): scripts find `asmsh.exe`,
 `lbr.exe`, `lnk.exe` and the `.lib` files by name. Point `SDK_PATH` at the SDK's top folder.
 
+**Long steps print progress** (Ghidra analysis ~3 min, first build a few minutes, textures a
+minute or two): tell the user what is running and roughly how long before starting each.
+
 **Evidence base: one game (Crazy Taxi, Europe), tested against the suggested SDK source**
 (`Kochise/dreamcast-docs`, SDK R10.1, as cloned: byte-identical build, 385 SDK names) **and a
 second SDK copy laid out like the reference decomp's (same results).** Crazy Taxi: 2,389 functions, 430 named (385 from SDK
@@ -90,10 +93,11 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
    data words, exported labels, `objects.txt` in link order.
 6. **Make the repo publishable and build it.** A pushed repo holds no game bytes, so it must be
    able to regenerate them from each user's own disc. Into the repo:
-   - copy `template/` (`build.sh`, `setup.sh`, `README.md`, `AGENTS.md`, `.gitignore`);
-   - copy `scripts/gdi_read.py`, `scripts/split_asm.py`, `scripts/text_map.py` into `tools/`;
+   - copy `template/` (`build.sh`, `setup.sh`, `disc.sh`, `README.md`, `AGENTS.md`, `.gitignore`);
+   - copy `scripts/gdi_read.py`, `split_asm.py`, `text_map.py`, `file_tables.py`, `textures.py` and
+     `disc_patch.py` into `tools/`;
    - write the base to `BASE` (hex, no `0x`); `split_asm.py` already wrote `functions.txt`;
-   - fill the placeholders: in `setup.sh` `@BOOT@` (boot file from IP.BIN) and `@SHA1@` (of that
+   - fill the placeholders: in `setup.sh` and `disc.sh` `@BOOT@` (boot file from IP.BIN) and `@SHA1@` (of that
      file); in `README.md` `@TITLE@`, `@RELEASE@` (IP.BIN: title, product number, version, date,
      region), `@BOOT@`, `@SIZE@`, `@SHA1@`, `@BASE@`, `@SDK@` (main banners), `@FUNCS@`, `@NAMED@`,
      `@NAMED_SDK@`, `@NAMED_REF@`, `@LICENSE@`. No `@...@` may remain (`grep -r @[A-Z_]*@`).
@@ -114,6 +118,15 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
    - `font.tsv`: BIOS ROM-font callers and font-looking files.
    - `image_candidates.tsv`: files that probably hold text drawn as images, with the reason.
      **Candidates only; the user decides.** Today's signal: language variants (`SPRMENG`/`SPRMJAP`).
+     A single-language game gets an explicit "no automatic signal" line, never an empty file.
+   - `file_tables.tsv` (`scripts/file_tables.py`): for each disc file made of repeating records, the
+     table in the executable that locates them (bytes or sectors, with or without sizes). **This is
+     what lets a container grow:** repack its records, rewrite that table. Boku Doraemon: STORY.PAC,
+     76 scenes, (sector, length) at 0x8C04B704; rewriting it took the Catalan from ~40% to 99% and
+     the game played through. Tested blind on 6 other games: no false hits, and no hits (their data
+     uses other layouts), so a missing row does not prove there is no table.
+   - `textures/index.html` (`scripts/textures.py`, not in `quick`): every standard texture decoded
+     to PNG on one page of thumbnails with checkboxes, for a person to mark the ones with text.
    - Tiers: `quick` = executable only (seconds); `standard` = plus a 2 MiB sample of every disc file
      (seconds to a minute); `deep` = whole files (minutes on a full disc).
    - Density and the Shift-JIS count are heuristics: binary data scores as text sometimes.
@@ -123,8 +136,12 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
      misses text and flags noise. If a user wants it, warn them of that cost first, and still
      present the results as candidates. A contact sheet of all textures for a human to tick is
      often faster and is the only reliable method.
-8. **Hand over**: `template/AGENTS.md` is the per-function loop (asm -> instructions -> C -> match).
-9. **GitHub (optional)**: print, do not run, the commands for the user:
+8. **Game build**: `bash disc.sh <original .gdi>` writes `build/disc/`: a copy of the user's disc
+   with the rebuilt executable and every file under `disc/` (same path as on the disc) written in
+   place, error correction recomputed, read back to verify. Replacements may be smaller (padded),
+   not bigger. Tested: rebuilds the over-budget Boku disc that was played, byte for byte.
+9. **Hand over**: `template/AGENTS.md` is the per-function loop (asm -> instructions -> C -> match).
+10. **GitHub (optional)**: print, do not run, the commands for the user:
 
    ```
    cd "<absolute repo path>" && git init && git add -A && git commit -m "Kick off: byte-matching split, <n> named"
@@ -150,6 +167,10 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
 | `references/memory-map.md` | Dreamcast addresses worth labelling on sight |
 | `scripts/sdk_sigs.sh` | signature table for every exported function in an SDK's libraries |
 | `scripts/text_map.py` | strings with pointers, file text density, font path, image candidates |
+| `scripts/file_tables.py` | tables in the executable that locate records inside disc files |
+| `scripts/textures.py` | every standard texture to PNG + a contact sheet (`index.html`) |
+| `scripts/disc_patch.py` | copy a GDI with files replaced in place, error correction recomputed |
+| `template/disc.sh` | in the repo: build a playable disc image of the user's version |
 | `scripts/split_asm.py` | split an executable into per-function asmsh sources + link order |
 | `template/build.sh` | assemble, link (`start P(<base>)`), `elf2bin`, compare with the original |
 | `template/setup.sh` | in the repo: extract + verify the user's executable, regenerate `asm/` and `text-map/` |

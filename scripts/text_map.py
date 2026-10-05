@@ -159,6 +159,9 @@ def main():
             f.write("path\treason\n")
             for p in sorted(cands):
                 f.write("%s\t%s\n" % (p, cands[p]))
+            if not cands:
+                f.write("-\tno automatic signal for this game (no per-language files): this does NOT mean no "
+                        "text in images. Check textures/index.html by eye.\n")
     print("%d strings (%d Shift-JIS, %d with pointers), %d files" % (
         len(rows), sum(1 for r in rows if r[2] == "sjis"), sum(1 for r in rows if r[5]), nfiles))
 

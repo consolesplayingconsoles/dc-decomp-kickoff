@@ -29,8 +29,10 @@ mkdir -p build/obj
 STEPS='
   set -e
   tool() { find "$T" -maxdepth 1 -iname "$1.exe" -print -quit; }
-  n=0
+  n=0; i=0; total=$(wc -l < objects.txt | tr -d " ")
+  echo "Assembling $total files (first build: a few minutes; later builds: only changed files)"
   while read -r f; do
+    i=$((i+1)); [ $((i % 200)) -eq 0 ] && echo "  checked $i/$total, assembled $n"
     o="build/obj/${f%.src}.obj"
     if [ ! -f "$o" ] || [ "asm/$f" -nt "$o" ]; then
       wibo "$(tool asmsh)" "asm\\$f" -object="build\\obj\\${f%.src}.obj" -cpu=sh4 -endian=little > build/asm.log 2>&1 \
@@ -38,7 +40,7 @@ STEPS='
       n=$((n+1))
     fi
   done < objects.txt
-  echo "assembled $n files"
+  echo "assembled $n files; linking"
   wibo "$(tool lnk)" -subcommand=build\\link.sub > build/link.log 2>&1 || { tr -d "\r" < build/link.log | grep -v "^: input" | tail -20; exit 1; }
   wibo "$(tool elf2bin)" -s "$B" build\\out.elf > build/elf2bin.log 2>&1 || { cat build/elf2bin.log; exit 1; }
 '
