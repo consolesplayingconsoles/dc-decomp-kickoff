@@ -1,0 +1,11 @@
+# Game data and anything derived from the SDK stay local
+1ST_READ.BIN
+*.gdi
+*.bin
+*.raw
+*.chd
+build/
+*.sigs
+objects.txt
+asm/
+text-map/
