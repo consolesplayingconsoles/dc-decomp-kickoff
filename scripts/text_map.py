@@ -128,6 +128,8 @@ def main():
 
     with open(os.path.join(out, "font.tsv"), "w") as f:
         f.write("kind\twhere\tfunction\n")
+        if not any(words.get(v) for v in ROMFONT):
+            f.write("-\tno BIOS ROM-font use found: the game draws text with its own font or as images\t-\n")
         for v in ROMFONT:
             for p in words.get(v, []):
                 f.write("romfont-vector\t%06x\t%s\n" % (p, containing(funcs, starts, base + p)))

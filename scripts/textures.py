@@ -11,6 +11,7 @@ This is the reliable way to find baked text: no OCR, a person looks. Undecodable
 Decoded: ARGB1555 / RGB565 / ARGB4444 in twiddled square (+mipmaps), VQ (+mipmaps), rectangle and
 twiddled rectangle. Not decoded: palettised (needs a separate palette file), and anything else.
 """
+import array
 import html
 import os
 import struct
@@ -49,6 +50,27 @@ def _px(v, pf):
     raise ValueError("pixel format %d" % pf)
 
 
+_LUT = {}
+_ORDER = {}
+
+
+def _lut(pf):
+    """All 65536 16-bit values of a pixel format -> 4 RGBA bytes, built once."""
+    if pf not in _LUT:
+        _LUT[pf] = [bytes(_px(v, pf)) for v in range(65536)]
+    return _LUT[pf]
+
+
+def _order(w, h, rect):
+    """Raster order -> twiddled index, built once per size."""
+    key = (w, h, rect)
+    if key not in _ORDER:
+        m = min(w, h)
+        _ORDER[key] = [((x // m) + (y // m) if rect else 0) * m * m + (TW[x % m] << 1 | TW[y % m])
+                       for y in range(h) for x in range(w)]
+    return _ORDER[key]
+
+
 def _mip16(w):
     """Bytes before the full-size level of a mipmapped 16-bit twiddled texture."""
     off, s = 6, 2                                 # the 1x1 level is padded to 6 bytes
@@ -64,41 +86,43 @@ def decode(d, at):
     w, h = struct.unpack_from("<HH", d, at + 12)
     if not (8 <= w <= 1024 and 8 <= h <= 1024):
         raise ValueError("size %dx%d" % (w, h))
+    if pf not in (0, 1, 2):
+        raise ValueError("pixel format %d" % pf)
+    lut = _lut(pf)
     p = at + 16
-    out = bytearray(w * h * 4)
     if dt in (1, 2, 0x0D):                        # twiddled (square, mipmapped, rectangle)
         if dt == 2:
             p += _mip16(w)
-        m = min(w, h)
-        for y in range(h):
-            for x in range(w):
-                # rectangles are square twiddled blocks side by side
-                blk = (x // m) + (y // m) if dt == 0x0D else 0
-                i = blk * m * m + (TW[x % m] << 1 | TW[y % m])
-                v = struct.unpack_from("<H", d, p + 2 * i)[0]
-                out[4 * (y * w + x):4 * (y * w + x) + 4] = bytes(_px(v, pf))
-    elif dt == 9:                                 # rectangle, linear
-        for i in range(w * h):
-            out[4 * i:4 * i + 4] = bytes(_px(struct.unpack_from("<H", d, p + 2 * i)[0], pf))
-    elif dt in (3, 4):                            # VQ: 256 codes of 2x2 pixels, then twiddled indices
-        book = [[_px(struct.unpack_from("<H", d, p + 8 * c + 2 * k)[0], pf) for k in range(4)] for c in range(256)]
+        v = array.array("H", d[p:p + 2 * w * h])
+        if len(v) < w * h:
+            raise ValueError("truncated")
+        return w, h, b"".join([lut[v[i]] for i in _order(w, h, dt == 0x0D)])
+    if dt == 9:                                   # rectangle, linear
+        v = array.array("H", d[p:p + 2 * w * h])
+        if len(v) < w * h:
+            raise ValueError("truncated")
+        return w, h, b"".join([lut[x] for x in v])
+    if dt in (3, 4):                              # VQ: 256 codes of 2x2 pixels, then twiddled indices
+        book = array.array("H", d[p:p + 2048])
         p += 2048
         if dt == 4:
-            off, s = 1, 2
-            while s < w:
-                off += (s // 2) * (s // 2)
-                s *= 2
+            off, s2 = 1, 2
+            while s2 < w:
+                off += (s2 // 2) * (s2 // 2)
+                s2 *= 2
             p += off
-        hw = w // 2
-        for y in range(h // 2):
+        hw, hh = w // 2, h // 2
+        idx = d[p:p + hw * hh]
+        rows = []
+        for y in range(hh):
+            top, bot = [], []
             for x in range(hw):
-                code = book[d[p + (TW[x] << 1 | TW[y])]]
-                for k, (dx, dy) in enumerate(((0, 0), (0, 1), (1, 0), (1, 1))):
-                    j = 4 * ((2 * y + dy) * w + 2 * x + dx)
-                    out[j:j + 4] = bytes(code[k])
-    else:
-        raise ValueError("data type 0x%02x" % dt)
-    return w, h, bytes(out)
+                c = idx[TW[x] << 1 | TW[y]] * 4
+                top.append(lut[book[c]] + lut[book[c + 2]])
+                bot.append(lut[book[c + 1]] + lut[book[c + 3]])
+            rows.append(b"".join(top) + b"".join(bot))
+        return w, h, b"".join(rows)
+    raise ValueError("data type 0x%02x" % dt)
 
 
 def png(path, w, h, rgba):
@@ -158,6 +182,9 @@ def main():
         f.write("<script>document.addEventListener('change',e=>{e.target.parentNode.classList.toggle('on',"
                 "e.target.checked);document.getElementById('out').value=[...document.querySelectorAll("
                 "'input:checked')].map(i=>i.value).join('\\n')})</script>")
+    if n == 0:
+        print("No standard (PVR) textures on this disc: its art uses the game's own formats, so this "
+              "contact sheet cannot help here; look at text-map/image_candidates.tsv instead.")
     print("%d textures decoded from %d files, %d not decoded -> %s" % (n, len(groups), len(failed),
                                                                      os.path.join(out, "index.html")))
 
