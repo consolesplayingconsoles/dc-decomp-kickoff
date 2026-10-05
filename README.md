@@ -32,7 +32,8 @@ It came out of real work on Consoles Playing Consoles. See what Pluto has helped
 - 📸 **Instagram:** [@consolesplayingconsoles](https://www.instagram.com/consolesplayingconsoles/)
 - 🔗 **Everything else:** [beacons.ai/consolesplayingconsoles](https://beacons.ai/consolesplayingconsoles)
 
-The Tokyo Bus Guide decomp by lhsazevedo is the main reason this works: its build setup runs the
+The [Tokyo Bus Guide decomp](https://github.com/lhsazevedo/tbg-decomp) by
+[@lhsazevedo](https://github.com/lhsazevedo), what a champion, is the main reason this works: its build setup runs the
 original Hitachi toolchain, its SDK name table was the first map, and it proved a byte-matching
 Dreamcast decomp is possible.
 

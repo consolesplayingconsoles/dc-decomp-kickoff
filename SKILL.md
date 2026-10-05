@@ -57,7 +57,7 @@ equivalent material lawfully in their possession.
 | need | example source | used for |
 |---|---|---|
 | Katana SDK (libraries + Hitachi `asmsh`, `shc`, `lnk`, `lbr`, `elf2bin`) | `github.com/Kochise/dreamcast-docs` (`SDK/`) | SDK signatures, the matching build |
-| a reference decomp | `github.com/lhsazevedo/tbg-decomp` | extra names, the tools image (`lhsazevedo/tbg-decomp`, has `wibo`) |
+| a reference decomp | `github.com/consolesplayingconsoles/tbg-decomp` (a fork of `lhsazevedo/tbg-decomp` whose matching build works with the Kochise R10.1 SDK) | names no SDK copy has; the tools image (`lhsazevedo/tbg-decomp`, has `wibo`) |
 | object compare tool | `github.com/lhsazevedo/sh4objtest` (MIT) | step 7 |
 
 Ask before cloning each one. Never commit the SDK, the game's files, or anything derived from them
@@ -81,7 +81,11 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
    - SDK-wide: `scripts/sdk_sigs.sh <SDK folder> <out>` -> `<out>/katana-sdk.sigs`. Any SDK layout:
      the Hitachi tools and the `.lib` files are found by name. Build once per SDK, keep it local.
      Details and gotchas: `references/sdk-signatures.md`.
-   - Reference decomp: its link script's `define _NAME(ADDR)` lines -> `ExportSigs.java`.
+   - Reference decomp: `scripts/ref_sigs.sh <SDK folder> <out>` -> `<out>/tbg.sigs`. No game disc
+     needed: it clones the decomp (ask first), builds Tokyo Bus Guide's executable from it with the
+     same SDK (checked against TBG's SHA-1), and hashes the library functions its link script names
+     (176, 162 hashable). These match older library versions than the SDK copy (Crazy Taxi: 6 names
+     only this table finds, `ADXT_StartAfs` among them). A few minutes, once.
    - Apply both with `ApplySigs.java <sigs> <out> apply` (unique matches only), then
      `DcReport.java` for the final list.
 5. **The repo: ask the user where to put it.** Suggest a default (a sibling of the current folder,
@@ -165,6 +169,7 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
 | `scripts/ghidra/*.java` | seed + report (`DcPre`, `DcReport`), signatures (`ExportSigs`, `ApplySigs`), queries (`Query`) |
 | `references/sdk-signatures.md` | naming library code from a reference decomp or the SDK's libraries |
 | `references/memory-map.md` | Dreamcast addresses worth labelling on sight |
+| `scripts/ref_sigs.sh` | reference decomp names: build TBG's executable from the decomp, hash its named functions |
 | `scripts/sdk_sigs.sh` | signature table for every exported function in an SDK's libraries |
 | `scripts/text_map.py` | strings with pointers, file text density, font path, image candidates |
 | `scripts/file_tables.py` | tables in the executable that locate records inside disc files |
