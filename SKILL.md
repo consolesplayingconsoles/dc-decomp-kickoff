@@ -46,6 +46,10 @@ Kochise repository that is `SDK/EXES/INSTALL KATANA SDK/INPUT/R10.1_000518` (quo
 spaces); a sparse checkout of that folder is enough (`git clone --filter=blob:none --sparse`, then
 `git sparse-checkout set "SDK/EXES/INSTALL KATANA SDK/INPUT/R10.1_000518"`).
 
+**Run the Ghidra steps one at a time.** Each needs ~1 GB; Docker Desktop and colima often default to
+2 GB, so two at once get killed ("Killed" in the log). `sdk_sigs.sh` switches to one library per run
+when Docker has under 4 GB. **Every script fails loudly**: never continue past an empty table.
+
 **Long steps print progress** (Ghidra analysis ~3 min, first build a few minutes, textures a
 minute or two): tell the user what is running and roughly how long before starting each.
 
@@ -68,7 +72,7 @@ equivalent material lawfully in their possession.
 | need | example source | used for |
 |---|---|---|
 | Katana SDK (libraries + Hitachi `asmsh`, `shc`, `lnk`, `lbr`, `elf2bin`) | `github.com/Kochise/dreamcast-docs` (`SDK/`) | SDK signatures, the matching build |
-| a reference decomp | `github.com/consolesplayingconsoles/tbg-decomp` (a fork of `lhsazevedo/tbg-decomp` whose matching build works with the Kochise R10.1 SDK) | names no SDK copy has; the tools image (`lhsazevedo/tbg-decomp`, has `wibo`) |
+| a reference decomp | `github.com/consolesplayingconsoles/tbg-decomp` at tag `kickoff-reference-1` (a fork of `lhsazevedo/tbg-decomp` whose matching build works with the Kochise R10.1 SDK) | names no SDK copy has |
 | object compare tool | `github.com/lhsazevedo/sh4objtest` (MIT) | step 7 |
 
 Ask before cloning each one. Never commit the SDK, the game's files, or anything derived from them
@@ -111,14 +115,19 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
    data words, exported labels, `objects.txt` in link order.
 6. **Make the repo publishable and build it.** A pushed repo holds no game bytes, so it must be
    able to regenerate them from each user's own disc. Into the repo:
-   - copy `template/` (`build.sh`, `setup.sh`, `disc.sh`, `README.md`, `AGENTS.md`, `.gitignore`);
-   - copy `scripts/gdi_read.py`, `split_asm.py`, `text_map.py`, `file_tables.py`, `textures.py` and
-     `disc_patch.py` into `tools/`;
+   - copy `template/` (`build.sh`, `setup.sh`, `disc.sh`, `textures.sh`, `README.md`, `AGENTS.md`,
+     `.gitignore`);
+   - copy into `tools/`: `scripts/gdi_read.py`, `split_asm.py`, `text_map.py`, `file_tables.py`,
+     `textures.py`, `disc_patch.py`, `apply_bin.py`, `docker_check.sh` and the `tools-image/` folder
+     (so a cloned repo builds its own tools image, nothing pulled from anyone else);
    - write the base to `BASE` (hex, no `0x`); `split_asm.py` already wrote `functions.txt`;
    - fill the placeholders: in `setup.sh` and `disc.sh` `@BOOT@` (boot file from IP.BIN) and `@SHA1@` (of that
      file); in `README.md` `@TITLE@`, `@RELEASE@` (IP.BIN: title, product number, version, date,
      region), `@BOOT@`, `@SIZE@`, `@SHA1@`, `@BASE@`, `@SDK@` (main banners), `@FUNCS@`, `@NAMED@`,
-     `@NAMED_SDK@`, `@NAMED_REF@`, `@LICENSE@`. No `@...@` may remain (`grep -r @[A-Z_]*@`).
+     `@NAMED_SDK@`, `@NAMED_REF@`, `@LICENSE@`. No `@...@` may remain in those three files
+     (`grep -n '@[A-Z_]*@' README.md setup.sh disc.sh`; `tools/` has its own `@N@` tokens, ignore).
+     `@NAMED@` = functions whose name is not `FUN_...` (what `split_asm.py` prints). It can exceed
+     `@NAMED_SDK@` + `@NAMED_REF@`: small wrappers (thunks) inherit the name of what they call.
    - **ask the user for a licence** for the repo's own code and docs (suggest GPL-3.0-or-later or
      MIT) and add its text as `LICENSE`.
    - `chmod +x build.sh setup.sh` (tell the user; it is one command).
@@ -143,8 +152,12 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
      76 scenes, (sector, length) at 0x8C04B704; rewriting it took the Catalan from ~40% to 99% and
      the game played through. Tested blind on 6 other games: no false hits, and no hits (their data
      uses other layouts), so a missing row does not prove there is no table.
-   - `textures/index.html` (`scripts/textures.py`, not in `quick`): every standard texture decoded
-     to PNG on one page of thumbnails with checkboxes, for a person to mark the ones with text.
+   - Textures are their **own step** (`bash textures.sh <disc.gdi>`, seconds to a minute): every
+     standard (PVR) texture decoded to PNG on one page with checkboxes (`text-map/textures/`), for a
+     person to mark the ones with text. A game that keeps its art in its own formats gets 0 here and a
+     note saying so (Crazy Taxi: 1 texture on the disc); then `image_candidates.tsv` is the lead.
+   - `setup.sh` rebuilds the text map from `functions.txt`, so a cloned repo's `files.tsv` lists
+     function-level users only; the kick-off's own run (from the full Ghidra report) has more.
    - Tiers: `quick` = executable only (seconds); `standard` = plus a 2 MiB sample of every disc file
      (seconds to a minute); `deep` = whole files (minutes on a full disc).
    - Density and the Shift-JIS count are heuristics: binary data scores as text sometimes.
@@ -156,8 +169,12 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
      often faster and is the only reliable method.
 8. **Game build**: `bash disc.sh <original .gdi>` writes `build/disc/`: a copy of the user's disc
    with the rebuilt executable and every file under `disc/` (same path as on the disc) written in
-   place, error correction recomputed, read back to verify. Replacements may be smaller (padded),
-   not bigger. Tested: rebuilds the over-budget Boku disc that was played, byte for byte.
+   place, error correction recomputed, read back to verify. A smaller file is padded; a **bigger**
+   one moves into free sectors (GD-ROMs often carry a whole filler track) and its directory entry is
+   repointed. To change the executable from a modified copy, `tools/apply_bin.py <repo> <original>
+   <modified>` writes the changes into the asm data words; then `bash build.sh` (it prints DIFFERS,
+   expected; `DC_EXPECT_CHANGES=1` makes that exit 0). Tested on Boku Doraemon: the story script at
+   1.7x a scene's budget, 10 KB bigger than the original file, played through in Flycast.
 9. **Hand over**: `template/AGENTS.md` is the per-function loop (asm -> instructions -> C -> match).
 10. **GitHub (optional)**: print, do not run, the commands for the user:
 
@@ -190,6 +207,10 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
 | `scripts/textures.py` | every standard texture to PNG + a contact sheet (`index.html`) |
 | `scripts/disc_patch.py` | copy a GDI with files replaced in place, error correction recomputed |
 | `template/disc.sh` | in the repo: build a playable disc image of the user's version |
+| `template/textures.sh` | in the repo: the texture contact sheet, as its own step |
+| `scripts/apply_bin.py` | write a modified executable's changes into the repo's asm data words |
+| `scripts/docker_check.sh` | Docker installed vs running vs low memory, and the tools image on first use |
+| `scripts/tools-image/Dockerfile` | the `dc-tools` image: small Linux + pinned, checksum-verified wibo |
 | `scripts/split_asm.py` | split an executable into per-function asmsh sources + link order |
 | `template/build.sh` | assemble, link (`start P(<base>)`), `elf2bin`, compare with the original |
 | `template/setup.sh` | in the repo: extract + verify the user's executable, regenerate `asm/` and `text-map/` |

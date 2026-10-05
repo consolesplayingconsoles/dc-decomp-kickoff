@@ -48,12 +48,15 @@ if [ "${DC_LOCAL:-0}" = 1 ]; then
   command -v wibo >/dev/null || { echo "[ERROR] DC_LOCAL=1 needs wibo on PATH (github.com/decompals/wibo, Linux x86_64)"; exit 1; }
   T="$SDK_PATH/$TOOLS_REL" B="$BASE" bash -c "$STEPS" </dev/null
 else
-  command -v docker >/dev/null || { echo "[ERROR] Docker not found: install it, or use DC_LOCAL=1 with wibo on Linux"; exit 1; }
-  IMAGE="${DC_TOOLS_IMAGE:-lhsazevedo/tbg-decomp}"   # any image with wibo on PATH
+  . tools/docker_check.sh
+  docker_ready tools/tools-image || exit 1      # builds the dc-tools image (wibo) on first use
+  IMAGE="${DC_TOOLS_IMAGE:-dc-tools}"
   docker run --rm -v "$SDK_PATH":/sdk:ro -v "$PWD":/app -w /app -e T="/sdk/$TOOLS_REL" -e B="$BASE" "$IMAGE" bash -c "$STEPS" </dev/null
 fi
 if cmp -s build/out.bin 1ST_READ.BIN; then
   echo "MATCH: build/out.bin is byte-identical to 1ST_READ.BIN"
 else
-  echo "DIFFERS: build/out.bin vs 1ST_READ.BIN"; cmp build/out.bin 1ST_READ.BIN | head -3 || true; exit 1
+  echo "DIFFERS: build/out.bin vs 1ST_READ.BIN (expected if you changed the game; a failure if you did not)"
+  cmp build/out.bin 1ST_READ.BIN | head -1 || true
+  [ "${DC_EXPECT_CHANGES:-0}" = 1 ] || exit 1
 fi

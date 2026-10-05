@@ -30,7 +30,8 @@ echo 'SDK_PATH="/path/to/katana-sdk"' > .env      # once: where your SDK is (not
 bash build.sh
 ```
 
-`build.sh` should end with `MATCH`. The first build assembles every file (a few minutes); after
+`build.sh` should end with `MATCH`. It builds its own small tools image the first time (Docker
+must be running). The first build assembles every file (a few minutes); after
 that only changed files. (Running the scripts with `bash` means file permissions never matter;
 `./build.sh` works too once `setup.sh` has run.) Docker is required; on Linux x86_64 without
 Docker, `DC_LOCAL=1` runs the tools through `wibo` instead.
@@ -43,6 +44,8 @@ Docker, `DC_LOCAL=1` runs the tools through `wibo` instead.
 | `BASE` | link address |
 | `setup.sh` | extract + verify your executable, generate `asm/` and `text-map/` |
 | `build.sh` | assemble, link, convert, compare with your original |
+| `disc.sh` | build a playable disc image of your version (files you put under `disc/`) |
+| `textures.sh` | optional: every standard texture on one page, to find text drawn into images |
 | `tools/` | disc reader, splitter, text mapper |
 | `AGENTS.md` | the per-function decompilation loop |
 
@@ -52,8 +55,9 @@ hold text (candidates). These are heuristics for you to check, not a verdict.
 
 ## Names
 
-@NAMED@ names come from signature matching: @NAMED_SDK@ from the Katana SDK's own libraries,
-@NAMED_REF@ from the public Tokyo Bus Guide decomp. Only unique matches are applied.
+Names come from signature matching: @NAMED_SDK@ matches from the Katana SDK's own libraries and
+@NAMED_REF@ from the public Tokyo Bus Guide decomp (only unique matches are applied). @NAMED@
+functions carry a name in all, because small wrappers inherit the name of the function they call.
 
 ## How this was started
 

@@ -5,8 +5,9 @@
 
 Files are written in place, sector by sector, with each sector's error correction (EDC, P/Q
 parity) recomputed: emulators ignore stale ECC, real hardware and GDEMU may not. No file moves, so
-nothing that locates files by disc position breaks. A replacement must not be bigger than the
-original (a smaller one is padded with zeros); growing a file needs a full disc rebuild.
+nothing that locates files by disc position breaks. A smaller replacement is padded with zeros. A
+bigger one moves into free sectors (no file or directory uses them: GD-ROMs often carry a whole
+filler track) and its ISO9660 directory entry is repointed; only that entry and the new sectors change.
 """
 import os
 import shutil
@@ -71,6 +72,96 @@ def fix_sector(s):
     return bytes(s)
 
 
+def grow(gdi, path, data):
+    """Move a file that no longer fits into free sectors and repoint its directory record."""
+    need = (len(data) + 2047) // 2048
+    disc = gdi_read.Disc(gdi)
+    def track_of(lba):
+        for t in disc.tracks:
+            if t["lba"] <= lba < t["lba"] + t["count"]:
+                return t
+        raise SystemExit("lba %d in no data track" % lba)
+
+
+    def write_sector(lba, user):
+        t = track_of(lba)
+        with open(t["path"], "r+b") as f:
+            pos = (lba - t["lba"]) * 2352
+            f.seek(pos)
+            s = bytearray(f.read(2352))
+            s[16:2064] = user.ljust(2048, b"\0")
+            f.seek(pos)
+            f.write(fix_sector(s))
+
+
+    # used sectors: every file and every directory extent
+    used = []
+    pvd = disc.sector(45016)
+    root = pvd[156:190]
+    dirs = [(struct.unpack_from("<I", root, 2)[0], struct.unpack_from("<I", root, 10)[0])]
+    target = None
+    i = 0
+    while i < len(dirs):
+        dlba, dsize = dirs[i]
+        i += 1
+        used.append((dlba, (dsize + 2047) // 2048))
+        raw = disc.read(dlba, dsize)
+        o = 0
+        while o < len(raw):
+            n = raw[o]
+            if n == 0:
+                o = (o // 2048 + 1) * 2048
+                continue
+            rec = raw[o:o + n]
+            name = rec[33:33 + rec[32]]
+            elba, esize = struct.unpack_from("<I", rec, 2)[0], struct.unpack_from("<I", rec, 10)[0]
+            if name not in (b"\0", b"\1"):
+                if rec[25] & 2:
+                    dirs.append((elba, esize))
+                else:
+                    used.append((elba, (esize + 2047) // 2048))
+                    if name.split(b";")[0].decode("latin-1").upper() == path.strip("/").split("/")[-1].upper():
+                        target = (dlba + o // 2048, o % 2048, elba, esize)
+            o += n
+    if target is None:
+        raise SystemExit("%s not found" % path)
+    rec_lba, rec_off, old_lba, old_size = target
+
+    # lowest free run of `need` sectors in a data track, past the volume descriptors
+    want = None
+    spans = sorted(used)
+    start = None
+    for t in disc.tracks:
+        lo = max(t["lba"], 45100)
+        cand = lo
+        for ul, un in spans:
+            if ul + un <= cand or ul >= cand + need:
+                continue
+            cand = max(cand, ul + un)
+        if cand + need <= t["lba"] + t["count"] and (want is None or cand <= want):
+            start = want if want is not None else cand
+            break
+    if start is None:
+        raise SystemExit("no free run of %d sectors" % need)
+
+    for k in range(need):
+        write_sector(start + k, data[k * 2048:(k + 1) * 2048])
+    sec = bytearray(disc.sector(rec_lba))
+    struct.pack_into("<I", sec, rec_off + 2, start)
+    struct.pack_into(">I", sec, rec_off + 6, start)
+    struct.pack_into("<I", sec, rec_off + 10, len(data))
+    struct.pack_into(">I", sec, rec_off + 14, len(data))
+    write_sector(rec_lba, bytes(sec))
+
+    disc = gdi_read.Disc(gdi)
+    hit = [f for f in disc.files() if f[2].upper() == "/" + path.strip("/").upper()]
+    if not (hit and hit[0][0] == start and hit[0][1] == len(data) and disc.read(start, len(data)) == data):
+        raise SystemExit("[ERROR] %s: read-back after the move differs" % path)
+    print("  moved %s: %d -> %d bytes, lba %d -> %d (free space in the track at lba %d), "
+          "directory entry updated, read back identical" % (path, old_size, len(data), old_lba, start,
+                                                            track_of(start)["lba"]))
+
+
 def main():
     if len(sys.argv) < 4:
         raise SystemExit(__doc__)
@@ -96,8 +187,10 @@ def main():
         lba, size = files[key]
         data = open(local, "rb").read()
         if len(data) > size:
-            raise SystemExit("[ERROR] %s: %d bytes, the original is %d: it cannot grow in place"
-                             % (path, len(data), size))
+            grow(out_gdi, path, data)             # bigger: move it into free space
+            disc = gdi_read.Disc(out_gdi)
+            files = {p.upper(): (l, z) for l, z, p in disc.files()}
+            continue
         data += bytes(size - len(data))
         for t in disc.tracks:
             if t["lba"] <= lba < t["lba"] + t["count"]:

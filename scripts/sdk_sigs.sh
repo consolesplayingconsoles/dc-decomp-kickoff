@@ -5,9 +5,11 @@
 # and the *.lib files are found by name. Keep the output local: it is derived from the SDK.
 #   1. lbr lists each library's modules; lnk links all of them into one ELF + a symbol map.
 #   2. Headless Ghidra hashes every ENT (code) symbol of the map (ExportSigs.java, folder mode).
-# Containers by default (wibo image + scripts/ghidra/dghidra.sh); DC_LOCAL=1 runs wibo directly.
+# Containers by default (this skill's dc-tools image + scripts/ghidra/dghidra.sh); DC_LOCAL=1 runs
+# wibo directly (Linux x86_64 only). Any failure stops with an error: never an empty table.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
+. "$HERE/docker_check.sh"
 SDK="$(cd "${1:?usage: sdk_sigs.sh <SDK folder> <out dir>}" && pwd)"
 mkdir -p "${2:?usage: sdk_sigs.sh <SDK folder> <out dir>}"; OUT="$(cd "$2" && pwd)"
 LBR="$(find "$SDK" -iname lbr.exe -print -quit)"
@@ -40,11 +42,14 @@ STEPS='
     wibo "$(tool lnk)" -subcommand="$b.sub" > "$b.log" 2>&1 || true
   done
 '
+echo "Linking every library into an ELF with a symbol map (a few minutes)"
 if [ "${DC_LOCAL:-0}" = 1 ]; then
+  command -v wibo >/dev/null || { echo "[ERROR] DC_LOCAL=1 needs wibo on PATH" >&2; exit 1; }
   (cd "$OUT" && T="$SDK/$TOOLS_REL" bash -c "$STEPS") </dev/null
 else
+  docker_ready "$HERE/tools-image"
   docker run --rm -v "$SDK":/sdk:ro -v "$OUT":/out -w /out -e T="/sdk/$TOOLS_REL" \
-    "${DC_TOOLS_IMAGE:-lhsazevedo/tbg-decomp}" bash -c "$STEPS" </dev/null
+    "${DC_TOOLS_IMAGE:-dc-tools}" bash -c "$STEPS" </dev/null
 fi
 
 ok=0; bad=""
@@ -58,10 +63,29 @@ for m in "$OUT"/link/*.map; do
     bad="$bad $b"
   fi
 done
-echo "$ok libraries linked, $(cat "$OUT"/names/*.names | wc -l | tr -d ' ') exported functions${bad:+; failed:$bad}"
+echo "$ok libraries linked, $(cat "$OUT"/names/*.names 2>/dev/null | wc -l | tr -d ' ') exported functions${bad:+; failed:$bad}"
+[ "$ok" -gt 0 ] || { echo "[ERROR] no library linked: see $OUT/link/*.log (is the tools image working?)" >&2; exit 1; }
 
-"$HERE/ghidra/dghidra.sh" "$OUT" /work sdkproj -import /work/elf -overwrite \
-  -processor SuperH4:LE:32:default -scriptPath /scripts \
-  -postScript ExportSigs.java /work/names /work/sigs > "$OUT/ghidra.log" 2>&1
+# Hash with Ghidra. With little Docker memory, one library per run (resumable: done ones are kept).
+if [ "${DC_LOCAL:-0}" != 1 ] && docker_low_memory; then
+  n=0; total=$(ls "$OUT"/elf/*.elf | wc -l | tr -d ' ')
+  for e in "$OUT"/elf/*.elf; do
+    b="$(basename "$e" .elf)"; n=$((n+1))
+    [ -s "$OUT/sigs/$b.sigs" ] && continue
+    echo "  hashing $n/$total: $b"
+    mkdir -p "$OUT/one/$b" && cp "$e" "$OUT/one/$b/"
+    "$HERE/ghidra/dghidra.sh" "$OUT" /work "proj_$b" -import "/work/one/$b/$b.elf" -overwrite \
+      -processor SuperH4:LE:32:default -scriptPath /scripts \
+      -postScript ExportSigs.java /work/names /work/sigs >> "$OUT/ghidra.log" 2>&1
+  done
+else
+  echo "Hashing every library with Ghidra (a few minutes)"
+  "$HERE/ghidra/dghidra.sh" "$OUT" /work sdkproj -import /work/elf -overwrite \
+    -processor SuperH4:LE:32:default -scriptPath /scripts \
+    -postScript ExportSigs.java /work/names /work/sigs > "$OUT/ghidra.log" 2>&1
+fi
+missing=""; for e in "$OUT"/elf/*.elf; do b="$(basename "$e" .elf)"; [ -s "$OUT/sigs/$b.sigs" ] || [ ! -s "$OUT/names/$b.names" ] || missing="$missing $b"; done
+[ -z "$missing" ] || { echo "[ERROR] no signatures for:$missing (see $OUT/ghidra.log; out of memory shows as 'Killed')" >&2; exit 1; }
 cat "$OUT"/sigs/*.sigs > "$OUT/katana-sdk.sigs"
+[ -s "$OUT/katana-sdk.sigs" ] || { echo "[ERROR] empty signature table" >&2; exit 1; }
 echo "$(wc -l < "$OUT/katana-sdk.sigs" | tr -d ' ') signatures -> $OUT/katana-sdk.sigs"

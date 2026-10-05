@@ -13,3 +13,4 @@ build/
 report*.txt
 .env
 disc/
+.idea/
