@@ -100,8 +100,9 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
    - **ask the user for a licence** for the repo's own code and docs (suggest GPL-3.0-or-later or
      MIT) and add its text as `LICENSE`.
    - `chmod +x build.sh setup.sh` (tell the user; it is one command).
-   Then put the original executable in as `1ST_READ.BIN` and run `SDK_PATH=<SDK folder> bash
-   build.sh`. It must print `MATCH`. First run assembles every file (minutes); later runs only
+   - write `.env` in the repo with `SDK_PATH="<absolute SDK folder>"` (gitignored, machine-local),
+     so the user can rebuild with a plain `bash build.sh` later.
+   Then put the original executable in as `1ST_READ.BIN` and run `bash build.sh`. It must print `MATCH`. First run assembles every file (minutes); later runs only
    changed ones. Always invoke scripts with `bash`/`python3`: downloads can lose execute bits.
    Finally prove the published layout works: empty `asm/`, `objects.txt`, `text-map/`, then
    `bash setup.sh <disc.gdi>` and `bash build.sh` again: `MATCH` again.

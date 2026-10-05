@@ -16,4 +16,10 @@ got="$( (sha1sum 1ST_READ.BIN 2>/dev/null || shasum -a 1 1ST_READ.BIN) | cut -d'
 "$PY" tools/split_asm.py 1ST_READ.BIN "$(cat BASE)" functions.txt .
 "$PY" tools/text_map.py 1ST_READ.BIN "$(cat BASE)" functions.txt text-map "$GDI" "$TIER"
 chmod +x build.sh setup.sh 2>/dev/null || true
-echo "Ready. Build with: SDK_PATH=<your Katana SDK folder> bash \"$PWD/build.sh\""
+if grep -q '^SDK_PATH=' .env 2>/dev/null; then
+  echo "Ready. Build with: bash \"$PWD/build.sh\""
+else
+  echo "Ready. Tell it where your Katana SDK is, then build:"
+  echo "  echo 'SDK_PATH=\"/path/to/katana-sdk\"' > \"$PWD/.env\""
+  echo "  bash \"$PWD/build.sh\""
+fi
