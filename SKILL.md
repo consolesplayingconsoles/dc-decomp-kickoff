@@ -9,6 +9,22 @@ The goal is a repo in the best automatable state: it already rebuilds the origin
 byte for byte, every function is its own file, as many as possible carry real names, and the loop
 for turning a function into C is written down. Decompiling the game is the work that follows.
 
+## Getting the tools (do this first)
+
+Installed skills often arrive as `SKILL.md` alone. This skill needs its own files (`scripts/`,
+`template/`) and the `dc-disassembly` skill's. If `scripts/split_asm.py` is not next to this file:
+
+1. Tell the user, and ask before cloning into a tools folder (default `~/dc-tools`):
+   ```
+   git clone https://github.com/consolesplayingconsoles/dc-decomp-kickoff ~/dc-tools/dc-decomp-kickoff
+   git clone https://github.com/consolesplayingconsoles/dc-disassembly ~/dc-tools/dc-disassembly
+   ```
+2. Use those copies for every path below (`scripts/...`, `template/...`), and set
+   `DC_DISASSEMBLY_DIR=~/dc-tools/dc-disassembly`.
+
+Do not rewrite the tools from this text unless the clone is impossible: they encode fixes that are
+easy to get wrong (multi-track discs, link address, regex blowups, linker quirks).
+
 ## Read this first: how complete this skill is
 
 **Requirements: Docker and Python 3, on any OS.** Everything else (Ghidra, the Hitachi tools) runs
