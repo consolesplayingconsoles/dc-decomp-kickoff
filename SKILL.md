@@ -31,9 +31,20 @@ impossible and the machine is **Linux x86_64**: `DC_LOCAL=1` (opt-in, never a de
 Hitachi tools through `wibo` on PATH and Ghidra from `GHIDRA_INSTALL_DIR` (Ghidra 12.x + JDK 21).
 `DC_LOCAL` does not work on macOS or Windows (`wibo` is a Linux program): there, install Docker.
 
+**Before starting, check the machine:**
+- `python3 --version` works and is 3.6 or newer (on macOS, `python3` can be Apple's stub that
+  opens an install dialog: then use another Python, e.g. from python.org or Homebrew).
+- `docker info` works. Docker Desktop and colima share **only your home folder** with containers
+  by default: keep the work folder, the repo and the SDK under your home folder, or mounts arrive
+  empty (a build that "can't find" files it plainly has is this).
+- About 4 GB free (Docker images ~1.5 GB, the SDK clone, the disc copy for the game image).
+
 **The SDK folder can have any layout** (the reference decomp's `bin/ shc/ shinobi/`, or the
 Kochise repository's `.../R10.1_000518/Utl/Dev/Hitachi` + `Lib`): scripts find `asmsh.exe`,
-`lbr.exe`, `lnk.exe` and the `.lib` files by name. Point `SDK_PATH` at the SDK's top folder.
+`lbr.exe`, `lnk.exe` and the `.lib` files by name. Point `SDK_PATH` at the SDK's top folder. In the
+Kochise repository that is `SDK/EXES/INSTALL KATANA SDK/INPUT/R10.1_000518` (quote it: it has
+spaces); a sparse checkout of that folder is enough (`git clone --filter=blob:none --sparse`, then
+`git sparse-checkout set "SDK/EXES/INSTALL KATANA SDK/INPUT/R10.1_000518"`).
 
 **Long steps print progress** (Ghidra analysis ~3 min, first build a few minutes, textures a
 minute or two): tell the user what is running and roughly how long before starting each.
@@ -65,6 +76,9 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
 
 ## Procedure
 
+0. **Name the conversation after the game.** As soon as IP.BIN gives the title (step 1), rename
+   the session if your client lets you (e.g. "Dreamcast decomp kick-off: Crazy Taxi"), so a user
+   running several games can tell the conversations apart.
 1. **Disc to executable** (`scripts/gdi_read.py`, CHD via `chdman extractcd`). Check the
    boot file in IP.BIN; `0WINCEOS.BIN` means Windows CE: stop, this skill does not apply.
 2. **Base and fingerprint**: `scripts/linkbase.py`, `scripts/banners.py`. Note the SDK version the game used.
