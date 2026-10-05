@@ -88,9 +88,23 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
    you show (commands, summaries, the final report) is absolute: never `cd <name>` alone.
    **Split**: `scripts/split_asm.py <1ST_READ.BIN> <base> <report> <repo>`: one `.src` per function,
    data words, exported labels, `objects.txt` in link order.
-6. **Build**: copy `template/` into the repo, write the base to `BASE`, put the original
-   executable in as `1ST_READ.BIN`, `SDK_PATH=... ./build.sh`. It must print `MATCH`. First run
-   assembles every file (minutes); later runs only changed ones.
+6. **Make the repo publishable and build it.** A pushed repo holds no game bytes, so it must be
+   able to regenerate them from each user's own disc. Into the repo:
+   - copy `template/` (`build.sh`, `setup.sh`, `README.md`, `AGENTS.md`, `.gitignore`);
+   - copy `scripts/gdi_read.py`, `scripts/split_asm.py`, `scripts/text_map.py` into `tools/`;
+   - write the base to `BASE` (hex, no `0x`); `split_asm.py` already wrote `functions.txt`;
+   - fill the placeholders: in `setup.sh` `@BOOT@` (boot file from IP.BIN) and `@SHA1@` (of that
+     file); in `README.md` `@TITLE@`, `@RELEASE@` (IP.BIN: title, product number, version, date,
+     region), `@BOOT@`, `@SIZE@`, `@SHA1@`, `@BASE@`, `@SDK@` (main banners), `@FUNCS@`, `@NAMED@`,
+     `@NAMED_SDK@`, `@NAMED_REF@`, `@LICENSE@`. No `@...@` may remain (`grep -r @[A-Z_]*@`).
+   - **ask the user for a licence** for the repo's own code and docs (suggest GPL-3.0-or-later or
+     MIT) and add its text as `LICENSE`.
+   - `chmod +x build.sh setup.sh` (tell the user; it is one command).
+   Then put the original executable in as `1ST_READ.BIN` and run `SDK_PATH=<SDK folder> bash
+   build.sh`. It must print `MATCH`. First run assembles every file (minutes); later runs only
+   changed ones. Always invoke scripts with `bash`/`python3`: downloads can lose execute bits.
+   Finally prove the published layout works: empty `asm/`, `objects.txt`, `text-map/`, then
+   `bash setup.sh <disc.gdi>` and `bash build.sh` again: `MATCH` again.
 7. **Text map** (for translators, English included: any language can be a source as well as a
    target): `scripts/text_map.py <1ST_READ.BIN> <base> <report> <repo>/text-map <disc.gdi> [tier]`.
    - `exe_strings.tsv`: every executable string, the functions using it, and every pointer to it
@@ -113,6 +127,7 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
 
    ```
    cd "<absolute repo path>" && git init && git add -A && git commit -m "Kick off: byte-matching split, <n> named"
+   # check first: git ls-files must show no asm/, 1ST_READ.BIN or other game files
    gh repo create <owner>/<repo dir name> --public --source . --push
    ```
 
@@ -136,5 +151,7 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
 | `scripts/text_map.py` | strings with pointers, file text density, font path, image candidates |
 | `scripts/split_asm.py` | split an executable into per-function asmsh sources + link order |
 | `template/build.sh` | assemble, link (`start P(<base>)`), `elf2bin`, compare with the original |
+| `template/setup.sh` | in the repo: extract + verify the user's executable, regenerate `asm/` and `text-map/` |
+| `template/README.md` | the repo's README, with `@PLACEHOLDERS@` to fill |
 | `template/AGENTS.md` | the decompilation loop for whoever works in the repo |
-| `template/.gitignore` | keeps game and SDK material out of git |
+| `template/.gitignore` | keeps game and SDK material out of git (asm, executable, disc, build, text map) |
