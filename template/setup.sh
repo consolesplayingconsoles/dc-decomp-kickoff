@@ -14,7 +14,14 @@ SHA1="@SHA1@"                                    # of the supported release's bo
 got="$( (sha1sum 1ST_READ.BIN 2>/dev/null || shasum -a 1 1ST_READ.BIN) | cut -d' ' -f1)"
 [ "$got" = "$SHA1" ] || { echo "[ERROR] $BOOT has SHA-1 $got, expected $SHA1: not the supported release (see README)"; exit 1; }
 "$PY" tools/split_asm.py 1ST_READ.BIN "$(cat BASE)" functions.txt .
+echo "Text map: strings, file text density, image candidates ($TIER tier)"
 "$PY" tools/text_map.py 1ST_READ.BIN "$(cat BASE)" functions.txt text-map "$GDI" "$TIER"
+echo "File tables: which disc files the executable locates by internal offsets (seconds)"
+"$PY" tools/file_tables.py 1ST_READ.BIN "$(cat BASE)" "$GDI" text-map/file_tables.tsv
+if [ "$TIER" != quick ]; then
+  echo "Textures: decoding every standard texture into a contact sheet (a minute or two)"
+  "$PY" tools/textures.py "$GDI" text-map/textures
+fi
 chmod +x build.sh setup.sh 2>/dev/null || true
 if grep -q '^SDK_PATH=' .env 2>/dev/null; then
   echo "Ready. Build with: bash \"$PWD/build.sh\""

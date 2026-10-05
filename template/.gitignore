@@ -12,3 +12,4 @@ build/
 *.sigs
 report*.txt
 .env
+disc/
