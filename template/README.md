@@ -28,7 +28,8 @@ assembler and linker do the build; any folder layout works).
 
 ```
 bash setup.sh "path/to/your disc.gdi"
-SDK_PATH=path/to/katana-sdk bash build.sh
+echo 'SDK_PATH="/path/to/katana-sdk"' > .env      # once: where your SDK is (not committed)
+bash build.sh
 ```
 
 `build.sh` should end with `MATCH`. The first build assembles every file (a few minutes); after
