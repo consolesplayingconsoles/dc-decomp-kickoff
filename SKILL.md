@@ -12,18 +12,16 @@ for turning a function into C is written down. Decompiling the game is the work 
 ## Getting the tools (do this first)
 
 Installed skills often arrive as `SKILL.md` alone. This skill needs its own files (`scripts/`,
-`template/`) and the `dc-disassembly` skill's. If `scripts/split_asm.py` is not next to this file:
+`template/`, `references/`). If `scripts/split_asm.py` is not next to this file, tell the user and
+ask before cloning the skill into a tools folder (default `~/dc-tools`):
 
-1. Tell the user, and ask before cloning into a tools folder (default `~/dc-tools`):
-   ```
-   git clone https://github.com/consolesplayingconsoles/dc-decomp-kickoff ~/dc-tools/dc-decomp-kickoff
-   git clone https://github.com/consolesplayingconsoles/dc-disassembly ~/dc-tools/dc-disassembly
-   ```
-2. Use those copies for every path below (`scripts/...`, `template/...`), and set
-   `DC_DISASSEMBLY_DIR=~/dc-tools/dc-disassembly`.
+```
+git clone https://github.com/consolesplayingconsoles/dc-decomp-kickoff ~/dc-tools/dc-decomp-kickoff
+```
 
-Do not rewrite the tools from this text unless the clone is impossible: they encode fixes that are
-easy to get wrong (multi-track discs, link address, regex blowups, linker quirks).
+Then use that copy for every `scripts/...`, `template/...` and `references/...` path below. Do not
+rewrite the tools from this text unless the clone is impossible: they encode fixes that are easy to
+get wrong (multi-track discs, link address, regex blowups, linker quirks).
 
 ## Read this first: how complete this skill is
 
@@ -33,9 +31,7 @@ in containers.
 **Evidence base: one game (Crazy Taxi, Europe).** 2,389 functions, 430 named (385 from SDK
 signatures, 30 from a reference decomp), 2,390 files, byte-identical rebuild with the SDK's own
 assembler and linker. The C side of the loop (step 7) is described, not yet exercised here.
-This builds on the `dc-disassembly` skill for steps 1 to 4. It is looked up at
-`$DC_DISASSEMBLY_DIR`, default: the sibling directory `../dc-disassembly` next to this skill.
-`DIS` below means that directory.
+Everything it uses is in this skill's own folder.
 
 ## Third-party sources
 
@@ -57,16 +53,22 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
 
 ## Procedure
 
-1. **Disc to executable** (`$DIS/scripts/gdi_read.py`, CHD via `chdman extractcd`). Check the
+1. **Disc to executable** (`scripts/gdi_read.py`, CHD via `chdman extractcd`). Check the
    boot file in IP.BIN; `0WINCEOS.BIN` means Windows CE: stop, this skill does not apply.
-2. **Base and fingerprint**: `$DIS/scripts/linkbase.py`, `$DIS/scripts/banners.py`. Note the SDK version the game used.
-3. **Ghidra**: import at the base with `$DIS/scripts/ghidra/dghidra.sh` (Docker; no Linux box
-   needed, see `$DIS/SKILL.md` step 3).
+2. **Base and fingerprint**: `scripts/linkbase.py`, `scripts/banners.py`. Note the SDK version the game used.
+3. **Ghidra** (Docker; no Linux machine needed, the image builds on first use), with the
+   executable in `<work>`:
+   ```
+   scripts/ghidra/dghidra.sh <work> /work proj -import /work/1ST_READ.BIN -overwrite \
+     -loader BinaryLoader -loader-baseAddr <base> -processor SuperH4:LE:32:default \
+     -scriptPath /scripts -preScript DcPre.java -postScript DcReport.java /work/report.txt
+   ```
+   Import at the base `linkbase.py` picked: at the wrong one Ghidra finds a fraction of the code.
 4. **Names**:
    - SDK-wide: for each SDK `.lib`, `lbr.exe` lists its modules; `lnk.exe` links them all into one
      ELF (`elf`, `print <x>.map`, `output <x>.elf`, `input <lib>(<module>)`...); the map's `ENT`
      symbols are the names. Import the ELFs, `ExportSigs.java` in folder mode, concatenate.
-     Details and gotchas: `$DIS/log/004`.
+     Details and gotchas: `references/sdk-signatures.md`.
    - Reference decomp: its link script's `define _NAME(ADDR)` lines -> `ExportSigs.java`.
    - Apply both with `ApplySigs.java <sigs> <out> apply` (unique matches only), then
      `DcReport.java` for the final list.
@@ -112,6 +114,13 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
 
 | script | what it does |
 |---|---|
+| `scripts/gdi_read.py` | list / extract files from any data track of a GDI; extract IP.BIN |
+| `scripts/linkbase.py` | pick the import base from self-pointer counts |
+| `scripts/banners.py` | SDK module banners: name, version, build date |
+| `scripts/ghidra/dghidra.sh` | headless Ghidra in Docker (image from `scripts/ghidra/Dockerfile`, built on first use) |
+| `scripts/ghidra/*.java` | seed + report (`DcPre`, `DcReport`), signatures (`ExportSigs`, `ApplySigs`), queries (`Query`) |
+| `references/sdk-signatures.md` | naming library code from a reference decomp or the SDK's libraries |
+| `references/memory-map.md` | Dreamcast addresses worth labelling on sight |
 | `scripts/text_map.py` | strings with pointers, file text density, font path, image candidates |
 | `scripts/split_asm.py` | split an executable into per-function asmsh sources + link order |
 | `template/build.sh` | assemble, link (`start P(<base>)`), `elf2bin`, compare with the original |
