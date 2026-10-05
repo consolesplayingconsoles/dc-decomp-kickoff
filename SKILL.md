@@ -35,7 +35,7 @@ Kochise repository's `.../R10.1_000518/Utl/Dev/Hitachi` + `Lib`): scripts find `
 
 **Evidence base: one game (Crazy Taxi, Europe), tested against the suggested SDK source**
 (`Kochise/dreamcast-docs`, SDK R10.1, as cloned: byte-identical build, 385 SDK names) **and a
-second SDK copy laid out like the reference decomp's (same results).** Earlier wording: 2,389 functions, 430 named (385 from SDK
+second SDK copy laid out like the reference decomp's (same results).** Crazy Taxi: 2,389 functions, 430 named (385 from SDK
 signatures, 30 from a reference decomp), 2,390 files, byte-identical rebuild with the SDK's own
 assembler and linker. The C side of the loop (step 7) is described, not yet exercised here.
 Everything it uses is in this skill's own folder.
