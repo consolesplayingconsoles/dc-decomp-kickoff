@@ -11,6 +11,9 @@ for turning a function into C is written down. Decompiling the game is the work 
 
 ## Read this first: how complete this skill is
 
+**Requirements: Docker and Python 3, on any OS.** Everything else (Ghidra, the Hitachi tools) runs
+in containers.
+
 **Evidence base: one game (Crazy Taxi, Europe).** 2,389 functions, 430 named (385 from SDK
 signatures, 30 from a reference decomp), 2,390 files, byte-identical rebuild with the SDK's own
 assembler and linker. The C side of the loop (step 7) is described, not yet exercised here.
@@ -41,7 +44,8 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
 1. **Disc to executable** (`$DIS/scripts/gdi_read.py`, CHD via `chdman extractcd`). Check the
    boot file in IP.BIN; `0WINCEOS.BIN` means Windows CE: stop, this skill does not apply.
 2. **Base and fingerprint**: `$DIS/scripts/linkbase.py`, `$DIS/scripts/banners.py`. Note the SDK version the game used.
-3. **Ghidra**: import at the base (`$DIS/scripts/ghidra/run.sh ... <base>`).
+3. **Ghidra**: import at the base with `$DIS/scripts/ghidra/dghidra.sh` (Docker; no Linux box
+   needed, see `$DIS/SKILL.md` step 3).
 4. **Names**:
    - SDK-wide: for each SDK `.lib`, `lbr.exe` lists its modules; `lnk.exe` links them all into one
      ELF (`elf`, `print <x>.map`, `output <x>.elf`, `input <lib>(<module>)`...); the map's `ENT`
