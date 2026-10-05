@@ -15,8 +15,7 @@ You get a repo that:
 Worked example: [crazy-taxi-decomp](https://github.com/consolesplayingconsoles/crazy-taxi-decomp)
 (2,389 functions, 430 named, byte-identical rebuild).
 
-Start with [`SKILL.md`](SKILL.md). Requirements: Docker and Python 3, on any OS. It uses
-[dc-disassembly](https://github.com/consolesplayingconsoles/dc-disassembly) for the mapping steps.
+Start with [`SKILL.md`](SKILL.md). Requirements: Docker and Python 3, on any OS.
 
 ## Third-party sources
 

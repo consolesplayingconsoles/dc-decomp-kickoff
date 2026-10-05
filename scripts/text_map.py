@@ -137,10 +137,7 @@ def main():
     if tier not in TIERS:
         raise SystemExit("tier must be one of: " + ", ".join(TIERS))
     if len(sys.argv) >= 6 and tier != "quick":
-        # gdi_read.py: next to this script (vendored), else the dc-disassembly skill
-        # ($DC_DISASSEMBLY_DIR, default: sibling of this skill).
-        dis = os.environ.get("DC_DISASSEMBLY_DIR", os.path.join(HERE, "..", "..", "dc-disassembly"))
-        sys.path[:0] = [HERE, os.path.join(dis, "scripts")]
+        sys.path.insert(0, HERE)              # gdi_read.py lives next to this script
         import gdi_read
         disc = gdi_read.Disc(sys.argv[5])
         by_name = {}
