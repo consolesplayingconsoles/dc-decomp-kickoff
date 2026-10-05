@@ -25,9 +25,11 @@ get wrong (multi-track discs, link address, regex blowups, linker quirks).
 
 ## Read this first: how complete this skill is
 
-**Requirements: Docker and Python 3, on any OS.** Everything else (Ghidra, the Hitachi tools) runs
-in containers. Without Docker: `DC_LOCAL=1` runs the Hitachi tools through `wibo` on your PATH
-(Linux x86_64) and Ghidra from `GHIDRA_INSTALL_DIR` (Ghidra 12.x + JDK 21).
+**Requirements: Docker and Python 3, on any OS (Mac, Windows, Linux).** Docker is the default:
+Ghidra and the Hitachi tools run in containers, so nothing else is installed. Only if Docker is
+impossible and the machine is **Linux x86_64**: `DC_LOCAL=1` (opt-in, never a default) runs the
+Hitachi tools through `wibo` on PATH and Ghidra from `GHIDRA_INSTALL_DIR` (Ghidra 12.x + JDK 21).
+`DC_LOCAL` does not work on macOS or Windows (`wibo` is a Linux program): there, install Docker.
 
 **The SDK folder can have any layout** (the reference decomp's `bin/ shc/ shinobi/`, or the
 Kochise repository's `.../R10.1_000518/Utl/Dev/Hitachi` + `Lib`): scripts find `asmsh.exe`,
