@@ -128,11 +128,11 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
      Details and gotchas: `references/sdk-signatures.md`.
      With the 1.55J folder too, run it again into a second folder (`<out155>/katana-sdk.sigs`) and
      apply both tables.
-   - **Apply every table you have, in one fixed order**, all in one Ghidra run (one `-postScript
-     ApplySigs.java <sigs> <out> <mode>` each, unique matches only), then `DcReport.java`:
-     1. the SDK tables with `apply`, the release farthest from the game first and the closest
-        (step 2's ranking) last, so where releases disagree the closest one's name stands;
-     The same tables in this order always give the same names.
+   - **Apply every table you have, all in one Ghidra run**, then `DcReport.java`:
+     1. all the SDK tables merged into one (`cat` them into one file), with `ApplySigs.java <sigs>
+        <out> apply`: a hash that two releases name differently stays ambiguous, so twin stubs
+        (byte-identical code under unrelated names) are never named by which release has which;
+     Only unique matches are applied; the same tables always give the same names.
 5. **The repo: ask the user where to put it.** Suggest a default (a sibling of the current folder,
    named from the IP.BIN title: lowercase, spaces to hyphens, plus `-decomp`, e.g.
    `CRAZY TAXI` -> `<parent>/crazy-taxi-decomp`), always written as an **absolute path**. Create it,
