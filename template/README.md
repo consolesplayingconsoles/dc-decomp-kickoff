@@ -65,7 +65,8 @@ to `<end>`), assembles it and links it in place; the result still has to `MATCH`
 constant data (initialised local arrays, const tables, string literals) also names where the
 original link put that data: `/* @unit <start>-<end> @data <dstart>-<dend> [shc options] */`. The
 data becomes its own piece at that range, in source order; both ranges must start and end on asm
-file boundaries (add the addresses to `functions.txt`). A unit is one
+file boundaries (add them to `functions.txt`: `F <addr> 0 FUN_<addr>` for a function start,
+`D <addr> 0 data_<addr>` for a data boundary, which is not counted as a function). A unit is one
 original source file: all its functions share literal pools, so it goes in only when all of it
 matches. `python3 tools/progress.py` reports the state in several measures, game code and SDK apart
 (`sdk.txt` marks the SDK): matching C (bytes, functions, units), named functions and globals, and

@@ -47,7 +47,9 @@ the build came out 16 bytes short. `units.py` now refuses such a unit.
   far from its code. A unit with any of them adds `@data <dstart>-<dend>` to its `@unit` line:
   `fill.py` splits the `C` section into its own piece laid out from `<dstart>` (alignment as zero
   bytes), `units.py` links that piece in place of the asm files in that range, and labels shared
-  by the two pieces get unit-unique names. The range is the unit's whole `C` section: find it from
+  by the two pieces get unit-unique names. Its ends must be asm file boundaries: add them to `functions.txt` as `D <addr> 0 data_<addr>`
+  (a data boundary: it splits the asm like an `F` line but is not counted as a function). The
+  range is the unit's whole `C` section: find it from
   the code's literal pool (the addresses it loads) and the copy sizes; `fill.py` refuses data over
   `<dend>` and notes data short of it. Inside the range the order is source order, which also
   orders the unit's functions and statements. Writable initialised data (`D`) and zeroed data (`B`)
