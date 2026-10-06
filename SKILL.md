@@ -70,14 +70,9 @@ the output folder, so cleaning outputs never wipes them (ask the user where, if 
 **Long steps print progress** (Ghidra analysis ~3 min, first build a few minutes, textures a
 minute or two): tell the user what is running and roughly how long before starting each.
 
-**Evidence base: one game (Crazy Taxi, Europe), tested against the suggested SDK source**
-(`Kochise/dreamcast-docs`, SDK R10.1, as cloned: byte-identical build, 385 SDK names) **and a
-second SDK copy laid out like the reference decomp's (same results).** Crazy Taxi: 2,389 functions, 430 named (385 from SDK
-signatures, 30 from a reference decomp), 2,390 files, byte-identical rebuild with the SDK's own
-assembler and linker. The C side (repo `AGENTS.md`) is exercised on Crazy Taxi: a first source
-file (three Naomi-library functions) builds from C byte for byte inside the full build, and a
-second (the game's heap and event list) matches 9 of 12 functions so far. Everything it uses is in
-this skill's own folder.
+**Evidence:** what the skill did on each game it has been run on (numbers, what broke, what
+changed) is in `references/evidence.md`; the steps below state rules, not games. Everything the
+skill uses is in its own folder.
 
 ## Third-party sources
 
@@ -94,7 +89,7 @@ equivalent material lawfully in their possession.
 | other Katana SDK releases, optional (disc images: 0.20 Pre 7 to R11b, 1.55J Vol.1 + Vol.2, Network 1.04) | archive.org item `official-katana-sdks` (`OFFICIAL KATANA SDKs.zip`, one image per release); 1.55J is also catalogued by Redump (discs 87866, 87867) | the release the game was built with (step 2), the complete reference decomp (1.55J), more SDK names |
 | a reference decomp | `github.com/consolesplayingconsoles/tbg-decomp` (a fork of `lhsazevedo/tbg-decomp`): latest `main` (the complete decomp, builds with SDK 1.55J) or tag `kickoff-reference-1` (builds with the Kochise R10.1 SDK) | names no SDK copy has |
 | object compare tool | `github.com/lhsazevedo/sh4objtest` (MIT) | the C loop (optional) |
-| an older SDK, optional | archive.org item `dcsdk-9e` (SDK R9 Europe, Nov 1999, disc 1: SHC 5.1 Release 08) | a period compiler for games built in 1999-2000; on Crazy Taxi it gave the same bytes as R10.1's (Release 11) |
+| an older SDK, optional | archive.org item `dcsdk-9e` (SDK R9 Europe, Nov 1999, disc 1: SHC 5.1 Release 08) | a period compiler for games built in 1999-2000; so far it gave the same bytes as R10.1's (Release 11) |
 
 Ask before cloning each one. Never commit the SDK, the game's files, or anything derived from them
 (hash tables included) to the new repo: its `.gitignore` already excludes them.
@@ -102,7 +97,7 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
 ## Procedure
 
 0. **Name the conversation after the game.** As soon as IP.BIN gives the title (step 1), rename
-   the session if your client lets you (e.g. "Dreamcast decomp kick-off: Crazy Taxi"), so a user
+   the session if your client lets you (e.g. "Dreamcast decomp kick-off: <title>"), so a user
    running several games can tell the conversations apart.
 1. **Disc to executable** (`scripts/gdi_read.py`, CHD via `chdman extractcd`). Check the
    boot file in IP.BIN; `0WINCEOS.BIN` means Windows CE: stop, this skill does not apply.
@@ -144,7 +139,7 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
      Only unique matches are applied; the same tables always give the same names.
 5. **The repo: ask the user where to put it.** Suggest a default (a sibling of the current folder,
    named from the IP.BIN title: lowercase, spaces to hyphens, plus `-decomp`, e.g.
-   `CRAZY TAXI` -> `<parent>/crazy-taxi-decomp`), always written as an **absolute path**. Create it,
+   `SOME GAME` -> `<parent>/some-game-decomp`), always written as an **absolute path**. Create it,
    then confirm the resolved absolute path back to the user in one line. From here on, every path
    you show (commands, summaries, the final report) is absolute: never `cd <name>` alone.
    **Split**: `scripts/split_asm.py <1ST_READ.BIN> <base> <report> <repo>`: one `.src` per function,
@@ -156,7 +151,7 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
      dotfiles);
    - copy into `tools/`: `scripts/gdi_read.py`, `split_asm.py`, `text_map.py`, `file_tables.py`,
      `textures.py`, `disc_patch.py`, `apply_bin.py`, `docker_check.sh`, `units.py`, `fill.py`,
-     `progress.py`, `missed_funcs.py`, the `tools-image/` folder and `scripts/hooks/` as `tools/hooks/` (so a cloned repo builds its own
+     `progress.py`, `missed_funcs.py`, `shdis.py`, the `tools-image/` folder and `scripts/hooks/` as `tools/hooks/` (so a cloned repo builds its own
      tools image, nothing pulled from anyone else);
    - write `sdk.txt`: `scripts/sdk_txt.py <repo>/functions.txt <base> <1ST_READ.BIN>
      <SDK ApplySigs output>` (SDK tables only, not the reference decomp's). It marks the boot block
@@ -181,8 +176,8 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
    `bash setup.sh <disc.gdi>` and `bash build.sh` again: `MATCH` again.
    Then `python3 tools/missed_funcs.py 1ST_READ.BIN <base> functions.txt`: code the analysis did
    not make into functions (callbacks reached only through tables, getters only through literal
-   pools, state handlers merged into a neighbour). Crazy Taxi: 644 candidates, about half backed
-   by a pointer. They matter for C units, whose ends must be function boundaries. Report the count
+   pools, state handlers merged into a neighbour). Expect hundreds, about half backed by a
+   pointer. They matter for C units, whose ends must be function boundaries. Report the count
    and leave the list for review: adding an entry never changes the bytes (still `MATCH`), only
    where files split. `python3 tools/progress.py` gives the starting state.
 7. **Text map** (for translators, English included: any language can be a source as well as a
@@ -196,14 +191,12 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
      A single-language game gets an explicit "no automatic signal" line, never an empty file.
    - `file_tables.tsv` (`scripts/file_tables.py`): for each disc file made of repeating records, the
      table in the executable that locates them (bytes or sectors, with or without sizes). **This is
-     what lets a container grow:** repack its records, rewrite that table. Boku Doraemon: STORY.PAC,
-     76 scenes, (sector, length) at 0x8C04B704; rewriting it took the Catalan from ~40% to 99% and
-     the game played through. Tested blind on 6 other games: no false hits, and no hits (their data
-     uses other layouts), so a missing row does not prove there is no table.
+     what lets a container grow:** repack its records, rewrite that table (proof in `references/evidence.md`). No false hits
+     so far, but games often keep positions elsewhere: a missing row does not prove there is no table.
    - Textures are their **own step** (`bash textures.sh <disc.gdi>`, seconds to a minute): every
      standard (PVR) texture decoded to PNG on one page with checkboxes (`text-map/textures/`), for a
      person to mark the ones with text. A game that keeps its art in its own formats gets 0 here and a
-     note saying so (Crazy Taxi: 1 texture on the disc); then `image_candidates.tsv` is the lead.
+     note saying so; then `image_candidates.tsv` is the lead.
    - `setup.sh` rebuilds the text map from `functions.txt`, so a cloned repo's `files.tsv` lists
      function-level users only; the kick-off's own run (from the full Ghidra report) has more.
    - Tiers: `quick` = executable only (seconds); `standard` = plus a 2 MiB sample of every disc file
@@ -221,12 +214,15 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
    one moves into free sectors (GD-ROMs often carry a whole filler track) and its directory entry is
    repointed. To change the executable from a modified copy, `tools/apply_bin.py <repo> <original>
    <modified>` writes the changes into the asm data words; then `bash build.sh` (it prints DIFFERS,
-   expected; `DC_EXPECT_CHANGES=1` makes that exit 0). Tested on Boku Doraemon: the story script at
-   1.7x a scene's budget, 10 KB bigger than the original file, played through in Flycast.
+   expected; `DC_EXPECT_CHANGES=1` makes that exit 0).
 9. **Hand over**: `template/AGENTS.md` is the loop (names first, then C one source file at a time).
    If the game was later ported and the user has the port (an Android `.apk`, an iOS or PC build),
    offer `references/port-symbols.md`: a port that kept its symbol table names a large share of
    the game's functions and globals by their original names.
+   **Print the run as an evidence entry** (the format at the top of `references/evidence.md`:
+   game, SDK by banners, counts, MATCH, text-map highlights, and what broke or surprised), and
+   tell the user they can send it to the skill's repo as an issue so the next version learns from
+   their game. Never write into the skill's own folder.
 10. **GitHub (optional)**: print, do not run, the commands for the user:
 
    ```
@@ -250,6 +246,7 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
 | `scripts/ghidra/dghidra.sh` | headless Ghidra in Docker (image from `scripts/ghidra/Dockerfile`, built on first use) |
 | `scripts/ghidra/*.java` | seed + report (`DcPre`, `DcReport`), signatures (`ExportSigs`, `ApplySigs`), queries (`Query`) |
 | `references/sdk-signatures.md` | naming library code from a reference decomp or the SDK's libraries |
+| `references/evidence.md` | each game the skill was run on: numbers, what broke, what changed |
 | `references/memory-map.md` | Dreamcast addresses worth labelling on sight |
 | `references/matching-c.md` | getting a source file to match: units, flags, fill, idioms, compare loop |
 | `references/port-symbols.md` | naming from a later port that kept its symbols (Android, iOS, PC builds) |
@@ -276,6 +273,8 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
 | `scripts/progress.py` | in the repo: matching C, named functions and globals, documented, game and SDK apart |
 | `scripts/sdk_txt.py` | mark the SDK's code (boot block, library block, single matches) as `sdk.txt` |
 | `scripts/missed_funcs.py` | list code the analysis did not make into functions |
+| `scripts/shdis.py` | in the repo: SH-4 disassembly with FPU, pool values and names (stdlib) |
+| `scripts/map_names.py` | code symbols of a linked library's map, runtime routines included |
 | `scripts/ghidra/ExportFeatures.java` | per-function strings, constants, calls and globals, for port matching |
 | `scripts/port/*.py` | pair functions and globals with a port's symbols (`references/port-symbols.md`) |
 | `template/setup.sh` | in the repo: extract + verify the user's executable, regenerate `asm/` and `text-map/` |

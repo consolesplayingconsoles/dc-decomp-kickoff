@@ -4,7 +4,8 @@
 # <out dir>/katana-sdk.sigs, for scripts/ghidra/ApplySigs.java. Any SDK layout: lbr.exe, lnk.exe
 # and the *.lib files are found by name. Keep the output local: it is derived from the SDK.
 #   1. lbr lists each library's modules; lnk links all of them into one ELF + a symbol map.
-#   2. Headless Ghidra hashes every ENT (code) symbol of the map (ExportSigs.java, folder mode).
+#   2. Headless Ghidra hashes every code symbol of the map (map_names.py: ENT, and the DAT symbols
+#      inside code sections, i.e. the hand-written runtime routines; ExportSigs.java, folder mode).
 # Containers by default (this skill's dc-tools image + scripts/ghidra/dghidra.sh); DC_LOCAL=1 runs
 # wibo directly (Linux x86_64 only). Any failure stops with an error: never an empty table.
 set -euo pipefail
@@ -57,7 +58,7 @@ for m in "$OUT"/link/*.map; do
   b="$(basename "$m" .map)"
   if [ -f "$OUT/link/$b.elf" ] && tail -1 "$OUT/link/$b.log" | tr -d '\r' | grep -q COMPLETED; then
     cp "$OUT/link/$b.elf" "$OUT/elf/"
-    tr -d '\r' < "$m" | awk '$NF=="ENT" && $2 ~ /^H'"'"'/ { n=$1; sub(/^_/, "", n); print substr($2,3,8), n }' > "$OUT/names/$b.names"
+    python3 "$HERE/map_names.py" "$m" > "$OUT/names/$b.names"
     ok=$((ok+1))
   else
     bad="$bad $b"

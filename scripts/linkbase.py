@@ -4,8 +4,8 @@
     linkbase.py <1ST_READ.BIN>
 
 Both bases load to the same RAM, but pointers inside the file use the one it was linked for:
-most Katana builds use 0x8C010000 (P1), some (Crazy Taxi) 0x0C010000. Import at the wrong one and
-Ghidra resolves almost no pointers: Crazy Taxi found 1,113 functions instead of the real set.
+most Katana builds use 0x8C010000 (P1), some 0x0C010000. Import at the wrong one and Ghidra
+resolves almost no pointers, and finds about half the functions.
 """
 import struct
 import sys

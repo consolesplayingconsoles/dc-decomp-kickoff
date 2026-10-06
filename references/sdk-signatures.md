@@ -9,13 +9,13 @@ the source's library order.
 
 A matching decomp's link script pins SDK functions by address: `define _NAME(8CADDR)`. Turn those
 into a names list (`<hex addr> <name>`, no leading underscore), import the reference game's
-executable at its base, run `ExportSigs.java <names.txt> <sigs.txt>`. Tokyo Bus Guide: 176 names,
-162 hashable; they named 30 functions in Crazy Taxi and 69 in Boku Doraemon.
+executable at its base, run `ExportSigs.java <names.txt> <sigs.txt>`. A complete decomp gives
+more: every function its linker map names (`scripts/ref_sigs.sh`).
 
 ## From the SDK's own libraries
 
 The Katana SDK's `.lib` files hold every exported library function. Built once per SDK version,
-the table applies to any game of that era in seconds (Crazy Taxi: 385 named, Boku Doraemon: 879).
+the table applies to any game of that era in seconds.
 Keep the table local: it is derived from the SDK and must not be committed.
 
 Pipeline (all with the SDK's own Hitachi tools, run under `wibo` in a Linux container)

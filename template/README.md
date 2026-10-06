@@ -49,7 +49,7 @@ Docker, `DC_LOCAL=1` runs the tools through `wibo` instead.
 | `build.sh` | assemble, link, convert, compare with your original |
 | `disc.sh` | build a playable disc image of your version (files you put under `disc/`) |
 | `textures.sh` | optional: every standard texture on one page, to find text drawn into images |
-| `tools/` | disc reader, splitter, text mapper, C-unit layout, progress report, missed-function finder |
+| `tools/` | disc reader, splitter, text mapper, C-unit layout, progress report, missed-function finder, SH-4 disassembler |
 | `AGENTS.md` | the per-function decompilation loop |
 
 `text-map/` (generated) lists the executable's strings with every pointer to them, the text density

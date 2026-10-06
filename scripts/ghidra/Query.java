@@ -1,6 +1,8 @@
 // Ad-hoc queries on an analysed program: args <out.txt> <cmd> <addr> [<cmd> <addr> ...]
 //   dec <addr>    decompile the function containing addr
 //   xref <addr>   references to addr, with the containing function of each
+//   callers <addr> the functions that call the function at addr, through its thunks too (in a shared
+//                 library the callers reach an exported function through its PLT stub)
 //   asm <addr>    disassembly of the function containing addr
 // Run with -process <program> -noanalysis, so it takes seconds on a saved project.
 import ghidra.app.decompiler.DecompInterface;
@@ -44,6 +46,22 @@ public class Query extends GhidraScript {
             o.println("  " + r.getFromAddress() + " " + r.getReferenceType() + " " + (g == null ? "-" : g.getName()));
           }
           break;
+        case "callers": {
+          Function t = getFunctionAt(addr) != null ? getFunctionAt(addr) : f;
+          if (t == null) break;
+          java.util.List<ghidra.program.model.address.Address> ends = new java.util.ArrayList<>();
+          ends.add(t.getEntryPoint());
+          var thunks = t.getFunctionThunkAddresses(true);
+          if (thunks != null) ends.addAll(java.util.Arrays.asList(thunks));
+          java.util.Set<String> seen = new java.util.TreeSet<>();
+          for (var e : ends)
+            for (Reference r : getReferencesTo(e)) {
+              Function g = getFunctionContaining(r.getFromAddress());
+              if (g != null && !g.isThunk()) seen.add(g.getEntryPoint() + " " + g.getName() + (e.equals(t.getEntryPoint()) ? "" : " (via stub " + e + ")"));
+            }
+          for (String x : seen) o.println("  " + x);
+          break;
+        }
         case "asm":
           if (f != null)
             for (Instruction ins : currentProgram.getListing().getInstructions(f.getBody(), true))

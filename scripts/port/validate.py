@@ -8,6 +8,12 @@ more of r4-r7 (before writing them, up to its first call or return) than the por
 integer/pointer parameters is not that function: the pair is rejected. Reading fewer proves
 nothing (arguments are often read after a call), so it is not a rejection. Only the port's original
 game functions (not its own C++ classes) and plain C identifiers are accepted.
+
+It also lists signature names that may have landed on game code: short functions (48 bytes or
+less) named by an sdk.txt "func" line with no name of the same family (first two letters) within
+8 functions either side (library functions are linked in families). A short game function can
+hash like an unrelated library one, and such a name, used as a seed, pairs its whole neighbourhood wrong. Listed for review, never dropped: check each
+against how its result is used (a value stored as an angle is not a sine).
 """
 import os, re, struct, sys
 from portcfg import DECOMP, SIGNATURE, ORIGINAL_NAMES
@@ -95,3 +101,33 @@ with open('accepted.tsv', 'w') as o:
             o.write(l + '\n')
 print('parameter count agrees %d, differs %d, no signature %d; rejected (reads more than the '
       'signature): %d; accepted: %d' % (ok, bad, unk, len(over), sum(1 for _ in open('accepted.tsv'))))
+
+sdk_txt = os.path.join(DECOMP, 'sdk.txt')
+if os.path.exists(sdk_txt):
+    ranges, sig = [], set()
+    for l in open(sdk_txt):
+        p = l.split()
+        if p and p[0] == 'range':
+            ranges.append((int(p[1], 16), int(p[2], 16)))
+        elif p and p[0] == 'func':
+            sig.add(int(p[1], 16))
+    order = sorted((int(l.split()[1], 16), l.split()[3], int(l.split()[2])) for l in
+                   open(os.path.join(DECOMP, 'functions.txt')) if l.startswith('F '))
+    def fam(n):
+        n = n.lstrip('_').lower()
+        return n[:2]
+    # Library functions come in families linked together (ADXSTM_* beside ADXSTM_*). A short
+    # signature name with no same-prefix name within 8 functions either side is suspect: a hash
+    # collision needs a short function.
+    odd = []
+    for i, (a, n, z) in enumerate(order):
+        if a not in sig or z > 48 or n.startswith('FUN_'):
+            continue
+        near = order[max(0, i - 8):i] + order[i + 1:i + 9]
+        if not any(fam(m) == fam(n) for _, m, _ in near if not m.startswith('FUN_')):
+            odd.append((a, n))
+    if odd:
+        print('short signature names with no same-prefix name nearby, check before trusting them as '
+              'seeds (%d):' % len(odd))
+        for a, n in odd:
+            print('  %08x %s' % (a, n))
