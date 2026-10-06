@@ -16,7 +16,7 @@ import re, struct, sys
 
 if len(sys.argv) < 5:
     sys.exit(__doc__)
-funcs = sorted((int(l.split()[1], 16), int(l.split()[2]), l.split()[3]) for l in open(sys.argv[1]))
+funcs = sorted((int(l.split()[1], 16), int(l.split()[2]), l.split()[3]) for l in open(sys.argv[1]) if l.startswith('F '))
 base = int(sys.argv[2], 16)
 exe = open(sys.argv[3], 'rb').read()
 sdk = {}
