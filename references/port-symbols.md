@@ -7,11 +7,8 @@ so nothing matches byte for byte, but the program is the same: same strings, sam
 calls in the same order. That is enough to pair a large share of the Dreamcast functions with their
 real names.
 
-**Crazy Taxi (Europe)** against Crazy Taxi Classic 6.0 for Android (`lib/arm64-v8a/libgl2jni.so`,
-from the user's own APK): about 980 original game functions and 470 of Sega's Naomi library named
-in the port; 310 Dreamcast functions and 29 globals paired, 257 of them new names for the decomp;
-all functions named in the decomp went from 20% to 31% (game code alone: 23% after). Ask the user for the port's file;
-never fetch an APK or game build yourself.
+On one game this named about a fifth of the functions the decomp had not named yet
+(`evidence.md`). Ask the user for the port's file; never fetch an APK or game build yourself.
 
 ## Steps (scripts in `scripts/port/`, `scripts/ghidra/ExportFeatures.java`)
 
@@ -36,17 +33,18 @@ never fetch an APK or game build yourself.
 
 - **Seeds**: names already shared (the SDK and Naomi library names the decomp has), a string only
   one function uses on each side, two rare constants shared, and `seeds.tsv` for pairs proven by
-  reading the SH-4 code.
+  reading the SH-4 code. Signature names are seeds too, so a wrong one spreads: `validate.py`
+  lists short signature names with no same-family name nearby, to check before trusting them.
 - **Calls through the PLT.** A shared library calls its own exported functions through PLT stubs:
   resolve a stub to the function it forwards to (`getThunkedFunction`), or every call list is
   empty and nothing propagates.
 - **Compiler runtime helpers.** SH-4 calls helpers for division, modulo and struct copies that
   ARM does inline; they flood the Dreamcast call lists and break call-order alignment. List their
-  range in `RUNTIME_SKIP` (Crazy Taxi: the unnamed functions between the game code and the C
-  library, `0x0C080E00-0x0C081700`).
+  range in `RUNTIME_SKIP` (typically the unnamed functions between the game code and the C
+  library).
 - **The port's own code.** Pair only the port's original game functions (free functions
   `_Z<digit>...` or plain C names), never its C++ classes: a string can live in a port-only class
-  that merely calls the original (Crazy Taxi: `gameInit` would have been named `Update`).
+  that merely calls the original, and the original would get the class method's name.
 - **Inlining** breaks call order: the port inlined small Dreamcast functions (or the reverse).
   Pairing by shared neighbours (paired callers and callees, paired globals, rare constants) is
   what carries most of the propagation; call-order gaps only help locally.
@@ -63,6 +61,18 @@ never fetch an APK or game build yourself.
   around) pairs with a variable by mistake: put such addresses in `DROP_GLOBALS`. A name that two
   addresses claim is dropped.
 - macOS `c++filt` only demangles `_Z...` with `-n` (it expects Mach-O's extra underscore).
+- **Callers through the PLT, when reading by hand.** In the port's Ghidra project, an xref on an
+  exported function finds only its stub. `Query.java callers <addr>` lists the functions that call
+  it directly or through any stub.
+- **Function-pointer tables pair whole families.** State machines keep their handlers in
+  function-pointer arrays (globals, or initialised locals whose template sits in the constant
+  data). In the shared library each entry is an `R_AARCH64_RELATIVE` relocation, so
+  `objdump -R` gives a table's entries in order; pairing them with the Dreamcast table, entry by
+  entry, names the whole family at once.
+- **Lining up a struct between builds.** The port keeps Dreamcast addresses as plain 32-bit
+  constants (motion and model pointers, loaded data addresses): exact anchors for a field's offset.
+  Offsets agree on both sides up to the first pointer field; each pointer the 64-bit port widens
+  shifts everything after it by +4. Walking a record that way maps it quickly.
 
 Expect a few wrong names among the applied ones: say so in the docs, and prefer a name proven by
 reading the code over the matcher's.

@@ -12,8 +12,10 @@ You get a repo that:
 * describes the loop for taking functions from assembly to C, with the build checking each step;
 * contains **no game code or data**: everything game-derived is generated from your disc.
 
-Worked example: [crazy-taxi-decomp](https://github.com/consolesplayingconsoles/crazy-taxi-decomp)
-(2,389 functions, 430 named, byte-identical rebuild).
+Worked examples: [crazy-taxi-decomp](https://github.com/consolesplayingconsoles/crazy-taxi-decomp)
+and [boku-doraemon-decomp](https://github.com/consolesplayingconsoles/boku-doraemon-decomp). What the
+skill did on each game it has been run on is in [`references/evidence.md`](references/evidence.md);
+if you run it on a game, the last step prints your run in that format: send it as an issue.
 
 ## Install
 

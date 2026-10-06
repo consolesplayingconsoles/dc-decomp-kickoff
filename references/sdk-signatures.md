@@ -8,7 +8,7 @@ the source's library order.
 ## From the SDK's own libraries
 
 The Katana SDK's `.lib` files hold every exported library function. Built once per SDK version,
-the table applies to any game of that era in seconds (Crazy Taxi: 385 named, Boku Doraemon: 879).
+the table applies to any game of that era in seconds.
 Keep the table local: it is derived from the SDK and must not be committed.
 
 Pipeline (all with the SDK's own Hitachi tools, run under `wibo` in a Linux container)

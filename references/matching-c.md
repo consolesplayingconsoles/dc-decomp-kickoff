@@ -1,6 +1,6 @@
 # Getting a source file to match
 
-What the C side of a Katana decomp needs, learned on Crazy Taxi (Europe). The repo's `AGENTS.md`
+What the C side of a Katana decomp needs (where it was learned: `evidence.md`). The repo's `AGENTS.md`
 has the short version; this is the detail.
 
 ## The unit is the original source file, not the function
@@ -16,8 +16,8 @@ Finding a unit's extent from the asm:
 - every pool word it loads lies inside it, and every `bsr` target too.
 
 Both ends must be function boundaries in `functions.txt`. The analysis misses functions
-(`missed_funcs.py`); Crazy Taxi's first unit swallowed a 16-byte leaf the split did not have, and
-the build came out 16 bytes short. `units.py` now refuses such a unit.
+(`missed_funcs.py`); a unit that swallows a leaf the split does not have comes out short by
+that leaf's size. `units.py` now refuses such a unit.
 
 ## Compiler and flags
 
@@ -26,11 +26,11 @@ the build came out 16 bytes short. `units.py` now refuses such a unit.
   -optimize=1 -size -string=const -section=p=P,c=C,d=D,b=B` (in `build.sh`).
 - `-size`, `-speed` and `-optimize=1` alone gave the same code on what was tried; `-optimize=0` is
   very different (everything through the stack) and easy to recognise.
-- **`-align16`**: library-style code (Crazy Taxi's Naomi library, `nl*`) pads every function *and*
+- **`-align16`**: library-style code pads every function *and*
   branch targets to 16 or 32 bytes with `nop`s. Seeing `nop` runs before function starts or
   before an isolated `rts` means `-align16` for that unit. Game code had none.
-- **Compiler version**: SHC 5.1 Release 08 (SDK R9, Nov 1999) and Release 11 (SDK R10.1, May 2000)
-  gave byte-identical output on everything compared. A difference that survives every rewording
+- **Compiler version**: SHC 5.1 Release 04 (SDK R1.42J), Release 08 (SDK R9, Nov 1999) and Release
+  11 (SDK R10.1, May 2000) gave byte-identical output on everything compared. A difference that survives every rewording
   is still more likely the C than the compiler: check another version once, then keep rewording.
 
 ## Layout the compiler does not control
@@ -66,7 +66,7 @@ landed, and ignore the displacement byte of `mov.l/mov.w @(disp,pc)` and of `bsr
 layout before it matches (those only change because something moved). Fix functions in address
 order: when an earlier one matches, later ones often follow.
 
-## Idioms that changed register allocation (Crazy Taxi)
+## Idioms that changed register allocation
 
 | the original had | written as |
 |---|---|
@@ -75,9 +75,25 @@ order: when an earlier one matches, later ones often follow.
 | a value tested right after being copied, not re-read | `if ((e->prev = before->prev) == 0)` |
 | the entry `mov #8,r5; cmp/hs r5,r4` with the argument kept in `r4` | a `while` loop instead of `for`, with the list head loaded before it |
 | a flag test that jumps to a padded `rts` | `if (flag == 0) return;` before the work, not `if (flag) { ... }` |
+| a bit field set from a call's result | `f.bit = g() ? 1 : 0;` (not `g() != 0`) |
+| a store through a computed address (`mov.w off,r2; add rP,r2; mov.l rX,@r2`), not `@(r0,rP)` | a whole-word bit field, `unsigned int f : 32;` |
+| flag tests with no `extu.b` | one-bit fields in a struct, not `flags & mask` on a byte |
+| a global read at constant offsets (the pool holds `symbol+offset`) | the global as a struct and its members, not array indexing |
+| a different block order and different stack slots | the if/else order: it decides both (the order locals are declared in changed nothing) |
+| a temporary kept in a register where you got a spill | declare it in the block that uses it, not at function scope |
+| a different register holding a shared constant | `unsigned` on the field or variable that uses it |
 
 What did *not* move anything: `-speed` vs `-size`, signed vs unsigned parameters, `register`,
 explicit casts on null pointers.
+
+## Compiler runtime routines
+
+The code calls a few routines from the compiler's own library (`sh4nlfzn.lib`): `__modls` (signed
+modulo), `__bfslu` (bit-field store), `__quick_evn_mvn` / `__quick_odd_mvn` (block copies), and
+others. They are hand-written assembly, typed as data in the library's link map; the kick-off's
+`sdk_sigs.sh` hashes them too (code-section data symbols). In `functions.txt` they carry one
+underscore less (`_modls`): `split_asm.py` exports `_<name>`, so the label is the compiler's own
+name and a C unit calling them links without `symbols.txt` entries.
 
 ## Pitfalls
 
