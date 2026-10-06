@@ -15,7 +15,31 @@ You get a repo that:
 Worked example: [crazy-taxi-decomp](https://github.com/consolesplayingconsoles/crazy-taxi-decomp)
 (2,389 functions, 430 named, byte-identical rebuild).
 
-Start with [`SKILL.md`](SKILL.md). Requirements: Docker and Python 3, on any OS.
+## Install
+
+The skill is a folder: `SKILL.md` plus the `scripts/`, `template/` and `references/` it runs.
+Install the whole folder, not `SKILL.md` alone.
+
+* **Claude (claude.ai or the desktop app):** build the zip, then upload it as a skill (Settings,
+  Capabilities, Skills):
+  ```
+  git clone https://github.com/consolesplayingconsoles/dc-decomp-kickoff
+  bash dc-decomp-kickoff/zip.sh
+  ```
+  It writes `dc-decomp-kickoff/dist/dc-decomp-kickoff.zip`. Then ask Claude to start a decomp of
+  your game. The work runs in Claude's own workspace, so you upload your disc and SDK images there
+  when it asks.
+* **Claude Code:** clone it into your skills folder, then ask Claude to start a decomp of your game:
+  ```
+  git clone https://github.com/consolesplayingconsoles/dc-decomp-kickoff ~/.claude/skills/dc-decomp-kickoff
+  ```
+  The work runs on your machine, with your disc and SDK where they already are.
+
+If only `SKILL.md` got installed, the skill fetches its own tools from this repo before starting.
+
+**What you provide:** your game disc (`.gdi` or `.chd`) and a Katana SDK. The skill reads your
+disc and tells you which SDK release it was built with, so you know which one to get. You also
+need Docker and Python 3 wherever it runs (Claude's workspace has them).
 
 ## Third-party sources
 

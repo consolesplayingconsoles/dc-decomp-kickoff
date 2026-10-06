@@ -11,9 +11,11 @@ for turning a function into C is written down. Decompiling the game is the work 
 
 ## Getting the tools (do this first)
 
-Installed skills often arrive as `SKILL.md` alone. This skill needs its own files (`scripts/`,
-`template/`, `references/`). If `scripts/split_asm.py` is not next to this file, tell the user and
-ask before cloning the skill into a tools folder (default `~/dc-tools`):
+This skill needs its own files (`scripts/`, `template/`, `references/`); the README's install
+(the zip from `zip.sh`, or a clone) brings them. If `scripts/split_asm.py` is not next to this file,
+only `SKILL.md` was installed: fetch the tools yourself, without asking (they are this skill's own
+public code, not third-party material), into a tools folder (default `~/dc-tools`), and tell the
+user in one line that you did and that the README's zip install avoids it:
 
 ```
 git clone https://github.com/consolesplayingconsoles/dc-decomp-kickoff ~/dc-tools/dc-decomp-kickoff
@@ -30,6 +32,11 @@ Ghidra and the Hitachi tools run in containers, so nothing else is installed. On
 impossible and the machine is **Linux x86_64**: `DC_LOCAL=1` (opt-in, never a default) runs the
 Hitachi tools through `wibo` on PATH and Ghidra from `GHIDRA_INSTALL_DIR` (Ghidra 12.x + JDK 21).
 `DC_LOCAL` does not work on macOS or Windows (`wibo` is a Linux program): there, install Docker.
+**In a cloud workspace** (a Claude conversation's own Linux machine) images often cannot be pulled:
+use `DC_LOCAL=1` for every script (`ref_sigs.sh` and `sdk_unpack.sh` included; the latter also needs
+`unshield`), installing wibo (pinned and checksummed as in `scripts/tools-image/Dockerfile`) and
+Ghidra + JDK 21 as `scripts/ghidra/Dockerfile` does. The user's disc and SDK images arrive as
+uploads or a connected folder; the repo is built there, so offer to hand it back to them at the end.
 
 **Before starting, check the machine:**
 - `python3 --version` works and is 3.6 or newer (on macOS, `python3` can be Apple's stub that
@@ -46,9 +53,19 @@ Kochise repository that is `SDK/EXES/INSTALL KATANA SDK/INPUT/R10.1_000518` (quo
 spaces); a sparse checkout of that folder is enough (`git clone --filter=blob:none --sparse`, then
 `git sparse-checkout set "SDK/EXES/INSTALL KATANA SDK/INPUT/R10.1_000518"`).
 
+**A second SDK, optional: 1.55J (1999), for the complete reference decomp and more names.** List it
+to the user by its disc names and ask them to provide the images themselves; never download it:
+"Dreamcast SDK (Sega Library) Ver.1.55J" **Vol.1 (Common Disc)** and **Vol.2 (For SHC Users)**
+(Redump discs 87866 and 87867; Vol.3, CodeWarrior, is not needed). Lay it out with
+`python3 scripts/sdk_from_iso.py <out folder> <Vol.1 .iso> <Vol.2 .iso>`: it checks each image
+against its Redump record, then copies `bin/` (Vol.1) and `shc/` + `shinobi/` (Vol.2), about a second.
+Without it everything below still works, with fewer names.
+
 **Run the Ghidra steps one at a time.** Each needs ~1 GB; Docker Desktop and colima often default to
 2 GB, so two at once get killed ("Killed" in the log). `sdk_sigs.sh` switches to one library per run
 when Docker has under 4 GB. **Every script fails loudly**: never continue past an empty table.
+Ghidra projects are the costly part: `DC_GHIDRA_PROJECTS=<folder>` keeps them there instead of in
+the output folder, so cleaning outputs never wipes them (ask the user where, if they have a place).
 
 **Long steps print progress** (Ghidra analysis ~3 min, first build a few minutes, textures a
 minute or two): tell the user what is running and roughly how long before starting each.
@@ -57,8 +74,10 @@ minute or two): tell the user what is running and roughly how long before starti
 (`Kochise/dreamcast-docs`, SDK R10.1, as cloned: byte-identical build, 385 SDK names) **and a
 second SDK copy laid out like the reference decomp's (same results).** Crazy Taxi: 2,389 functions, 430 named (385 from SDK
 signatures, 30 from a reference decomp), 2,390 files, byte-identical rebuild with the SDK's own
-assembler and linker. The C side of the loop (step 7) is described, not yet exercised here.
-Everything it uses is in this skill's own folder.
+assembler and linker. The C side (repo `AGENTS.md`) is exercised on Crazy Taxi: a first source
+file (three Naomi-library functions) builds from C byte for byte inside the full build, and a
+second (the game's heap and event list) matches 9 of 12 functions so far. Everything it uses is in
+this skill's own folder.
 
 ## Third-party sources
 
@@ -72,8 +91,10 @@ equivalent material lawfully in their possession.
 | need | example source | used for |
 |---|---|---|
 | Katana SDK (libraries + Hitachi `asmsh`, `shc`, `lnk`, `lbr`, `elf2bin`) | `github.com/Kochise/dreamcast-docs` (`SDK/`) | SDK signatures, the matching build |
-| a reference decomp | `github.com/consolesplayingconsoles/tbg-decomp` at tag `kickoff-reference-1` (a fork of `lhsazevedo/tbg-decomp` whose matching build works with the Kochise R10.1 SDK) | names no SDK copy has |
-| object compare tool | `github.com/lhsazevedo/sh4objtest` (MIT) | step 7 |
+| other Katana SDK releases, optional (disc images: 0.20 Pre 7 to R11b, 1.55J Vol.1 + Vol.2, Network 1.04) | archive.org item `official-katana-sdks` (`OFFICIAL KATANA SDKs.zip`, one image per release); 1.55J is also catalogued by Redump (discs 87866, 87867) | the release the game was built with (step 2), the complete reference decomp (1.55J), more SDK names |
+| a reference decomp | `github.com/consolesplayingconsoles/tbg-decomp` (a fork of `lhsazevedo/tbg-decomp`): latest `main` (the complete decomp, builds with SDK 1.55J) or tag `kickoff-reference-1` (builds with the Kochise R10.1 SDK) | names no SDK copy has |
+| object compare tool | `github.com/lhsazevedo/sh4objtest` (MIT) | the C loop (optional) |
+| an older SDK, optional | archive.org item `dcsdk-9e` (SDK R9 Europe, Nov 1999, disc 1: SHC 5.1 Release 08) | a period compiler for games built in 1999-2000; on Crazy Taxi it gave the same bytes as R10.1's (Release 11) |
 
 Ask before cloning each one. Never commit the SDK, the game's files, or anything derived from them
 (hash tables included) to the new repo: its `.gitignore` already excludes them.
@@ -86,6 +107,14 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
 1. **Disc to executable** (`scripts/gdi_read.py`, CHD via `chdman extractcd`). Check the
    boot file in IP.BIN; `0WINCEOS.BIN` means Windows CE: stop, this skill does not apply.
 2. **Base and fingerprint**: `scripts/linkbase.py`, `scripts/banners.py`. Note the SDK version the game used.
+   **Which SDK to ask for:** `python3 scripts/sdk_scan.py references/sdk-banners.tsv <1ST_READ.BIN>`
+   ranks the publicly preserved Katana releases by how many of the game's library builds they
+   contain. A full match: ask the user for that release. None: say the game was built with a
+   release not in the list, and to pick a close one; suggest the one or two the script names. If
+   the user already has several SDKs, they can instead point at one folder holding all of them
+   (images, zips or folders) and run `sdk_scan.py <that folder> <1ST_READ.BIN>`. Older releases
+   ship inside InstallShield cabinets: `scripts/sdk_unpack.sh <image> <out>` lays any of them out
+   as plain files (Docker, any OS) before `sdk_sigs.sh`.
 3. **Ghidra** (Docker; no Linux machine needed, the image builds on first use), with the
    executable in `<work>`:
    ```
@@ -99,13 +128,20 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
    - SDK-wide: `scripts/sdk_sigs.sh <SDK folder> <out>` -> `<out>/katana-sdk.sigs`. Any SDK layout:
      the Hitachi tools and the `.lib` files are found by name. Build once per SDK, keep it local.
      Details and gotchas: `references/sdk-signatures.md`.
-   - Reference decomp: `scripts/ref_sigs.sh <SDK folder> <out>` -> `<out>/tbg.sigs`. No game disc
-     needed: it clones the decomp (ask first), builds Tokyo Bus Guide's executable from it with the
-     same SDK (checked against TBG's SHA-1), and hashes the library functions its link script names
-     (176, 162 hashable). These match older library versions than the SDK copy (Crazy Taxi: 6 names
-     only this table finds, `ADXT_StartAfs` among them). A few minutes, once.
-   - Apply both with `ApplySigs.java <sigs> <out> apply` (unique matches only), then
-     `DcReport.java` for the final list.
+     With the 1.55J folder too, run it again into a second folder (`<out155>/katana-sdk.sigs`) and
+     apply both tables.
+   - Reference decomp: `scripts/ref_sigs.sh <SDK folder> <out> [<SDK 1.55J folder>]` ->
+     `<out>/tbg.sigs`. No game disc needed: it clones the decomp (ask first), builds Tokyo Bus
+     Guide's executable from it (checked against TBG's SHA-1) and hashes its named functions. With
+     1.55J: the complete decomp (the fork's latest `main`, pulled every run), every function its linker map names
+     (1,462). Without: tag `kickoff-reference-1` built with R10.1, the 176 library functions its
+     link script pins (162 hashable). A few minutes, once.
+   - **Apply every table you have, in one fixed order**, all in one Ghidra run (one `-postScript
+     ApplySigs.java <sigs> <out> <mode>` each, unique matches only), then `DcReport.java`:
+     1. the SDK tables with `apply`, the release farthest from the game first and the closest
+        (step 2's ranking) last, so where releases disagree the closest one's name stands;
+     2. the reference decomp's table with `fill`: it only names functions no SDK table named.
+     The same tables in this order always give the same names.
 5. **The repo: ask the user where to put it.** Suggest a default (a sibling of the current folder,
    named from the IP.BIN title: lowercase, spaces to hyphens, plus `-decomp`, e.g.
    `CRAZY TAXI` -> `<parent>/crazy-taxi-decomp`), always written as an **absolute path**. Create it,
@@ -115,28 +151,40 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
    data words, exported labels, `objects.txt` in link order.
 6. **Make the repo publishable and build it.** A pushed repo holds no game bytes, so it must be
    able to regenerate them from each user's own disc. Into the repo:
-   - copy `template/` (`build.sh`, `setup.sh`, `disc.sh`, `textures.sh`, `README.md`, `AGENTS.md`,
-     `.gitignore`);
+   - copy `template/` (`build.sh`, `setup.sh`, `disc.sh`, `textures.sh`, `README.md`, `AGENTS.md`),
+     and `template/gitignore` as **`.gitignore`** (shipped without the dot: some installs drop
+     dotfiles);
    - copy into `tools/`: `scripts/gdi_read.py`, `split_asm.py`, `text_map.py`, `file_tables.py`,
-     `textures.py`, `disc_patch.py`, `apply_bin.py`, `docker_check.sh` and the `tools-image/` folder
-     (so a cloned repo builds its own tools image, nothing pulled from anyone else);
+     `textures.py`, `disc_patch.py`, `apply_bin.py`, `docker_check.sh`, `units.py`, `fill.py`,
+     `progress.py`, `missed_funcs.py`, the `tools-image/` folder and `scripts/hooks/` as `tools/hooks/` (so a cloned repo builds its own
+     tools image, nothing pulled from anyone else);
+   - write `sdk.txt`: `scripts/sdk_txt.py <repo>/functions.txt <base> <1ST_READ.BIN>
+     <SDK ApplySigs output>` (SDK tables only, not the reference decomp's). It marks the boot block
+     and the SDK library block, so `tools/progress.py` reports game code and SDK apart;
    - write the base to `BASE` (hex, no `0x`); `split_asm.py` already wrote `functions.txt`;
    - fill the placeholders: in `setup.sh` and `disc.sh` `@BOOT@` (boot file from IP.BIN) and `@SHA1@` (of that
      file); in `README.md` `@TITLE@`, `@RELEASE@` (IP.BIN: title, product number, version, date,
      region), `@BOOT@`, `@SIZE@`, `@SHA1@`, `@BASE@`, `@SDK@` (main banners), `@FUNCS@`, `@NAMED@`,
-     `@NAMED_SDK@`, `@NAMED_REF@`, `@LICENSE@`. No `@...@` may remain in those three files
+     `@NAMED_SDK@`, `@NAMED_REF@`, `@LICENSE@`, and `@PROGRESS@` (after the first `MATCH`: the
+     output of `python3 tools/progress.py` in a ``` fence). No `@...@` may remain in those three files
      (`grep -n '@[A-Z_]*@' README.md setup.sh disc.sh`; `tools/` has its own `@N@` tokens, ignore).
      `@NAMED@` = functions whose name is not `FUN_...` (what `split_asm.py` prints). It can exceed
      `@NAMED_SDK@` + `@NAMED_REF@`: small wrappers (thunks) inherit the name of what they call.
    - **ask the user for a licence** for the repo's own code and docs (suggest GPL-3.0-or-later or
      MIT) and add its text as `LICENSE`.
-   - `chmod +x build.sh setup.sh` (tell the user; it is one command).
+   - `chmod +x build.sh setup.sh tools/hooks/pre-commit` (tell the user; it is one command).
    - write `.env` in the repo with `SDK_PATH="<absolute SDK folder>"` (gitignored, machine-local),
      so the user can rebuild with a plain `bash build.sh` later.
    Then put the original executable in as `1ST_READ.BIN` and run `bash build.sh`. It must print `MATCH`. First run assembles every file (minutes); later runs only
    changed ones. Always invoke scripts with `bash`/`python3`: downloads can lose execute bits.
    Finally prove the published layout works: empty `asm/`, `objects.txt`, `text-map/`, then
    `bash setup.sh <disc.gdi>` and `bash build.sh` again: `MATCH` again.
+   Then `python3 tools/missed_funcs.py 1ST_READ.BIN <base> functions.txt`: code the analysis did
+   not make into functions (callbacks reached only through tables, getters only through literal
+   pools, state handlers merged into a neighbour). Crazy Taxi: 644 candidates, about half backed
+   by a pointer. They matter for C units, whose ends must be function boundaries. Report the count
+   and leave the list for review: adding an entry never changes the bytes (still `MATCH`), only
+   where files split. `python3 tools/progress.py` gives the starting state.
 7. **Text map** (for translators, English included: any language can be a source as well as a
    target): `scripts/text_map.py <1ST_READ.BIN> <base> <report> <repo>/text-map <disc.gdi> [tier]`.
    - `exe_strings.tsv`: every executable string, the functions using it, and every pointer to it
@@ -175,11 +223,14 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
    <modified>` writes the changes into the asm data words; then `bash build.sh` (it prints DIFFERS,
    expected; `DC_EXPECT_CHANGES=1` makes that exit 0). Tested on Boku Doraemon: the story script at
    1.7x a scene's budget, 10 KB bigger than the original file, played through in Flycast.
-9. **Hand over**: `template/AGENTS.md` is the per-function loop (asm -> instructions -> C -> match).
+9. **Hand over**: `template/AGENTS.md` is the loop (names first, then C one source file at a time).
+   If the game was later ported and the user has the port (an Android `.apk`, an iOS or PC build),
+   offer `references/port-symbols.md`: a port that kept its symbol table names a large share of
+   the game's functions and globals by their original names.
 10. **GitHub (optional)**: print, do not run, the commands for the user:
 
    ```
-   cd "<absolute repo path>" && git init && git add -A && git commit -m "Kick off: byte-matching split, <n> named"
+   cd "<absolute repo path>" && git init && git config core.hooksPath tools/hooks && git add -A && git commit -m "Kick off: byte-matching split, <n> named"
    # check first: git ls-files must show no asm/, 1ST_READ.BIN or other game files
    gh repo create <owner>/<repo dir name> --public --source . --push
    ```
@@ -200,8 +251,15 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
 | `scripts/ghidra/*.java` | seed + report (`DcPre`, `DcReport`), signatures (`ExportSigs`, `ApplySigs`), queries (`Query`) |
 | `references/sdk-signatures.md` | naming library code from a reference decomp or the SDK's libraries |
 | `references/memory-map.md` | Dreamcast addresses worth labelling on sight |
+| `references/matching-c.md` | getting a source file to match: units, flags, fill, idioms, compare loop |
+| `references/port-symbols.md` | naming from a later port that kept its symbols (Android, iOS, PC builds) |
 | `scripts/ref_sigs.sh` | reference decomp names: build TBG's executable from the decomp, hash its named functions |
 | `scripts/sdk_sigs.sh` | signature table for every exported function in an SDK's libraries |
+| `scripts/sdk_from_iso.py` | SDK 1.55J folder from its Vol.1 + Vol.2 disc images, checked against Redump |
+| `scripts/sdk_scan.py` | which SDK release built the game: its library banners against `references/sdk-banners.tsv` or a folder of SDKs |
+| `scripts/sdk_unpack.sh` | any SDK image or zip as plain files, InstallShield cabinets unpacked (`unshield-image/`) |
+| `scripts/iso_extract.py` | copy every file out of a disc image or zip (Joliet or ISO9660, no mounting) |
+| `references/sdk-banners.tsv` | library banners (module, version, build date) of every preserved Katana release |
 | `scripts/text_map.py` | strings with pointers, file text density, font path, image candidates |
 | `scripts/file_tables.py` | tables in the executable that locate records inside disc files |
 | `scripts/textures.py` | every standard texture to PNG + a contact sheet (`index.html`) |
@@ -212,8 +270,15 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
 | `scripts/docker_check.sh` | Docker installed vs running vs low memory, and the tools image on first use |
 | `scripts/tools-image/Dockerfile` | the `dc-tools` image: small Linux + pinned, checksum-verified wibo |
 | `scripts/split_asm.py` | split an executable into per-function asmsh sources + link order |
-| `template/build.sh` | assemble, link (`start P(<base>)`), `elf2bin`, compare with the original |
+| `template/build.sh` | assemble, compile C units, link (`start P(<base>)`), `elf2bin`, compare with the original |
+| `scripts/units.py` | in the repo: the link order with C units in place of the asm files they replace |
+| `scripts/fill.py` | in the repo: lay a C unit out like the original (nop alignment, 0xEE fill, exact size) |
+| `scripts/progress.py` | in the repo: matching C, named functions and globals, documented, game and SDK apart |
+| `scripts/sdk_txt.py` | mark the SDK's code (boot block, library block, single matches) as `sdk.txt` |
+| `scripts/missed_funcs.py` | list code the analysis did not make into functions |
+| `scripts/ghidra/ExportFeatures.java` | per-function strings, constants, calls and globals, for port matching |
+| `scripts/port/*.py` | pair functions and globals with a port's symbols (`references/port-symbols.md`) |
 | `template/setup.sh` | in the repo: extract + verify the user's executable, regenerate `asm/` and `text-map/` |
 | `template/README.md` | the repo's README, with `@PLACEHOLDERS@` to fill |
 | `template/AGENTS.md` | the decompilation loop for whoever works in the repo |
-| `template/.gitignore` | keeps game and SDK material out of git (asm, executable, disc, build, text map) |
+| `template/gitignore` | the repo's `.gitignore`: keeps game and SDK material out of git (asm, executable, disc, build, text map) |

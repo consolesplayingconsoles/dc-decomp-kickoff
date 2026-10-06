@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Keeps the README's Progress block current: on every commit it rewrites the lines between
+# <!-- progress --> and <!-- /progress --> with tools/progress.py's report, and stages README.md.
+# Enable once per clone: git config core.hooksPath tools/hooks
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+grep -q '<!-- progress -->' README.md || exit 0
+[ -f functions.txt ] || exit 0
+report="$(python3 tools/progress.py 2>/dev/null)" || { echo "[pre-commit] tools/progress.py failed: Progress block left as is" >&2; exit 0; }
+python3 - "$report" <<'PY'
+import re, sys
+s = open("README.md", encoding="utf-8").read()
+block = "<!-- progress -->\n```\n%s\n```\n<!-- /progress -->" % sys.argv[1].rstrip()
+s2 = re.sub(r"<!-- progress -->.*?<!-- /progress -->", lambda m: block, s, flags=re.S)
+if s2 != s:
+    open("README.md", "w", encoding="utf-8").write(s2)
+PY
+git add README.md

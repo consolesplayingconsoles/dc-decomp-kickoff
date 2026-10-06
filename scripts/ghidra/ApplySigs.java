@@ -1,4 +1,6 @@
-// Name functions from an ExportSigs table: args <sigs.txt> <result.txt> [apply].
+// Name functions from an ExportSigs table: args <sigs.txt> <result.txt> [apply|fill].
+// apply: rename every unique match; fill: only functions still unnamed (FUN_...), so a later table
+// never overrides an earlier one.
 // A function is named only when its full hash maps to exactly one name in the table AND exactly one
 // function in this program carries that hash; otherwise it is reported as ambiguous, never guessed.
 import ghidra.app.script.GhidraScript;
@@ -13,7 +15,8 @@ import java.util.*;
 public class ApplySigs extends GhidraScript {
   @Override public void run() throws Exception {
     String[] a = getScriptArgs();
-    boolean apply = a.length > 2 && a[2].equals("apply");
+    boolean apply = a.length > 2 && (a[2].equals("apply") || a[2].equals("fill"));
+    boolean fill = a.length > 2 && a[2].equals("fill");
     Map<Long, Set<String>> byHash = new HashMap<>();
     for (String line : Files.readAllLines(Paths.get(a[0]))) {
       String[] p = line.trim().split("\\s+");
@@ -35,7 +38,7 @@ public class ApplySigs extends GhidraScript {
       if (names.size() == 1 && fs.size() == 1) {
         String n = names.iterator().next();
         o.println("MATCH " + fs.get(0).getEntryPoint() + " " + n);
-        if (apply) fs.get(0).setName(n, SourceType.ANALYSIS);
+        if (apply && !(fill && !fs.get(0).getName().startsWith("FUN_"))) fs.get(0).setName(n, SourceType.ANALYSIS);
         named++;
       } else {
         o.println("AMBIG " + names + " at " + fs.size() + " sites: " +
