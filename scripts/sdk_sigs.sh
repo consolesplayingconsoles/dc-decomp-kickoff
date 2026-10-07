@@ -85,7 +85,15 @@ else
     -processor SuperH4:LE:32:default -scriptPath /scripts \
     -postScript ExportSigs.java /work/names /work/sigs > "$OUT/ghidra.log" 2>&1
 fi
-missing=""; for e in "$OUT"/elf/*.elf; do b="$(basename "$e" .elf)"; [ -s "$OUT/sigs/$b.sigs" ] || [ ! -s "$OUT/names/$b.names" ] || missing="$missing $b"; done
+missing=""; empty=""
+for e in "$OUT"/elf/*.elf; do
+  b="$(basename "$e" .elf)"
+  [ -s "$OUT/names/$b.names" ] || continue
+  if [ -s "$OUT/sigs/$b.sigs" ]; then :
+  elif [ -f "$OUT/sigs/$b.sigs" ]; then empty="$empty $b"   # written but empty: every function too short to hash
+  else missing="$missing $b"; fi
+done
+[ -z "$empty" ] || echo "[note] no hashable functions in:$empty (tiny routines)"
 [ -z "$missing" ] || { echo "[ERROR] no signatures for:$missing (see $OUT/ghidra.log; out of memory shows as 'Killed')" >&2; exit 1; }
 cat "$OUT"/sigs/*.sigs > "$OUT/katana-sdk.sigs"
 [ -s "$OUT/katana-sdk.sigs" ] || { echo "[ERROR] empty signature table" >&2; exit 1; }

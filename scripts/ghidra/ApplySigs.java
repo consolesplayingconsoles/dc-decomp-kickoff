@@ -31,14 +31,15 @@ public class ApplySigs extends GhidraScript {
         here.computeIfAbsent(h.getFullHash(), k -> new ArrayList<>()).add(f);
     }
     PrintWriter o = new PrintWriter(a[1]);
-    int named = 0, ambiguous = 0;
+    int named = 0, ambiguous = 0, kept = 0;
     for (var e : here.entrySet()) {
       Set<String> names = byHash.get(e.getKey());
       List<Function> fs = e.getValue();
       if (names.size() == 1 && fs.size() == 1) {
         String n = names.iterator().next();
         o.println("MATCH " + fs.get(0).getEntryPoint() + " " + n);
-        if (apply && !(fill && !fs.get(0).getName().startsWith("FUN_"))) fs.get(0).setName(n, SourceType.ANALYSIS);
+        if (fill && !fs.get(0).getName().startsWith("FUN_")) { kept++; continue; }   // fill: never override
+        if (apply) fs.get(0).setName(n, SourceType.ANALYSIS);
         named++;
       } else {
         o.println("AMBIG " + names + " at " + fs.size() + " sites: " +
@@ -50,6 +51,6 @@ public class ApplySigs extends GhidraScript {
     for (var e : here.keySet()) found.addAll(byHash.get(e));
     for (var s : byHash.values()) for (String n : s) if (!found.contains(n)) o.println("NOTFOUND " + n);
     o.close();
-    println("ApplySigs: " + named + " named, " + ambiguous + " ambiguous, table " + byHash.size() + " hashes");
+    println("ApplySigs: " + named + " named, " + ambiguous + " ambiguous" + (fill ? ", " + kept + " already named (kept)" : "") + ", table " + byHash.size() + " hashes");
   }
 }
