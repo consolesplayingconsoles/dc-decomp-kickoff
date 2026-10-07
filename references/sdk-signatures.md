@@ -12,6 +12,14 @@ into a names list (`<hex addr> <name>`, no leading underscore), import the refer
 executable at its base, run `ExportSigs.java <names.txt> <sigs.txt>`. A complete decomp gives
 more: every function its linker map names (`scripts/ref_sigs.sh`).
 
+## From another decomp's names
+
+Any decomp whose build reproduces its game's executable is a names source, not only the reference
+one: a names list from its `functions.txt` (`<hex addr> <name>` for every non-`FUN_` entry) and its
+executable go through `ExportSigs.java` the same way. Games from the same developer share
+libraries no SDK has (a middleware or engine library): one such decomp named a sister game's
+rendering-library functions that no SDK table could. Apply it with `fill`, after the SDK tables.
+
 ## From the SDK's own libraries
 
 The Katana SDK's `.lib` files hold every exported library function. Built once per SDK version,
@@ -35,3 +43,18 @@ Pipeline (all with the SDK's own Hitachi tools, run under `wibo` in a Linux cont
 
 Only exported (non-static) functions get names. Coverage follows the SDK version: a copy from the
 game's own era matches best.
+
+## When the libraries do not match: sample programs
+
+A game built with a pre-release SDK can carry library versions no shipped `.lib` has. SDK discs
+also carry compiled sample programs, often with symbols, and those link the libraries of their own
+moment: a sample built with exactly the game's library version can match where every `.lib`
+misses. Look for `.elf` / `.map` files under the SDK's sample folders and hash them like a decomp's
+executable (names from their symbol table).
+
+## Early (1998) SDKs
+
+Pre-1.0 releases (Katana 0.40 and earlier) carry few banners, in an older form (`GDFS Version 0.49
+1998-05-26`, which `banners.py` and `sdk_scan.py` read). Launch-era games can sit between two
+releases (newer than 0.40, older than 1.0B2): expect few signature names, and look at sample
+programs (above) and sister decomps.

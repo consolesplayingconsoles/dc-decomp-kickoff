@@ -86,7 +86,7 @@ equivalent material lawfully in their possession.
 | need | example source | used for |
 |---|---|---|
 | Katana SDK (libraries + Hitachi `asmsh`, `shc`, `lnk`, `lbr`, `elf2bin`) | `github.com/Kochise/dreamcast-docs` (`SDK/`) | SDK signatures, the matching build |
-| other Katana SDK releases, optional (disc images: 0.20 Pre 7 to R11b, 1.55J Vol.1 + Vol.2, Network 1.04) | archive.org item `official-katana-sdks` (`OFFICIAL KATANA SDKs.zip`, one image per release); 1.55J is also catalogued by Redump (discs 87866, 87867) | the release the game was built with (step 2), the complete reference decomp (1.55J), more SDK names |
+| other Katana SDK releases, optional (disc images: 0.20 Pre 7 to R11b, 1.55J Vol.1 + Vol.2, Network 1.04; and Katana 0.40 Release.4 for 1998 games) | archive.org item `official-katana-sdks` (`OFFICIAL KATANA SDKs.zip`, one image per release); 1.55J is also catalogued by Redump (discs 87866, 87867); 0.40 from sega-dreamcast-info.com (`Dreamcast Katana SDK Version 0.40 Release.4.zip`) | the release the game was built with (step 2), the complete reference decomp (1.55J), more SDK names |
 | a reference decomp | `github.com/consolesplayingconsoles/tbg-decomp` (a fork of `lhsazevedo/tbg-decomp`): latest `main` (the complete decomp, builds with SDK 1.55J) or tag `kickoff-reference-1` (builds with the Kochise R10.1 SDK) | names no SDK copy has |
 | object compare tool | `github.com/lhsazevedo/sh4objtest` (MIT) | the C loop (optional) |
 | an older SDK, optional | archive.org item `dcsdk-9e` (SDK R9 Europe, Nov 1999, disc 1: SHC 5.1 Release 08) | a period compiler for games built in 1999-2000; so far it gave the same bytes as R10.1's (Release 11) |
@@ -101,6 +101,12 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
    running several games can tell the conversations apart.
 1. **Disc to executable** (`scripts/gdi_read.py`, CHD via `chdman extractcd`). Check the
    boot file in IP.BIN; `0WINCEOS.BIN` means Windows CE: stop, this skill does not apply.
+   **Check it is the game before splitting.** Look for the game's own text (menus, item or place
+   names) in the executable. A big `.BIN` next to the boot file can be a bundled application
+   instead (a web browser shipped for online registration: `http` strings, a perfect SDK match and
+   none of the game's text). A boot file with none of the game's text may only be a core that
+   loads the game's code at runtime from other files (relocatable modules): this skill handles one
+   executable at a fixed address, so stop and say so (`references/evidence.md` has an example).
 2. **Base and fingerprint**: `scripts/linkbase.py`, `scripts/banners.py`. Note the SDK version the game used.
    **Which SDK to ask for:** `python3 scripts/sdk_scan.py references/sdk-banners.tsv <1ST_READ.BIN>`
    ranks the publicly preserved Katana releases by how many of the game's library builds they
@@ -119,6 +125,13 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
    ```
    Import at the base `linkbase.py` picked: at the wrong one Ghidra finds a fraction of the code.
    Never copy the `.java` scripts into `<work>`: Ghidra then finds two copies and fails to load them.
+   **How much it finds:** compare the bytes inside functions with the executable's size. A game is
+   often mostly data (models, tables), so a third can be normal; a whole region with `rts`
+   instructions and no functions is code the analysis never reached. `scripts/seed_funcs.py`
+   lists function starts in uncovered stretches; re-import with `-preScript SeedFuncs.java
+   <seeds.txt>` after `DcPre.java` so the analysis follows them. Code reached only through switch
+   tables (`braf` / `jmp @Rn` with a table of offsets) or runs of function pointers stays hidden
+   to both: read those tables when a region still looks like unreached code.
 4. **Names**:
    - SDK-wide: `scripts/sdk_sigs.sh <SDK folder> <out>` -> `<out>/katana-sdk.sigs`. Any SDK layout:
      the Hitachi tools and the `.lib` files are found by name. Build once per SDK, keep it local.
@@ -136,7 +149,10 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
         <out> apply`: a hash that two releases name differently stays ambiguous, so twin stubs
         (byte-identical code under unrelated names) are never named by which release has which;
      2. the reference decomp's table with `fill`: it only names functions no SDK table named.
-     Only unique matches are applied; the same tables always give the same names.
+     Only unique matches are applied; the same tables always give the same names. A unique match
+     on a tiny function (a few instructions) can still be a collision with unrelated library code:
+     report short names that make no sense where they sit (a video-player function in a game that
+     plays no video) as suspect, never silently trust them.
 5. **The repo: ask the user where to put it.** Suggest a default (a sibling of the current folder,
    named from the IP.BIN title: lowercase, spaces to hyphens, plus `-decomp`, e.g.
    `SOME GAME` -> `<parent>/some-game-decomp`), always written as an **absolute path**. Create it,
@@ -273,6 +289,7 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
 | `scripts/progress.py` | in the repo: matching C, named functions and globals, documented, game and SDK apart |
 | `scripts/sdk_txt.py` | mark the SDK's code (boot block, library block, single matches) as `sdk.txt` |
 | `scripts/missed_funcs.py` | list code the analysis did not make into functions |
+| `scripts/seed_funcs.py` | function starts in stretches no function covers, seeds for `ghidra/SeedFuncs.java` |
 | `scripts/shdis.py` | in the repo: SH-4 disassembly with FPU, pool values and names (stdlib) |
 | `scripts/map_names.py` | code symbols of a linked library's map, runtime routines included |
 | `scripts/ghidra/ExportFeatures.java` | per-function strings, constants, calls and globals, for port matching |

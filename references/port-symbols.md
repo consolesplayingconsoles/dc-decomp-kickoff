@@ -10,6 +10,15 @@ real names.
 On one game this named about a fifth of the functions the decomp had not named yet
 (`evidence.md`). Ask the user for the port's file; never fetch an APK or game build yourself.
 
+## Check for symbols first (a minute)
+
+A port helps only if it kept names. Before any pairing: a Windows `.exe` with an empty export
+table, no debug directory (or one pointing at a `.pdb` that did not ship) and no game class names
+has none; a GameCube disc without a `.map` file and with stripped `.dol`s has none; extra
+executables on a disc are often bundled applications (a web browser), not the game. A port of the
+arcade original rather than of the Dreamcast version shares no code with it. Without symbols, a
+port is still a reading reference (x86 decompiles more readably), not a naming source.
+
 ## Steps (scripts in `scripts/port/`, `scripts/ghidra/ExportFeatures.java`)
 
 1. Get the library: an `.apk`/`.xapk` is a zip; the native code is `lib/<abi>/*.so` (a split

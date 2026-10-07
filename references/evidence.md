@@ -76,3 +76,38 @@ as an issue) to add a game.
     release has which -> SDK tables are merged into one before applying
   - the cloud workspace dropped dotfiles and execute bits from the uploaded skill, and could not
     pull Docker images -> `template/gitignore` without the dot, `DC_LOCAL` for every script
+
+### Virtua Fighter 3tb (US), MK-51001 V1.002
+- run: 2026-10-07, naming only (for another team's decomp; no repo kicked off), on macOS (Docker)
+- executable: 1,179,648 bytes, linked at 0x0C010000 (16,517 pointers; 11 at 0x8C010000); SDK by
+  banners: none of the game's 6 library builds (Jan 1999, GDFS 0.53 of Aug 1998) is in any
+  preserved release: it sits between Katana 0.40 and 1.0B2; SDKs used: 0.40 Release.4, 1.55J, R9,
+  R10.1, R11b
+- functions: 1,906 at first (27% of the executable), 2,306 after seeding (32%); the other team's
+  own baseline is 2,398 (37%): most of the executable is data
+- named (after seeding): 126 (97 SDK, of which 0.40 added 44; 22 from the Crazy Taxi decomp's
+  NAOMI library names; 3 from TBG; 4 wrappers); before seeding, 97 of 116 signature names did not
+  appear anywhere in that team's repo
+- what broke or surprised -> what changed:
+  - 1998 libraries use another banner form -> `banners.py` / `sdk_scan.py` read both; 0.40 added
+  - a sister decomp (same developer's library) named what no SDK could -> "From another decomp's
+    names" in `sdk-signatures.md`
+  - the other team's best SDK matches came from an SDK sample program's ELF of the exact library
+    version -> "sample programs" note
+  - analysis reached a quarter of the executable -> `seed_funcs.py` + `SeedFuncs.java`, coverage
+    note in step 3
+  - tiny collisions (a video-player function name in a fighting game) -> suspect-name note in step 4
+  - PC (Sega ALLS, 2023) version: a modern host engine around the arcade original, no symbols
+
+### Phantasy Star Online Ver. 2 (US), MK-51193 V1.004
+- run: 2026-10-07, stopped at step 1
+- the boot file (157 KB, Shinobi 1.757) has none of the game's text: a core that loads the game's
+  code at runtime (the disc holds 129 `.BIN` and 516 `.REL` files); the big `2_DP.BIN` (2.8 MB,
+  SDK R9 exact) is the bundled Dream Passport 2 browser, kicked off by mistake before checking its
+  text (kept as its own local repo)
+- ports checked for names: PC (no symbols, no `.pdb`), GameCube Episode I & II (no map; its extra
+  `.dol`s are a web browser and its debug build), the GameCube decomp (9 game files, C++ classes
+  whose names do not appear in the Dreamcast build): none carries names over automatically
+- what changed: step 1 "check it is the game", runtime-loaded code named as a limit; "check for
+  symbols first" in `port-symbols.md`
+
