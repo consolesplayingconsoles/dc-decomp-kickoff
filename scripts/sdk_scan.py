@@ -26,9 +26,17 @@ BANNER = re.compile(rb"([A-Za-z][\w .@/-]{1,30}?)\s*Ver\.?\s*([\w.]+)\s*Build:\s
                     rb"([A-Z][a-z]{2} [ \d]\d \d{4}(?: [\d:]{8})?)")
 
 
+# Early (1998) libraries use another form: "GDFS Version 0.49  1998-05-26".
+OLD = re.compile(rb"([A-Za-z][\w.]{1,15})\s*Version\s*(\d[\w.]*)\s+((?:19|20)\d\d[/-]\d\d[/-]\d\d)")
+
+
 def banners(data):
-    return {(m.group(1).decode("ascii").strip(" -@"), m.group(2).decode("ascii"),
-             " ".join(m.group(3).decode("ascii").split())) for m in BANNER.finditer(data)}
+    out = {(m.group(1).decode("ascii").strip(" -@"), m.group(2).decode("ascii"),
+            " ".join(m.group(3).decode("ascii").split())) for m in BANNER.finditer(data)}
+    for m in OLD.finditer(data):
+        d = datetime.date(*map(int, re.split(rb"[/-]", m.group(3))))
+        out.add((m.group(1).decode("latin-1").strip(" -@"), m.group(2).decode("ascii"), d.strftime("%b %d %Y")))
+    return out
 
 
 def date(b):
