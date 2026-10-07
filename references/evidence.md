@@ -59,9 +59,9 @@ as an issue) to add a game.
 - executable: 978,148 bytes, linked at 0x8C010000; SDK by banners: no release has all 48 library
   builds (newest Shinobi 1.75, Oct 2000), closest R11b (26/48) then R10.1 (23/48); SDKs used:
   R10.1, R11b, 1.55J
-- functions: 3,034; named: 1,044 (976 from the SDK tables merged, 13 from the complete Tokyo Bus
-  Guide decomp; v0.4 had 975 with R10.1 and the 176-name reference); build: MATCH, also after
-  setup.sh
+- functions: 3,034; named: 1,164 on 2026-10-08 (1,091 from nine SDK tables merged, 18 from the
+  complete Tokyo Bus Guide decomp, the rest wrappers; 1,060 the day before with three tables,
+  975 at v0.4 with R10.1 and the 176-name reference); build: MATCH, also after setup.sh
 - text map: 2,155 strings (80 Shift-JIS, 1,962 with pointers); file tables: STORY.PAC (76 scenes,
   sector and length at 0x8C04B704), KAOGRA.PAC, STORYGRA.PAC; textures: 887 decoded, 222 not
 - missed functions: 860 candidates, plus 9 merged functions reached through tables
@@ -76,6 +76,11 @@ as an issue) to add a game.
     release has which -> SDK tables are merged into one before applying
   - the cloud workspace dropped dotfiles and execute bits from the uploaded skill, and could not
     pull Docker images -> `template/gitignore` without the dot, `DC_LOCAL` for every script
+  - 2026-10-08, four more SDK tables (R4, R1.42J samples, R1.42J, 2.00J): +122 SDK names on top
+    of the 992 (measured in a scratch project): 86 from 2.00J (Sep 2000 libraries, the closest to
+    this Oct 2000 game: Sofdec `MPS_`/`MPV_`, `mwRnv2`...) and 33 only from the R1.42J sample
+    programs, whose Sofdec builds matched where no library did. Crazy Taxi: +7. More releases
+    keep paying, each game by the one nearest its build date, and sample programs count
 
 ### Virtua Fighter 3tb (US), MK-51001 V1.002
 - run: 2026-10-07, naming only (for another team's decomp; no repo kicked off), on macOS (Docker)
@@ -98,6 +103,12 @@ as an issue) to add a game.
     note in step 3
   - tiny collisions (a video-player function name in a fighting game) -> suspect-name note in step 4
   - PC (Sega ALLS, 2023) version: a modern host engine around the arcade original, no symbols
+  - more 1998-1999 SDK tables tried after that (R4: 1,035 signatures; R1.42J's 13 prebuilt
+    samples with their link maps: 2,141; R1.42J's own libraries, unpacked from its InstallShield 3
+    installer with `is3_extract.py`: 2,943): +0, +0 and +1 names. The game's libraries are in no
+    preserved release; the tables stay for the next early game
+  - cheat codes (the Dreamcast-Talk CodeBreaker list, same release): 5 RAM variables named
+    (both players' health, the round timer, the win counters), none of them in that team's repo
 
 ### Phantasy Star Online Ver. 2 (US), MK-51193 V1.004
 - run: 2026-10-07, stopped at step 1

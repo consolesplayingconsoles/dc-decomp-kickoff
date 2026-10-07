@@ -86,9 +86,11 @@ equivalent material lawfully in their possession.
 | need | example source | used for |
 |---|---|---|
 | Katana SDK (libraries + Hitachi `asmsh`, `shc`, `lnk`, `lbr`, `elf2bin`) | `github.com/Kochise/dreamcast-docs` (`SDK/`) | SDK signatures, the matching build |
-| other Katana SDK releases, optional (disc images: 0.20 Pre 7 to R11b, 1.55J Vol.1 + Vol.2, Network 1.04; and Katana 0.40 Release.4 for 1998 games) | archive.org item `official-katana-sdks` (`OFFICIAL KATANA SDKs.zip`, one image per release); 1.55J is also catalogued by Redump (discs 87866, 87867); 0.40 from sega-dreamcast-info.com (`Dreamcast Katana SDK Version 0.40 Release.4.zip`) | the release the game was built with (step 2), the complete reference decomp (1.55J), more SDK names |
+| other Katana SDK releases, optional (disc images: 0.20 Pre 7 to R11b, 1.55J Vol.1 + Vol.2, Network 1.04; Katana 0.40 Release.4 for 1998 games; R1.42J and 2.00J come as InstallShield 3 installers, `is3_extract.py`; R2 and 0.20 Pre 7 carry GNU `ar` libraries this skill does not hash yet) | archive.org item `official-katana-sdks` (`OFFICIAL KATANA SDKs.zip`, one image per release); 1.55J is also catalogued by Redump (discs 87866, 87867); 0.40 from sega-dreamcast-info.com (`Dreamcast Katana SDK Version 0.40 Release.4.zip`) | the release the game was built with (step 2), the complete reference decomp (1.55J), more SDK names |
 | a reference decomp | `github.com/consolesplayingconsoles/tbg-decomp` (a fork of `lhsazevedo/tbg-decomp`): latest `main` (the complete decomp, builds with SDK 1.55J) or tag `kickoff-reference-1` (builds with the Kochise R10.1 SDK) | names no SDK copy has |
 | object compare tool | `github.com/lhsazevedo/sh4objtest` (MIT) | the C loop (optional) |
+| cheat codes, optional | gamehacking.org (per-game pages, public); the Dreamcast-Talk compiled CodeBreaker list (members' attachment, credits its code authors) | named variables (`scripts/cheat_leads.py`) |
+| a later port, a prototype, other decomps, optional | the user's own copies (ports and prototypes), GitHub, hiddenpalace.org, tcrf.net, segaretro.org | step 2b |
 | an older SDK, optional | archive.org item `dcsdk-9e` (SDK R9 Europe, Nov 1999, disc 1: SHC 5.1 Release 08) | a period compiler for games built in 1999-2000; so far it gave the same bytes as R10.1's (Release 11) |
 
 Ask before cloning each one. Never commit the SDK, the game's files, or anything derived from them
@@ -115,7 +117,32 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
    the user already has several SDKs, they can instead point at one folder holding all of them
    (images, zips or folders) and run `sdk_scan.py <that folder> <1ST_READ.BIN>`. Older releases
    ship inside InstallShield cabinets: `scripts/sdk_unpack.sh <image> <out>` lays any of them out
-   as plain files (Docker, any OS) before `sdk_sigs.sh`.
+   as plain files (Docker, any OS) before `sdk_sigs.sh`. The 1998-1999 releases (R1.42J, 2.00J)
+   are InstallShield 3 self-extractors instead: `python3 scripts/is3_extract.py <SETUP.EXE> <out>`
+   (stdlib) unpacks every archive inside. Some discs also carry a samples zip with prebuilt
+   sample programs and their link maps: those link the release's libraries, so hashing them
+   (ELFs in `elf/`, `map_names.py` output in `names/`, then `ExportSigs.java` in folder mode as
+   `sdk_sigs.sh` does) is a signature table too, with no installer to unpack.
+2b. **Extra material: ask the user, one short form.** Open with: "These are optional; the
+   kick-off works without them, but each one gives the decomp a stronger starting point." Then
+   ask these as separate questions (a form where the client has one, a numbered list otherwise),
+   each answered with a local path, a link, or "no". Most likely first:
+   1. **Cheat codes for this game** (a saved code list in CodeBreaker/Xploder format, or a saved
+      gamehacking.org page). Every code is an address with a meaning: named variables.
+   2. **Other regions or revisions of the game.** Same code: names and addresses carry across.
+   3. **Existing reverse-engineering notes or a partial decomp** (a repo, thread or wiki page).
+      Reference names and pitfalls.
+   4. **A later port** (Android `.apk`, iOS, PC, another console). The big one when it kept its
+      symbol table: it can name a large share of the functions and globals.
+   5. **A decomp of the same game on another console.** Structures, class names and logic;
+      no bytes match.
+   6. **A prototype or debug build.** Pre-release discs often still carry the linker's `.ELF`
+      or `.MAP`, with every name.
+   Record each answer in the game's evidence entry. Only 1, 4 and 6 feed a tool: 1 ->
+   `scripts/cheat_leads.py` (globals candidates, step 7); 4 -> `references/port-symbols.md`,
+   symbols check first; 6 -> a symbol scan before anything else. 2, 3 and 5 become references in
+   the repo's docs, and names only when the source is itself a matching decomp (`ExportSigs.java`).
+   Never fetch any of it yourself: the user supplies what they have.
 3. **Ghidra** (Docker; no Linux machine needed, the image builds on first use), with the
    executable in `<work>`:
    ```
@@ -209,6 +236,11 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
      table in the executable that locates them (bytes or sectors, with or without sizes). **This is
      what lets a container grow:** repack its records, rewrite that table (proof in `references/evidence.md`). No false hits
      so far, but games often keep positions elsewhere: a missing row does not prove there is no table.
+   - **Cheat codes** (when step 2b got a list): `scripts/cheat_leads.py <list.txt> <title>
+     <1ST_READ.BIN> <base>` prints one line per code: address, size, write or compare, the
+     cheat's name. Those are globals candidates with their meaning (health, timer, cash...). Most
+     are RAM variables beyond the executable. A list for another region of the game names the
+     same variables at other addresses: find each by its use in the code before applying it.
    - Textures are their **own step** (`bash textures.sh <disc.gdi>`, seconds to a minute): every
      standard (PVR) texture decoded to PNG on one page with checkboxes (`text-map/textures/`), for a
      person to mark the ones with text. A game that keeps its art in its own formats gets 0 here and a
@@ -270,6 +302,7 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
 | `scripts/sdk_sigs.sh` | signature table for every exported function in an SDK's libraries |
 | `scripts/sdk_from_iso.py` | SDK 1.55J folder from its Vol.1 + Vol.2 disc images, checked against Redump |
 | `scripts/sdk_scan.py` | which SDK release built the game: its library banners against `references/sdk-banners.tsv` or a folder of SDKs |
+| `scripts/is3_extract.py` | InstallShield 3 installers (SETUP.EXE / .Z) as plain files: directory + PKWARE implode, stdlib |
 | `scripts/sdk_unpack.sh` | any SDK image or zip as plain files, InstallShield cabinets unpacked (`unshield-image/`) |
 | `scripts/iso_extract.py` | copy every file out of a disc image or zip (Joliet or ISO9660, no mounting) |
 | `references/sdk-banners.tsv` | library banners (module, version, build date) of every preserved Katana release |
@@ -289,6 +322,7 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
 | `scripts/progress.py` | in the repo: matching C, named functions and globals, documented, game and SDK apart |
 | `scripts/sdk_txt.py` | mark the SDK's code (boot block, library block, single matches) as `sdk.txt` |
 | `scripts/missed_funcs.py` | list code the analysis did not make into functions |
+| `scripts/cheat_leads.py` | cheat codes (CodeBreaker/Xploder list) as named-variable leads |
 | `scripts/seed_funcs.py` | function starts in stretches no function covers, seeds for `ghidra/SeedFuncs.java` |
 | `scripts/shdis.py` | in the repo: SH-4 disassembly with FPU, pool values and names (stdlib) |
 | `scripts/map_names.py` | code symbols of a linked library's map, runtime routines included |
