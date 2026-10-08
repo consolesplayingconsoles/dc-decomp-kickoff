@@ -5,10 +5,15 @@ file names as they have been seen in public archives (archive.org items, collect
 preservation sites), given as search terms. Nothing here is a download link, and the sources
 disclaimer in SKILL.md applies: the user decides what they are entitled to obtain and use.
 
+Two catalogues cover most of the list: archive.org's `official-katana-sdks` item and
+sega-dreamcast-info.com's SDK archive page
+(https://www.sega-dreamcast-info.com/en/dreamcast-develppement-sdk-library-archive), which also
+holds the Shinobi and Kamui library sources and the 0.40 release.
+
 | release | date (newest library) | seen as | notes |
 |---|---|---|---|
 | 0.20 Pre 7 | 1998 | `SEGA Katana Dreamcast SDK Version 0.20 Pre 7.iso` | PC-side (NEC Arc1A PowerVR board); x86 COFF import libraries, no SH-4 code |
-| 0.40 Release 4 | May 1998 | `Dreamcast Katana SDK Version 0.40 Release.4.zip` | sega-dreamcast-info.com's SDK archive page; first SH-4 libraries (778 signatures) |
+| 0.40 Release 4 | May 1998 | `Dreamcast Katana SDK Version 0.40 Release.4.zip` | first SH-4 libraries (778 signatures) |
 | Release 2 | 1998 | `SEGA Katana Dreamcast SDK R2.iso` | NEC Arc1A era; x86 import libraries only |
 | Release 4 (4.01) | Jun 1998 | `SEGA Katana Dreamcast SDK R4..iso` | Set 4 unit; 1,035 signatures |
 | Set 5.05 | Aug 1998 | no SDK dump; the Tower of Babel dev kit demo and its link map (`KTN505`) | 690 signatures from the demo |
