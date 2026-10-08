@@ -67,6 +67,13 @@ as an issue) to add a game.
     in one session against the running game (RetroArch + Flycast), the bug as cars spawned and
     removed in the same frame
 
+- SDK release (2026-10-08, `sdk_scan.py` against 16 tables): no full match and none possible. The
+  libraries no release has carry a `zr` suffix (`Shinobi 1.62zr`, `bu 1.47zr`, `kd 1.48zr`,
+  `pd 1.50zr`, `syHw 1.07zr`, `syInt 1.50rz`, Aug 17-30 1999) plus `KAMUI 1.11.0.1`, `mwRna 1.26`
+  and the Oct 1999 `libintr`/`libspr`: Sega-internal library builds between R9 and R10, never in a
+  shipped SDK. The rest is R9's (1999-04 to 1999-08), so R9's compiler (SHC 5.1 Release 08) is the
+  matching-C toolchain to try before R10.1's Release 11
+
 ### Boku Doraemon (Japan), T-41802M V1.003
 - run: 2026-10-05 (v0.4) and 2026-10-06 (v0.5, on macOS and in a claude.ai cloud workspace: same
   names)
