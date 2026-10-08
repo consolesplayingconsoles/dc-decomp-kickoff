@@ -145,11 +145,14 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
       or `.MAP`, with every name. Whether one exists for the game:
       https://www.sega-dreamcast-info.com/en/releases-prototypes-sega-dreamcast-iso (about 300
       Dreamcast prototypes, with what each one holds) and Hidden Palace's Dreamcast list
-      (https://hiddenpalace.org/Prototypes_by_system/Dreamcast).
+      (https://hiddenpalace.org/Prototypes_by_system/Dreamcast). With no ELF or map, still diff
+      its strings against the release: debug readouts and menus left in early builds carry their
+      own labels (`printf("Act    = %d", ...)` names the field it prints).
    Record each answer in the game's evidence entry. Only 1, 4 and 6 feed a tool: 1 ->
    `scripts/cheat_leads.py` (globals candidates, step 7); 4 -> `references/port-symbols.md`,
-   symbols check first; 6 -> a symbol scan before anything else. 2, 3 and 5 become references in
-   the repo's docs, and names only when the source is itself a matching decomp (`ExportSigs.java`).
+   symbols check first; 6 -> a symbol scan before anything else, then the strings diff. 2, 3 and
+   5 become references in the repo's docs, and names only when the source is itself a matching
+   decomp (`ExportSigs.java`).
    Never fetch any of it yourself: the user supplies what they have.
 3. **Ghidra** (Docker; no Linux machine needed, the image builds on first use), with the
    executable in `<work>`:
