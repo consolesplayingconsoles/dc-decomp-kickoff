@@ -196,6 +196,16 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
      on a tiny function (a few instructions) can still be a collision with unrelated library code:
      report short names that make no sense where they sit (a video-player function in a game that
      plays no video) as suspect, never silently trust them.
+   - **Types from the SDK's headers**, once the names are in: `scripts/sdk_headers.py <SDK folder>
+     <out>` copies the headers in a form Ghidra's C parser reads, then, in the same Ghidra run as
+     `DcReport.java` or on its own, `ApplyHeaders.java <out>/shinobi/include
+     <out>/shinobi/include/SHC <out>/shc/include <out>/stub -D__SHC__ -D_SH4`. It parses the
+     release's headers into the program (R10.1: 2,372 prototypes, 423 structs such as
+     `PDS_PERIPHERAL`, `NJS_OBJECT`, `KMVERTEX`), gives every named function that has a public
+     prototype its real signature, and types the literal-pool words SH-4 calls through, so the
+     decompiler shows `PDS_PERIPHERAL *` where it showed `undefined4`. Only the public API gets
+     a prototype (one named function in five: the rest are library internals); use the headers
+     of the release `sdk_scan.py` picked.
 5. **The repo: ask the user where to put it.** Suggest a default (a sibling of the current folder,
    named from the IP.BIN title: lowercase, spaces to hyphens, plus `-decomp`, e.g.
    `SOME GAME` -> `<parent>/some-game-decomp`), always written as an **absolute path**. Create it,
@@ -310,7 +320,8 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
 | `scripts/linkbase.py` | pick the import base from self-pointer counts |
 | `scripts/banners.py` | SDK module banners: name, version, build date |
 | `scripts/ghidra/dghidra.sh` | headless Ghidra in Docker (image from `scripts/ghidra/Dockerfile`, built on first use) |
-| `scripts/ghidra/*.java` | seed + report (`DcPre`, `DcReport`), signatures (`ExportSigs`, `ApplySigs`), queries (`Query`) |
+| `scripts/ghidra/*.java` | seed + report (`DcPre`, `DcReport`), signatures (`ExportSigs`, `ApplySigs`), prototypes and structs from the SDK's headers (`ApplyHeaders`), queries (`Query`) |
+| `scripts/sdk_headers.py` | an SDK's C headers copied in a form Ghidra's C parser reads (form feeds, Shift-JIS comments, `(Void)` parameter lists, empty attribute macros) |
 | `references/sdk-signatures.md` | naming library code from a reference decomp or the SDK's libraries |
 | `references/evidence.md` | each game the skill was run on: numbers, what broke, what changed |
 | `references/memory-map.md` | Dreamcast addresses worth labelling on sight |

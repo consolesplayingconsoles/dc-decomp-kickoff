@@ -170,3 +170,17 @@ as an issue) to add a game.
 - what changed: dev kit dumps added as extra material (link maps, ELFs with debug info, source);
   a DWARF-1 reader is worth a script if a second ELF like this turns up
 
+### SDK headers as types (R10.1 headers on the Boku and Crazy Taxi projects)
+- run: 2026-10-08. 174 headers; what Ghidra's C parser tripped on, all handled by `sdk_headers.py`:
+  form feeds between declarations (every Kamui API header), `(Void)` / `(VOID)` / `(KMVOID)` as an
+  empty parameter list (a typedef of void is "not permitted" as a parameter), Shift-JIS comment
+  bytes, `KMAPI` / `IN` / `OUT` / `CRIAPI` attribute macros, a missing `machine.h`, and headers
+  that use a type a later header defines (second parse pass). One header still fails (`sg_sm.h`,
+  a forward-declared `OVLIB`)
+- parsed: 2,372 function prototypes, 423 structs. Applied: Boku 216 of 1,157 named functions,
+  Crazy Taxi 143 of 546; the rest are library internals (`mw*`, `kmi*`, `vmsfs_*`, `mpdrv_*`,
+  `sd*` internals) that no public header declares. Pool words pointing at prototyped functions
+  typed (Boku 795), every pool word pointing at a function marked constant (7,303)
+- effect: `pPVar2 = (*PTR_pdGetPeripheral)(0x12)` now carries `PDS_PERIPHERAL *`; the decompiler
+  does not fold the constant pool pointer into a direct call, so the call keeps its pointer name
+
