@@ -155,6 +155,9 @@ as an issue) to add a game.
   builds = Release 8 (Europe), and 964 of those 1,032 names are already in the R8E table; the 68
   left are Eurocom/Midway wrappers (`Bup*`, `dc*`, `SN_*`). Nothing new to hash, two things
   confirmed: `sdk_scan.py` works on an ELF, and a prototype's data files can carry the link map
+- also pulled (`~/cpc/dreamcast/prototypes/`): Crazy Taxi Dec 3 / Dec 13 1999, Jan 14 2000 (the
+  untitled "Dreamcast prototype" item is the same Jan 14 build) and VF3tb Jul 27 1999: only
+  `1ST_READ.BIN` on each, no ELF or map; earlier revisions of the executable, nothing more
 - what changed: dev kit dumps added as extra material (link maps, ELFs with debug info, source);
   a DWARF-1 reader is worth a script if a second ELF like this turns up
 
