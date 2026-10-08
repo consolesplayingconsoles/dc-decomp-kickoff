@@ -9,7 +9,9 @@ games; gamehacking.org exports the same codes), or a RetroArch ".cht" file (libr
 cht/Sega - Dreamcast/<game>.cht: one game per file, "cheatN_address", "cheatN_desc",
 "cheatN_memory_search_size", "cheatN_value"; the title is the file name). Every code is an address with a meaning, so each
 cheat becomes a globals candidate: the cheat's name as the variable's name, its size from the code
-type. Prints a table, and after it the raw lines of cheats it could not read.
+type. Widescreen codes (the community's CodeBreaker widescreen hacks) read the same way: the
+address is the game's projection or aspect value. Prints a table, and after it the raw lines of
+cheats it could not read.
 
 Code types read (address = 0x8C000000 + the low 24 bits):
   00 / 01 / 02   8 / 16 / 32-bit write: the variable the cheat sets

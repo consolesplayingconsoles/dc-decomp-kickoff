@@ -90,7 +90,7 @@ equivalent material lawfully in their possession.
 | the Shinobi and Kamui library sources, optional | sega-dreamcast-info.com ("The source code of the Dreamcast Shinobi/Kamui development library") | exact C and names for the SDK part of every game: reference source for the C loop, and their bundled `.LIB` files are one more signature table |
 | a reference decomp, optional | `github.com/consolesplayingconsoles/tbg-decomp` (a fork of `lhsazevedo/tbg-decomp`): latest `main` (the complete decomp, builds with SDK 1.55J) or tag `kickoff-reference-1` (builds with the Kochise R10.1 SDK) | a few names no SDK copy has; worth it when the user has few SDK releases |
 | object compare tool | `github.com/lhsazevedo/sh4objtest` (MIT) | the C loop (optional) |
-| cheat codes, optional | gamehacking.org (per-game pages, public); the Dreamcast-Talk compiled CodeBreaker list (members' attachment, credits its code authors) | named variables (`scripts/cheat_leads.py`) |
+| cheat codes, optional | gamehacking.org (per-game pages, public); the Dreamcast-Talk compiled CodeBreaker list (members' attachment, credits its code authors); the community's widescreen code lists | named variables (`scripts/cheat_leads.py`) |
 | a later port, a prototype, other decomps, optional | the user's own copies (ports and prototypes), GitHub, hiddenpalace.org, tcrf.net, segaretro.org | step 2b |
 | an older SDK, optional | archive.org item `dcsdk-9e` (SDK R9 Europe, Nov 1999, disc 1: SHC 5.1 Release 08) | a period compiler for games built in 1999-2000; so far it gave the same bytes as R10.1's (Release 11) |
 
@@ -129,7 +129,9 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
    ask these as separate questions (a form where the client has one, a numbered list otherwise),
    each answered with a local path, a link, or "no". Most likely first:
    1. **Cheat codes for this game** (a saved code list in CodeBreaker/Xploder format, or a saved
-      gamehacking.org page). Every code is an address with a meaning: named variables.
+      gamehacking.org page). Every code is an address with a meaning: named variables. Widescreen
+      codes count too (the community's CodeBreaker/hex widescreen hacks, one or two codes per
+      game): each is the game's projection or aspect value, a named global.
    2. **Other regions or revisions of the game.** Same code: names and addresses carry across.
    3. **Existing reverse-engineering notes or a partial decomp** (a repo, thread or wiki page).
       Reference names and pitfalls.
