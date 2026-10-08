@@ -112,6 +112,8 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
    executable at a fixed address, so stop and say so (`references/evidence.md` has an example).
 2. **Base and fingerprint**: `scripts/linkbase.py`, `scripts/banners.py`. Note the SDK version the game used.
    **Which SDK to ask for:** `python3 scripts/sdk_scan.py references/sdk-banners.tsv <1ST_READ.BIN>`
+   (`references/sdk-releases.md` lists every release with the file names it has been seen under, as
+   search terms for the user)
    ranks the publicly preserved Katana releases by how many of the game's library builds they
    contain. A full match: ask the user for that release. None: say the game was built with a
    release not in the list, and to pick a close one; suggest the one or two the script names. If
@@ -316,6 +318,7 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
 | `scripts/sdk_unpack.sh` | any SDK image or zip as plain files, InstallShield cabinets unpacked (`unshield-image/`) |
 | `scripts/iso_extract.py` | copy every file out of a disc image or zip (Joliet or ISO9660, no mounting) |
 | `references/sdk-banners.tsv` | library banners (module, version, build date) of every preserved Katana release |
+| `references/sdk-releases.md` | every Katana release: date, the file names it circulates under (search terms), what it gave; prototypes and dev kit dumps as material |
 | `scripts/text_map.py` | strings with pointers, file text density, font path, image candidates |
 | `scripts/file_tables.py` | tables in the executable that locate records inside disc files |
 | `scripts/textures.py` | every standard texture to PNG + a contact sheet (`index.html`) |

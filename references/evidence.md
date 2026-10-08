@@ -118,6 +118,8 @@ as an issue) to add a game.
     preserved release; the tables stay for the next early game
   - cheat codes (the Dreamcast-Talk CodeBreaker list, same release): 5 RAM variables named
     (both players' health, the round timer, the win counters), none of them in that team's repo
+  - the 1998 Set 5.05 table from the Tower of Babel dev kit demo (below): +0, 1 ambiguous. VF3tb's
+    Kamui is not Set 5's either
 
 ### Phantasy Star Online Ver. 2 (US), MK-51193 V1.004
 - run: 2026-10-07, stopped at step 1
@@ -130,4 +132,29 @@ as an issue) to add a game.
   whose names do not appear in the Dreamcast build): none carries names over automatically
 - what changed: step 1 "check it is the game", runtime-loaded code named as a limit; "check for
   symbols first" in `port-symbols.md`
+
+### Dev kit dumps (sega-dreamcast-info.com, 11 "Set 5" Katana kits on archive.org)
+- run: 2026-10-08, three kits opened (Tower of Babel 70 MB, Rage Software 0.2 GB, Eurocom 1.4 GB)
+- the disk images are the studios' project folders (NBA Hoopz, Hydro Thunder, UEFA Striker), no
+  SDK install on any of them; the recovered-files archives hold the useful pieces. By design: the
+  dev box's own disk holds GD-ROM emulation images (`.HCD`/`.VDS`), the SDK lives on the Windows
+  host, so no dev box dump will ever carry an SDK release
+- Tower of Babel: the demo's `1ST_READ` (Sep 1998) and its Hitachi link map, linked against
+  `C:\KTN505` (Set 5.05, Aug 1998); the map matches the binary (the start-up stub's jump). 1,005
+  code symbols -> `map_names.py` + `ExportSigs.java`: 690 signatures, the earliest table there is
+  (`nw`, `kmi`/`km`, `gd`, `vms`, `mpd`, `sd`, `sy`, `kd`, `bu`). Set 5 era only: VF3tb +0
+- Eurocom: `Hydro.elf` (Jul 1999, 26 MB) is the game's ELF with a 23 MB DWARF-1 `.debug` section
+  and no symbol table; a 60-line DWARF-1 walk gives 2,753 named functions with addresses, all
+  Eurocom's own code (the SDK libraries were linked without debug info), so it is a named
+  reference for a Hydro Thunder decomp, not an SDK table. `kmtransform*.c` are VideoLogic's 1998
+  KMTools sample sources
+- Rage: UEFA Striker DC betas without maps, PSX source in a zip, nothing to take
+- Hydro Thunder (Jul 28, 1999 prototype, Hidden Palace / archive.org, 258 MB): its `HYDRO.ELF` is
+  the kit's, byte for byte, and `LOO3.R2` (a data pack) embeds the Hitachi link map of the Jul 16
+  build: 3,027 code symbols, 1,032 of them library code. `sdk_scan.py` on the ELF: 18/18 library
+  builds = Release 8 (Europe), and 964 of those 1,032 names are already in the R8E table; the 68
+  left are Eurocom/Midway wrappers (`Bup*`, `dc*`, `SN_*`). Nothing new to hash, two things
+  confirmed: `sdk_scan.py` works on an ELF, and a prototype's data files can carry the link map
+- what changed: dev kit dumps added as extra material (link maps, ELFs with debug info, source);
+  a DWARF-1 reader is worth a script if a second ELF like this turns up
 
