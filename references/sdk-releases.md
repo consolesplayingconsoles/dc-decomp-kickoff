@@ -40,6 +40,26 @@ The release numbering, from a 2007 collectors' thread: Release 2 = NEC Arc1A Pow
 Releases 3-4 = Set 3/4 units; Releases 5-7 = Set 5.00-5.23 (HKT-0100/0110); Releases 8-11 = Set
 5.24 (HKT-0120). Japanese numbering (1.xxJ, 2.00J) ran in parallel with the same libraries.
 
+## The compiler each release ships
+
+Matching C needs the compiler the game was built with, not just its libraries. `shc.exe`'s own
+banner per release:
+
+| release | SH C compiler |
+|---|---|
+| 0.40 Release 4 | SH SERIES C Compiler Ver. 5.0 (Release 10), C++ 1.0 |
+| Release 4 | Ver. 5.0 (Release 27) |
+| 1.0B2, 1.00J | Ver. 5.0 (Release 28) |
+| Release 8 (Europe) | SH SERIES C/C++ Compiler Ver. 5.1 (Release 03) |
+| 1.42J | Ver. 5.1 (Release 04) |
+| 1.55J, Release 9 | Ver. 5.1 (Release 08) |
+| Release 10.1, Release 11b | Ver. 5.1 (Release 11) |
+| 2.00J | Ver. 6.0 AD (Release 04) |
+
+So a game whose banners say 1999 libraries was compiled by SHC 5.1 R03-R08, and byte-matching it
+through R10.1's R11 compiler is not guaranteed: when `sdk_scan.py` names the release, build with
+that release's `shc` (step 6's `SDK_PATH`), and say so in the repo's README.
+
 ## Prototypes and dev kit dumps as material
 
 A prototype disc sometimes carries what retail never does: the linker's `.ELF` (with or without
