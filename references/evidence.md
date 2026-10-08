@@ -61,6 +61,11 @@ as an issue) to add a game.
   - a menu handler reached only from a handler table started right after another function's
     mid-body literal pool, which neither rts nor padding seeding caught -> `seed_funcs.py`
     also seeds right after a pool (+47 candidates here, +71 on VF3)
+  - 2026-10-08, a mode reading from the port's names was wrong (`MainMode` 1 taken for the arcade
+    game; it is the normal one, the traffic centre 500 ahead of the car, not on it) and a mod bug
+    (all traffic gone until retry) stayed unexplained by reading alone -> `live.py`: both settled
+    in one session against the running game (RetroArch + Flycast), the bug as cars spawned and
+    removed in the same frame
 
 ### Boku Doraemon (Japan), T-41802M V1.003
 - run: 2026-10-05 (v0.4) and 2026-10-06 (v0.5, on macOS and in a claude.ai cloud workspace: same
@@ -157,7 +162,11 @@ as an issue) to add a game.
   confirmed: `sdk_scan.py` works on an ELF, and a prototype's data files can carry the link map
 - also pulled (`~/cpc/dreamcast/prototypes/`): Crazy Taxi Dec 3 / Dec 13 1999, Jan 14 2000 (the
   untitled "Dreamcast prototype" item is the same Jan 14 build) and VF3tb Jul 27 1999: only
-  `1ST_READ.BIN` on each, no ELF or map; earlier revisions of the executable, nothing more
+  `1ST_READ.BIN` on each, no ELF or map; earlier revisions of the executable. A strings diff
+  against the release still paid: Dec 3 keeps a debug readout ("Beta Version DEBUG ASCII") whose
+  printf labels name the cab driver's struct fields (`ManType`, `Act`, `Mode`, `ParamA`, `ParamB`,
+  `Addr`, `Frm`, `isIp`), and pairing functions build to build (pools, pool addresses and `bsr`
+  offsets allowed to move) shows what changed late: Jan 14 differs from the release in 58 functions
 - what changed: dev kit dumps added as extra material (link maps, ELFs with debug info, source);
   a DWARF-1 reader is worth a script if a second ELF like this turns up
 
