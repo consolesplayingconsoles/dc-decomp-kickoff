@@ -32,6 +32,12 @@ that leaf's size. `units.py` now refuses such a unit.
 - **Compiler version**: SHC 5.1 Release 04 (SDK R1.42J), Release 08 (SDK R9, Nov 1999) and Release
   11 (SDK R10.1, May 2000) gave byte-identical output on everything compared. A difference that survives every rewording
   is still more likely the C than the compiler: check another version once, then keep rewording.
+  SHC 5.0 is not the same: Release 27 (SDK R4) and Release 28 (R1.00J) allocate registers and
+  schedule differently from every 5.1 build (Crazy Taxi's `extRand`: 5.0 puts a mask in `r3` like
+  the original, 5.1 in `r2`, and 5.0 moves the `sts.l macl` save after the first load where the
+  original has it before). A single-register difference that no wording moves can mean a release
+  between those, which no SDK copy so far carries. 5.0 Release 10 (SDK 0.40) has no `-fpu` or
+  `-round`, and 6.0 AD (R2.00J) gives no object with these flags.
 
 ## Layout the compiler does not control
 
