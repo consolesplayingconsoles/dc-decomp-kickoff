@@ -207,7 +207,7 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
      dotfiles);
    - copy into `tools/`: `scripts/gdi_read.py`, `split_asm.py`, `text_map.py`, `file_tables.py`,
      `textures.py`, `disc_patch.py`, `apply_bin.py`, `docker_check.sh`, `units.py`, `fill.py`,
-     `progress.py`, `missed_funcs.py`, `shdis.py`, the `tools-image/` folder and `scripts/hooks/` as `tools/hooks/` (so a cloned repo builds its own
+     `progress.py`, `missed_funcs.py`, `shdis.py`, `live.py`, the `tools-image/` folder and `scripts/hooks/` as `tools/hooks/` (so a cloned repo builds its own
      tools image, nothing pulled from anyone else);
    - write `sdk.txt`: `scripts/sdk_txt.py <repo>/functions.txt <base> <1ST_READ.BIN>
      <SDK ApplySigs output>` (SDK tables only, not the reference decomp's). It marks the boot block
@@ -341,6 +341,7 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
 | `scripts/cheat_leads.py` | cheat codes (CodeBreaker/Xploder list) as named-variable leads |
 | `scripts/seed_funcs.py` | function starts in stretches no function covers, seeds for `ghidra/SeedFuncs.java` |
 | `scripts/shdis.py` | in the repo: SH-4 disassembly with FPU, pool values and names (stdlib) |
+| `scripts/live.py` | in the repo, optional: read, watch and write the running game by address or name, screenshots, pad input (RetroArch + Flycast core over its network ports, stdlib) |
 | `scripts/map_names.py` | code symbols of a linked library's map, runtime routines included |
 | `scripts/ghidra/ExportFeatures.java` | per-function strings, constants, calls and globals, for port matching |
 | `scripts/port/*.py` | pair functions and globals with a port's symbols (`references/port-symbols.md`) |
