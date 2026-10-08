@@ -88,7 +88,7 @@ equivalent material lawfully in their possession.
 | Katana SDK (libraries + Hitachi `asmsh`, `shc`, `lnk`, `lbr`, `elf2bin`) | `github.com/Kochise/dreamcast-docs` (`SDK/`) | SDK signatures, the matching build |
 | other Katana SDK releases, optional (disc images: 0.20 Pre 7 to R11b, 1.55J Vol.1 + Vol.2, Network 1.04; Katana 0.40 Release.4 for 1998 games; R1.42J and 2.00J come as InstallShield 3 installers, `is3_extract.py`; R2 and 0.20 Pre 7 carry GNU `ar` libraries this skill does not hash yet) | archive.org item `official-katana-sdks` (`OFFICIAL KATANA SDKs.zip`, one image per release); 1.55J is also catalogued by Redump (discs 87866, 87867); 0.40 from sega-dreamcast-info.com (`Dreamcast Katana SDK Version 0.40 Release.4.zip`) | the release the game was built with (step 2), more SDK names |
 | the Shinobi and Kamui library sources, optional | sega-dreamcast-info.com ("The source code of the Dreamcast Shinobi/Kamui development library") | exact C and names for the SDK part of every game: reference source for the C loop, and their bundled `.LIB` files are one more signature table |
-| cheat codes, optional | gamehacking.org (per-game pages, public); the Dreamcast-Talk compiled CodeBreaker list (members' attachment, credits its code authors) | named variables (`scripts/cheat_leads.py`) |
+| cheat codes, optional | gamehacking.org (per-game pages, public); the Dreamcast-Talk compiled CodeBreaker list (members' attachment, credits its code authors); the community's widescreen code lists | named variables (`scripts/cheat_leads.py`) |
 | a later port, a prototype, other decomps, optional | the user's own copies (ports and prototypes), GitHub, hiddenpalace.org, tcrf.net, segaretro.org | step 2b |
 | an older SDK, optional | archive.org item `dcsdk-9e` (SDK R9 Europe, Nov 1999, disc 1: SHC 5.1 Release 08) | a period compiler for games built in 1999-2000; so far it gave the same bytes as R10.1's (Release 11) |
 
@@ -127,7 +127,9 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
    ask these as separate questions (a form where the client has one, a numbered list otherwise),
    each answered with a local path, a link, or "no". Most likely first:
    1. **Cheat codes for this game** (a saved code list in CodeBreaker/Xploder format, or a saved
-      gamehacking.org page). Every code is an address with a meaning: named variables.
+      gamehacking.org page). Every code is an address with a meaning: named variables. Widescreen
+      codes count too (the community's CodeBreaker/hex widescreen hacks, one or two codes per
+      game): each is the game's projection or aspect value, a named global.
    2. **Other regions or revisions of the game.** Same code: names and addresses carry across.
    3. **Existing reverse-engineering notes or a partial decomp** (a repo, thread or wiki page).
       Names and pitfalls.
