@@ -5,7 +5,8 @@ file names as they have been seen in public archives (archive.org items, collect
 preservation sites), given as search terms. Nothing here is a download link, and the sources
 disclaimer in SKILL.md applies: the user decides what they are entitled to obtain and use.
 
-Two catalogues cover most of the list: archive.org's `official-katana-sdks` item and
+Two catalogues cover most of the list: archive.org's `official-katana-sdks` item
+(https://archive.org/details/official-katana-sdks) and
 sega-dreamcast-info.com's SDK archive page
 (https://www.sega-dreamcast-info.com/en/dreamcast-develppement-sdk-library-archive), which also
 holds the Shinobi and Kamui library sources and the 0.40 release.
@@ -45,7 +46,7 @@ A prototype disc sometimes carries what retail never does: the linker's `.ELF` (
 debug info), a `.map`, or a build log inside a data pack. Where to look whether one exists:
 https://www.sega-dreamcast-info.com/en/releases-prototypes-sega-dreamcast-iso (about 300
 Dreamcast prototypes, each described, plus the eleven published Katana dev kit dumps) and Hidden
-Palace (`hiddenpalace.org`, "Prototypes by system / Dreamcast", several hundred, with archive.org
+Palace (https://hiddenpalace.org/Prototypes_by_system/Dreamcast, several hundred, with archive.org
 mirrors). A dev kit's own disk holds GD-ROM emulation images and project folders, never the SDK
 (that lived on the Windows host), but a studio's project folder can hold link maps, ELFs with
 debug info and source. Seen so far: Tower of Babel (1998 demo + link map), Eurocom (Hydro
