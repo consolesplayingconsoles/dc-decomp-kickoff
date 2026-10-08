@@ -37,10 +37,11 @@ Releases 3-4 = Set 3/4 units; Releases 5-7 = Set 5.00-5.23 (HKT-0100/0110); Rele
 ## Prototypes and dev kit dumps as material
 
 A prototype disc sometimes carries what retail never does: the linker's `.ELF` (with or without
-debug info), a `.map`, or a build log inside a data pack. Hidden Palace (`hiddenpalace.org`,
-"Prototypes by system / Dreamcast") lists several hundred Dreamcast prototypes with archive.org
-mirrors; sega-dreamcast-info.com lists about 300 more and the eleven published Katana dev kit
-dumps. A dev kit's own disk holds GD-ROM emulation images and project folders, never the SDK
+debug info), a `.map`, or a build log inside a data pack. Where to look whether one exists:
+https://www.sega-dreamcast-info.com/en/releases-prototypes-sega-dreamcast-iso (about 300
+Dreamcast prototypes, each described, plus the eleven published Katana dev kit dumps) and Hidden
+Palace (`hiddenpalace.org`, "Prototypes by system / Dreamcast", several hundred, with archive.org
+mirrors). A dev kit's own disk holds GD-ROM emulation images and project folders, never the SDK
 (that lived on the Windows host), but a studio's project folder can hold link maps, ELFs with
 debug info and source. Seen so far: Tower of Babel (1998 demo + link map), Eurocom (Hydro
 Thunder ELF with DWARF, 2,753 named functions), Hydro Thunder Jul 28 1999 prototype (link map
