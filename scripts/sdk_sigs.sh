@@ -2,7 +2,8 @@
 # sdk_sigs.sh <SDK folder> <out dir>
 # Build a signature table for every exported function in a Katana SDK's libraries:
 # <out dir>/katana-sdk.sigs, for scripts/ghidra/ApplySigs.java. Any SDK layout: lbr.exe, lnk.exe
-# and the *.lib files are found by name. Keep the output local: it is derived from the SDK.
+# and the *.lib files are found by name. Keep the output local (derived from the SDK) and somewhere
+# durable beside the SDK folders, not a scratch dir: the hashing takes minutes to an hour.
 #   1. lbr lists each library's modules; lnk links all of them into one ELF + a symbol map.
 #   2. Headless Ghidra hashes every code symbol of the map (map_names.py: ENT, and the DAT symbols
 #      inside code sections, i.e. the hand-written runtime routines; ExportSigs.java, folder mode).

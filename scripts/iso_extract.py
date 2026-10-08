@@ -3,7 +3,7 @@
 
     iso_extract.py <image .iso | .zip> <out folder>
 
-ISO images (2048-byte sectors) are read directly, Joliet names when the disc has them, plain
+ISO images (2048-byte sectors, or raw 2352-byte dumps in Mode 1 or Mode 2 Form 1) are read directly, Joliet names when the disc has them, plain
 ISO9660 otherwise (images that are also UDF carry an ISO9660 tree too). No mounting, any OS.
 """
 import os
@@ -15,9 +15,13 @@ import zipfile
 class Iso:
     def __init__(self, path):
         self.f = open(path, "rb")
-        pvd = self.sector(16)
-        if pvd[1:6] != b"CD001":
-            raise SystemExit("[ERROR] %s: not an ISO image (2048-byte sectors expected)" % path)
+        # Plain 2048-byte sectors, or a raw 2352-byte dump: Mode 1 (data at +16) or Mode 2 Form 1 (+24).
+        for self.sector_size, self.data_offset in ((2048, 0), (2352, 16), (2352, 24)):
+            pvd = self.sector(16)
+            if pvd[1:6] == b"CD001":
+                break
+        else:
+            raise SystemExit("[ERROR] %s: not an ISO image (no volume descriptor at sector 16)" % path)
         self.volume = pvd[40:72].decode("latin-1").strip()
         self.root, self.joliet = pvd[156:190], False
         for s in range(17, 32):
@@ -28,8 +32,14 @@ class Iso:
                 self.root, self.joliet = d[156:190], True
 
     def sector(self, n, count=1):
-        self.f.seek(n * 2048)
-        return self.f.read(2048 * count)
+        if self.sector_size == 2048:
+            self.f.seek(n * 2048)
+            return self.f.read(2048 * count)
+        out = bytearray()
+        for k in range(count):                       # raw dump: the user data of each sector
+            self.f.seek((n + k) * self.sector_size + self.data_offset)
+            out += self.f.read(2048)
+        return bytes(out)
 
     def entries(self, rec):
         lba, size = struct.unpack_from("<I", rec, 2)[0], struct.unpack_from("<I", rec, 10)[0]

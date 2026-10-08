@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Cheat codes as named-variable leads. Stdlib only.
 
-    cheat_leads.py <code list .txt> <game title or id substring> [<1ST_READ.BIN> <base hex>]
+    cheat_leads.py <code list .txt | .cht | fetch> <game title> [<1ST_READ.BIN> <base hex>]
 
 Reads a decrypted CodeBreaker / Xploder DC code list (the Xploder DC Code Compiler text format:
 game id, @version, @title, then per cheat its name and address/value pairs, ".end" between
@@ -16,6 +16,10 @@ Code types read (address = 0x8C000000 + the low 24 bits):
   0C / 0D        32 / 16-bit compare: the variable the cheat tests
   04 / 05        16 / 32-bit slide (count and step in the value): the table's first entry
 Others (enable codes 0B/0E/0F, increments, hooks) are listed as "other" with their raw lines.
+
+"fetch" in place of a file looks the title up in libretro-database (cht/Sega - Dreamcast/, public,
+stdlib urllib, no account), keeps the .cht next to this script's dist/cheats/ and reads it. No
+network or no match: it says so and stops; a local file always works.
 
 With the executable and its base: "in exe" marks addresses inside the file (a variable with an
 initial value, or code), else "RAM". The list's release is printed next to the game: if it is not
@@ -84,10 +88,35 @@ def parse_cht(path):
     return [g]
 
 
+def fetch_cht(title):
+    """The libretro-database .cht for a title (a substring, case-insensitive); the local path."""
+    import json, os, urllib.parse, urllib.request
+    api = "https://api.github.com/repos/libretro/libretro-database/contents/cht/Sega%20-%20Dreamcast"
+    try:
+        with urllib.request.urlopen(api, timeout=30) as r:
+            names = [e["name"] for e in json.load(r)]
+    except Exception as e:
+        raise SystemExit("[ERROR] libretro-database not reachable (%s): give a local list instead" % e)
+    hits = [n for n in names if title.lower() in n.lower()]
+    if not hits:
+        raise SystemExit("[ERROR] no .cht matching %r in libretro-database (%d Dreamcast lists)" % (title, len(names)))
+    if len(hits) > 1:
+        print("several lists match, using the first: " + "; ".join(hits), file=sys.stderr)
+    out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "dist", "cheats", hits[0])
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    if not os.path.exists(out):
+        url = "https://raw.githubusercontent.com/libretro/libretro-database/master/cht/Sega%20-%20Dreamcast/" + urllib.parse.quote(hits[0])
+        with urllib.request.urlopen(url, timeout=30) as r, open(out, "wb") as f:
+            f.write(r.read())
+    print("libretro-database: %s" % hits[0], file=sys.stderr)
+    return out
+
+
 def main():
     if len(sys.argv) not in (3, 5):
         raise SystemExit(__doc__)
-    games = parse_cht(sys.argv[1]) if sys.argv[1].lower().endswith(".cht") else parse(sys.argv[1])
+    src = fetch_cht(sys.argv[2]) if sys.argv[1] == "fetch" else sys.argv[1]
+    games = parse_cht(src) if src.lower().endswith(".cht") else parse(src)
     want = sys.argv[2].lower()
     hits = [g for g in games if want in g["title"].lower() or want in g["id"].lower()]
     if not hits:

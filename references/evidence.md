@@ -52,6 +52,15 @@ as an issue) to add a game.
     library map -> `map_names.py`
   - code placed in the boot block's filler gave a black screen once gameplay started -> the
     "Changing the game" note in the template
+  - 2026-10-08, the four early-SDK tables: +7 unique matches, 4 applied; 3 collided with
+    confident names on tiny functions and were left out: `vmsio_init` on a 12-byte helicopter
+    init, `nwSetWindowClip` on a 22-byte function the reference decomp names
+    `nlObjPutUseViewMatrix`, `ADXERR_EntryErrFunc` on a 10-byte `njSetConstantAttr` -> the
+    suspect-name rule in step 4 holds; cheat leads for the USA release carried to the Europe
+    build by locating each variable in the code (two different shifts, two leads unconfirmed)
+  - a menu handler reached only from a handler table started right after another function's
+    mid-body literal pool, which neither rts nor padding seeding caught -> `seed_funcs.py`
+    also seeds right after a pool (+47 candidates here, +71 on VF3)
 
 ### Boku Doraemon (Japan), T-41802M V1.003
 - run: 2026-10-05 (v0.4) and 2026-10-06 (v0.5, on macOS and in a claude.ai cloud workspace: same

@@ -76,7 +76,7 @@ skill uses is in its own folder.
 
 ## Third-party sources
 
-The procedure needs three kinds of material. The repositories below are identified solely as
+The procedure needs two kinds of material (a Katana SDK and the game's disc); the rest is optional. The repositories below are identified solely as
 examples of the type of material required. The authors of this skill have no affiliation with, and
 make no representation regarding, those repositories, their contents, or their licensing. Nothing
 is retrieved without the user's express confirmation. The user is solely responsible for
@@ -87,7 +87,8 @@ equivalent material lawfully in their possession.
 |---|---|---|
 | Katana SDK (libraries + Hitachi `asmsh`, `shc`, `lnk`, `lbr`, `elf2bin`) | `github.com/Kochise/dreamcast-docs` (`SDK/`) | SDK signatures, the matching build |
 | other Katana SDK releases, optional (disc images: 0.20 Pre 7 to R11b, 1.55J Vol.1 + Vol.2, Network 1.04; Katana 0.40 Release.4 for 1998 games; R1.42J and 2.00J come as InstallShield 3 installers, `is3_extract.py`; R2 and 0.20 Pre 7 carry GNU `ar` libraries this skill does not hash yet) | archive.org item `official-katana-sdks` (`OFFICIAL KATANA SDKs.zip`, one image per release); 1.55J is also catalogued by Redump (discs 87866, 87867); 0.40 from sega-dreamcast-info.com (`Dreamcast Katana SDK Version 0.40 Release.4.zip`) | the release the game was built with (step 2), the complete reference decomp (1.55J), more SDK names |
-| a reference decomp | `github.com/consolesplayingconsoles/tbg-decomp` (a fork of `lhsazevedo/tbg-decomp`): latest `main` (the complete decomp, builds with SDK 1.55J) or tag `kickoff-reference-1` (builds with the Kochise R10.1 SDK) | names no SDK copy has |
+| the Shinobi and Kamui library sources, optional | sega-dreamcast-info.com ("The source code of the Dreamcast Shinobi/Kamui development library") | exact C and names for the SDK part of every game: reference source for the C loop, and their bundled `.LIB` files are one more signature table |
+| a reference decomp, optional | `github.com/consolesplayingconsoles/tbg-decomp` (a fork of `lhsazevedo/tbg-decomp`): latest `main` (the complete decomp, builds with SDK 1.55J) or tag `kickoff-reference-1` (builds with the Kochise R10.1 SDK) | a few names no SDK copy has; worth it when the user has few SDK releases |
 | object compare tool | `github.com/lhsazevedo/sh4objtest` (MIT) | the C loop (optional) |
 | cheat codes, optional | gamehacking.org (per-game pages, public); the Dreamcast-Talk compiled CodeBreaker list (members' attachment, credits its code authors) | named variables (`scripts/cheat_leads.py`) |
 | a later port, a prototype, other decomps, optional | the user's own copies (ports and prototypes), GitHub, hiddenpalace.org, tcrf.net, segaretro.org | step 2b |
@@ -161,16 +162,21 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
    to both: read those tables when a region still looks like unreached code.
 4. **Names**:
    - SDK-wide: `scripts/sdk_sigs.sh <SDK folder> <out>` -> `<out>/katana-sdk.sigs`. Any SDK layout:
-     the Hitachi tools and the `.lib` files are found by name. Build once per SDK, keep it local.
+     the Hitachi tools and the `.lib` files are found by name. Build once per SDK and keep the table
+     beside the SDK folders (not in a scratch dir): it is minutes to an hour of hashing to rebuild.
      Details and gotchas: `references/sdk-signatures.md`.
      With the 1.55J folder too, run it again into a second folder (`<out155>/katana-sdk.sigs`) and
      apply both tables.
-   - Reference decomp: `scripts/ref_sigs.sh <SDK folder> <out> [<SDK 1.55J folder>]` ->
-     `<out>/tbg.sigs`. No game disc needed: it clones the decomp (ask first), builds Tokyo Bus
-     Guide's executable from it (checked against TBG's SHA-1) and hashes its named functions. With
-     1.55J: the complete decomp (the fork's latest `main`, pulled every run), every function its linker map names
-     (1,462). Without: tag `kickoff-reference-1` built with R10.1, the 176 library functions its
-     link script pins (162 hashable). A few minutes, once.
+   - **Reference decomp, only when the SDK coverage is thin.** With several SDK releases the
+     Tokyo Bus Guide decomp adds about 1% of the names (Boku: 18 of 1,164; VF3: 3), and the step
+     costs a clone, a full build and a Ghidra pass. Offer it when the user has one or two SDK
+     releases, or when step 2's ranking found no release close to the game's libraries:
+     `scripts/ref_sigs.sh <SDK folder> <out> [<SDK 1.55J folder>]` -> `<out>/tbg.sigs`. No game
+     disc needed: it clones the decomp (ask first), builds TBG's executable (checked against its
+     SHA-1) and hashes its named functions: with 1.55J the complete decomp (the fork's latest
+     `main`), 1,462 names; with R10.1 the tag `kickoff-reference-1`, 176 names. Any other
+     matching decomp works the same way (`references/sdk-signatures.md`, "From another decomp's
+     names").
    - **Apply every table you have, all in one Ghidra run**, then `DcReport.java`:
      1. all the SDK tables merged into one (`cat` them into one file), with `ApplySigs.java <sigs>
         <out> apply`: a hash that two releases name differently stays ambiguous, so twin stubs
@@ -240,7 +246,9 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
      <1ST_READ.BIN> <base>` prints one line per code: address, size, write or compare, the
      cheat's name. Those are globals candidates with their meaning (health, timer, cash...). Most
      are RAM variables beyond the executable. A list for another region of the game names the
-     same variables at other addresses: find each by its use in the code before applying it.
+     same variables at other addresses, and not by one constant shift (one build moved its game
+     state block by 0x22E0 and its option flags by 0x2358): find each by its use in the code
+     before applying it. `cheat_leads.py fetch <title>` takes the list from libretro-database.
    - Textures are their **own step** (`bash textures.sh <disc.gdi>`, seconds to a minute): every
      standard (PVR) texture decoded to PNG on one page with checkboxes (`text-map/textures/`), for a
      person to mark the ones with text. A game that keeps its art in its own formats gets 0 here and a
