@@ -86,6 +86,14 @@ order: when an earlier one matches, later ones often follow.
 What did *not* move anything: `-speed` vs `-size`, signed vs unsigned parameters, `register`,
 explicit casts on null pointers.
 
+## The SDK's own source
+
+The Shinobi (system, GD-ROM, controllers, sound) and Kamui (3D) libraries exist as source
+(sega-dreamcast-info.com's archive). Once a game's SDK functions are named by signature, their C is
+already written: the SDK part of the game can be matched from that source with the game's compiler
+flags, and it shows the structs and conventions the game code around it uses. Versions differ
+between the source drop and a given game's libraries (compare the banners), so expect to adjust.
+
 ## Compiler runtime routines
 
 The code calls a few routines from the compiler's own library (`sh4nlfzn.lib`): `__modls` (signed

@@ -5,6 +5,189 @@ R0.40 Release.4	GDFS	0.49	May 26 1998
 R4	GDC	0.51	Apr 30 1998
 R4	GDFS	0.49	May 26 1998
 R4	GDFS	0.50	Jun 01 1998
+R1.0b2	ADXF	5.18	Oct 03 1998 01:28:21
+R1.0b2	AIP	0.62	Sep 14 1998 16:18:43
+R1.0b2	GDC	0.64a	Aug 20 1998
+R1.0b2	GDC	1.01	Sep 30 1998
+R1.0b2	GDFS	0.53	Aug 28 1998
+R1.0b2	GDFS	1.00	Sep 28 1998
+R1.0b2	Local	1.24	Sep 30 1998
+R1.0b2	MPS	1.00	Sep 30 1998
+R1.0b2	MPV	0.02	Jan 06 1998
+R1.0b2	MPV	1.00	Sep 30 1998
+R1.0b2	MWGSC	0.90	Sep 18 1998
+R1.0b2	MWPLY	0.57	Aug 28 1998
+R1.0b2	MWPLY	0.90	Sep 26 1998
+R1.0b2	MWRNA	1.00	Sep 30 1998
+R1.0b2	MWSJ	0.90	Sep 18 1998
+R1.0b2	MWSJ_MEM	0.90	Sep 18 1998
+R1.0b2	MWSJ_RBF	0.90	Sep 18 1998
+R1.0b2	Ninja	00060058	Sep 05 1998 03:13:52
+R1.0b2	Ninja	00060058	Sep 05 1998 04:51:06
+R1.0b2	Ninja	00060058	Sep 07 1998 22:27:08
+R1.0b2	Ninja	00060059	Sep 17 1998 22:59:07
+R1.0b2	Ninja	00060060	Sep 29 1998 11:42:28
+R1.0b2	Ninja	00060060	Sep 30 1998 17:47:14
+R1.0b2	Ninja	00060062	Oct 05 1998 14:34:05
+R1.0b2	PMC	1.10	Jun 04 1998
+R1.0b2	SFD	1.00	Sep 30 1998
+R1.0b2	Shinobi	0.70b	Sep 09 1998 13:18:46
+R1.0b2	Shinobi	1.01	Sep 30 1998 19:32:16
+R1.0b2	Shinobi	1.03	Oct 01 1998 16:58:06
+R1.0b2	bu	1.07BTR	Sep 26 1998 23:18:12
+R1.0b2	bu	1.10	Sep 29 1998 13:37:59
+R1.0b2	fmMng	0.55	Sep 11 1998 18:52:10
+R1.0b2	fmMng	1.00	Sep 29 1998 14:42:44
+R1.0b2	gdFs	0.53	Sep 07 1998 13:48:56
+R1.0b2	gdFs	0.54	Sep 15 1998 17:47:44
+R1.0b2	gdFs	1.00	Sep 28 1998 19:43:45
+R1.0b2	kd	1.17	Sep 07 1998 11:53:12
+R1.0b2	kd	1.21	Sep 24 1998 21:32:40
+R1.0b2	mwGsc	1.00	Sep 30 1998 23:37:04
+R1.0b2	mwMng	1.00	Sep 30 1998 23:33:54
+R1.0b2	mwPly	1.00	Sep 30 1998 23:33:42
+R1.0b2	mwRna	1.00	Sep 30 1998 13:46:45
+R1.0b2	mwSfd	1.00	Oct 01 1998 15:44:27
+R1.0b2	mwSj	0.90	Sep 30 1998 23:34:22
+R1.0b2	mwWav	1.00	Sep 29 1998 19:03:15
+R1.0b2	nw	00060070	Sep 07 1998 11:53:24
+R1.0b2	pd	1.07	Sep 07 1998 11:53:37
+R1.0b2	pdLcd	1.01	Sep 07 1998 11:53:36
+R1.0b2	pdLcd	1.01	Sep 11 1998 23:34:43
+R1.0b2	pdTmr	1.03	Sep 22 1998 22:56:09
+R1.0b2	sd	0.57.01	Sep 11 1998 17:03:37
+R1.0b2	sd	1.00.02	Oct 01 1998 06:19:44
+R1.0b2	syBt	1.00	Sep 28 1998 14:49:03
+R1.0b2	syBtCfg	1.00	Sep 29 1998 15:00:47
+R1.0b2	syBtFnt	1.00	Sep 29 1998 16:09:15
+R1.0b2	syCache	0.70	Sep 07 1998 13:46:29
+R1.0b2	syCache	1.01	Sep 28 1998 22:22:21
+R1.0b2	syCache	1.03	Sep 30 1998 18:03:31
+R1.0b2	syCbl	0.51	Sep 29 1998 12:27:52
+R1.0b2	syCbl	1.00	Sep 29 1998 13:22:53
+R1.0b2	syCfg	1.00	Sep 28 1998 14:59:49
+R1.0b2	syChain	0.70	Sep 07 1998 13:43:17
+R1.0b2	syChain	1.00	Sep 16 1998 14:34:01
+R1.0b2	syChain	1.01	Oct 01 1998 16:37:03
+R1.0b2	syCp	1.00	Sep 16 1998 14:36:55
+R1.0b2	syDma	0.70	Sep 07 1998 13:43:54
+R1.0b2	syDma	1.00	Sep 16 1998 14:37:09
+R1.0b2	syFbr	0.10	Sep 22 1998 00:19:17
+R1.0b2	syFbr	1.00	Sep 29 1998 15:10:08
+R1.0b2	syG2	0.52.08	Sep 11 1998 17:02:48
+R1.0b2	syG2	1.00.00	Sep 29 1998 13:53:59
+R1.0b2	syHw	1.01	Sep 07 1998 11:53:40
+R1.0b2	syInt	0.70	Sep 07 1998 13:44:40
+R1.0b2	syInt	1.00	Sep 16 1998 14:37:57
+R1.0b2	syMalloc	0.70	Sep 07 1998 13:44:58
+R1.0b2	syMalloc	1.00	Sep 16 1998 14:48:33
+R1.0b2	syMalloc	1.01	Sep 17 1998 19:49:50
+R1.0b2	syMmu	1.00	Sep 16 1998 14:37:26
+R1.0b2	syRtc	0.43	Sep 07 1998 12:51:46
+R1.0b2	syRtc	1.00	Sep 28 1998 05:02:55
+R1.0b2	syRtc	1.00	Sep 28 1998 05:10:44
+R1.0b2	sySq	0.70	Sep 07 1998 13:45:46
+R1.0b2	sySq	1.00	Sep 16 1998 14:38:15
+R1.0b2	syStart	0.61	Sep 04 1998 22:03:22
+R1.0b2	syStart	1.01	Sep 30 1998 17:05:11
+R1.0b2	syStart	1.01	Sep 30 1998 17:05:14
+R1.0b2	syTmr	0.94	Sep 07 1998 13:52:40
+R1.0b2	syTmr	1.00	Sep 25 1998 12:34:18
+R1.0b2	wav	1.00	Sep 29 1998 19:03:04
+R1.00J	ADXF	5.18	Oct 03 1998 01:28:21
+R1.00J	AIP	0.62	Sep 14 1998 16:18:43
+R1.00J	GDC	0.64a	Aug 20 1998
+R1.00J	GDC	1.01	Sep 30 1998
+R1.00J	GDFS	0.53	Aug 28 1998
+R1.00J	GDFS	1.01	Oct 12 1998
+R1.00J	Local	1.24	Sep 30 1998
+R1.00J	MPS	1.01	Oct 14 1998
+R1.00J	MPV	0.02	Jan 06 1998
+R1.00J	MPV	1.01	Oct 14 1998
+R1.00J	MWRNA	1.01	Oct 14 1998
+R1.00J	MWSJ_MEM	0.90	Sep 18 1998
+R1.00J	MWSJ_RBF	0.90	Sep 18 1998
+R1.00J	Ninja	00050063	Oct 07 1998 20:39:24
+R1.00J	Ninja	00060058	Sep 07 1998 22:27:08
+R1.00J	Ninja	00060060	Sep 30 1998 14:46:43
+R1.00J	Ninja	00060060	Sep 30 1998 17:47:14
+R1.00J	Ninja	00060063	Oct 06 1998 19:54:23
+R1.00J	Ninja	00060064	Oct 13 1998 16:07:20
+R1.00J	PMC	1.10	Jun 04 1998
+R1.00J	SFD	1.01	Oct 14 1998
+R1.00J	Shinobi	0.70b	Sep 09 1998 13:18:46
+R1.00J	Shinobi	1.01	Sep 30 1998 19:32:16
+R1.00J	Shinobi	1.05	Oct 03 1998 22:00:42
+R1.00J	Shinobi	1.08	Oct 13 1998 20:55:44
+R1.00J	bu	1.07BTR	Sep 26 1998 23:18:12
+R1.00J	bu	1.10	Sep 29 1998 13:37:59
+R1.00J	fmMng	1.00	Sep 29 1998 14:42:44
+R1.00J	fmMng	1.01	Oct 01 1998 12:28:29
+R1.00J	fmMng	1.01	Oct 12 1998 19:03:00
+R1.00J	gdFs	0.53	Sep 07 1998 13:48:56
+R1.00J	gdFs	1.00	Sep 28 1998 19:43:45
+R1.00J	gdFs	1.01	Oct 12 1998 13:54:14
+R1.00J	kd	1.17	Sep 07 1998 11:53:12
+R1.00J	kd	1.21	Sep 24 1998 21:32:40
+R1.00J	kd	1.22	Oct 09 1998 18:30:34
+R1.00J	mwGsc	1.01	Oct 14 1998 17:44:39
+R1.00J	mwMng	1.01	Oct 14 1998 17:45:22
+R1.00J	mwPly	1.01	Oct 14 1998 17:45:23
+R1.00J	mwRna	1.01	Oct 14 1998 18:26:38
+R1.00J	mwRnv	1.01	Oct 14 1998 17:46:36
+R1.00J	mwSfd	1.01	Oct 15 1998 12:08:50
+R1.00J	mwSj	1.01	Oct 14 1998 17:46:10
+R1.00J	mwWav	1.01	Oct 15 1998 09:53:02
+R1.00J	mwWav	1.02	Oct 16 1998 12:02:57
+R1.00J	nw	00060070	Sep 07 1998 11:53:24
+R1.00J	pd	1.07	Sep 07 1998 11:53:37
+R1.00J	pdLcd	1.01	Sep 07 1998 11:53:36
+R1.00J	pdLcd	1.01	Sep 11 1998 23:34:43
+R1.00J	pdTmr	1.03	Sep 22 1998 22:56:09
+R1.00J	pdVib	0.20	Oct 08 1998 18:46:58
+R1.00J	sd	0.57.01	Sep 11 1998 17:03:37
+R1.00J	sd	1.00.04	Oct 13 1998 19:22:49
+R1.00J	syBt	1.01	Oct 09 1998 14:31:23
+R1.00J	syBtCfg	1.00	Sep 29 1998 15:00:47
+R1.00J	syBtFnt	1.00	Sep 29 1998 16:09:15
+R1.00J	syCache	0.70	Sep 07 1998 13:46:29
+R1.00J	syCache	1.03	Sep 30 1998 18:03:31
+R1.00J	syCache	1.04	Oct 03 1998 21:58:40
+R1.00J	syCbl	1.00	Sep 29 1998 13:22:53
+R1.00J	syCfg	1.00	Sep 28 1998 14:59:49
+R1.00J	syChain	0.70	Sep 07 1998 13:43:17
+R1.00J	syChain	1.00	Sep 16 1998 14:34:01
+R1.00J	syChain	1.01	Oct 01 1998 16:37:03
+R1.00J	syCp	1.00	Sep 16 1998 14:36:55
+R1.00J	syDma	0.70	Sep 07 1998 13:43:54
+R1.00J	syDma	1.00	Sep 16 1998 14:37:09
+R1.00J	syFbr	1.00	Sep 29 1998 15:10:08
+R1.00J	syG2	0.52.08	Sep 11 1998 17:02:48
+R1.00J	syG2	1.00.00	Sep 29 1998 13:53:59
+R1.00J	syG2	1.01.00	Oct 12 1998 05:48:41
+R1.00J	syHw	1.01	Sep 07 1998 11:53:40
+R1.00J	syHw	1.02	Oct 08 1998 11:45:07
+R1.00J	syInt	0.70	Sep 07 1998 13:44:40
+R1.00J	syInt	1.00	Sep 16 1998 14:37:57
+R1.00J	syInt	1.01	Oct 02 1998 22:27:32
+R1.00J	syInt	1.02	Oct 08 1998 19:31:47
+R1.00J	syMalloc	0.70	Sep 07 1998 13:44:58
+R1.00J	syMalloc	1.00	Sep 16 1998 14:48:33
+R1.00J	syMalloc	1.01	Sep 17 1998 19:49:50
+R1.00J	syMmu	1.00	Sep 16 1998 14:37:26
+R1.00J	syRtc	0.43	Sep 07 1998 12:51:46
+R1.00J	syRtc	1.00	Sep 28 1998 05:02:55
+R1.00J	syRtc	1.00	Sep 28 1998 05:10:44
+R1.00J	sySq	0.70	Sep 07 1998 13:45:46
+R1.00J	sySq	1.00	Sep 16 1998 14:38:15
+R1.00J	syStart	0.61	Sep 04 1998 22:03:22
+R1.00J	syStart	1.00	Sep 28 1998 10:47:50
+R1.00J	syStart	1.01	Sep 30 1998 17:05:11
+R1.00J	syStart	1.01	Sep 30 1998 17:05:14
+R1.00J	syTmr	0.94	Sep 07 1998 13:52:40
+R1.00J	syTmr	1.00	Sep 25 1998 12:34:18
+R1.00J	wav	1.01	Oct 14 1998 17:02:34
+R1.00J	wav	1.01	Oct 16 1998 12:02:42
 R1.42J	ADXF	5.52	Apr 23 1999 14:38:48
 R1.42J	ADXT	5.55	Apr 23 1999 21:20:58
 R1.42J	AIP	0.62	Sep 14 1998 16:18:43
@@ -105,6 +288,171 @@ R1.42J	syTmr	1.03	Mar 01 1999 18:07:27
 R1.42J	syWssip	1.01	Mar 02 1999 20:11:42
 R1.42J	uf	1.05	Mar 01 1999 12:03:58
 R1.42J	wav	1.10	Mar 10 1999 18:01:04
+Release 8 (Europe)	ADXF	5.42	Dec 08 1998 11:19:38
+Release 8 (Europe)	ADXF	5.52	Apr 23 1999 14:38:48
+Release 8 (Europe)	ADXT	5.42	Dec 08 1998 14:37:02
+Release 8 (Europe)	ADXT	5.42	Dec 08 1998 20:42:53
+Release 8 (Europe)	ADXT	5.55	Apr 23 1999 21:20:58
+Release 8 (Europe)	AIP	0.62	Sep 14 1998 16:18:43
+Release 8 (Europe)	AIP	1.01	Dec 01 1998 14:08:29
+Release 8 (Europe)	AIP	1.03	Jan 21 1999 17:12:59
+Release 8 (Europe)	AIP	1.05	Mar 03 1999 14:45:25
+Release 8 (Europe)	AIPf	1.04	Jan 21 1999 17:16:22
+Release 8 (Europe)	AIPf	1.05	Mar 03 1999 15:52:43
+Release 8 (Europe)	CRI SFD	1.12	Mar 08 1999 14:11:47
+Release 8 (Europe)	CRI_SFD	1.04	Dec 04 1998 19:14:17
+Release 8 (Europe)	GDC	0.64a	Aug 20 1998
+Release 8 (Europe)	GDC	1.01	Sep 30 1998
+Release 8 (Europe)	GDFS	1.06	Jan 21 1999
+Release 8 (Europe)	KAMUI	1.06	Feb 25 1999 19:11:51
+Release 8 (Europe)	Local	1.33	Nov 20 1998
+Release 8 (Europe)	MPS	1.04	Dec 04 1998
+Release 8 (Europe)	MPS	1.12	Mar 08 1999
+Release 8 (Europe)	MPV	0.02	Jan 06 1998
+Release 8 (Europe)	MPV	1.04	Dec 04 1998
+Release 8 (Europe)	MPV	1.12	Mar 08 1999
+Release 8 (Europe)	MWGSC	1.11	Dec 02 1998
+Release 8 (Europe)	MWGSC	1.12	Mar 09 1999
+Release 8 (Europe)	MWRNA	1.01	Oct 14 1998
+Release 8 (Europe)	MWRNA	1.07	Nov 25 1998
+Release 8 (Europe)	MWSJ	1.10	Nov 10 1998
+Release 8 (Europe)	MWSJ_RBF	0.90	Sep 18 1998
+Release 8 (Europe)	Nindows	01000074	Mar 02 1999 20:53:52
+Release 8 (Europe)	Nindows	0x01000072	Nov 30 1998 17:42:53
+Release 8 (Europe)	Ninja	00060060	Sep 30 1998 14:46:43
+Release 8 (Europe)	Ninja	00060064	Oct 13 1998 16:07:20
+Release 8 (Europe)	Ninja	01000074	Dec 17 1998 16:02:53
+Release 8 (Europe)	Ninja	01000086	Apr 09 1999 19:34:49
+Release 8 (Europe)	Ninja	0x01000071	Nov 20 1998 14:01:56
+Release 8 (Europe)	PMC	1.10	Jun 04 1998
+Release 8 (Europe)	SFA	5.42	Dec 08 1998 14:37:15
+Release 8 (Europe)	SFA	5.42	Dec 08 1998 20:43:02
+Release 8 (Europe)	SFA	5.55	Apr 23 1999 21:21:02
+Release 8 (Europe)	SFD	1.04	Dec 04 1998
+Release 8 (Europe)	SFD	1.12	Mar 08 1999
+Release 8 (Europe)	SJ	5.42	Dec 08 1998 12:18:26
+Release 8 (Europe)	SJ	5.45	Mar 16 1999 20:32:02
+Release 8 (Europe)	Shinobi	1.08	Oct 13 1998 20:55:44
+Release 8 (Europe)	Shinobi	1.23uchi	Nov 26 1998 18:43:53
+Release 8 (Europe)	Shinobi	1.34	Dec 04 1998 14:44:40
+Release 8 (Europe)	Shinobi	1.42	Apr 02 1999 15:16:40
+Release 8 (Europe)	bu	1.07BTR	Sep 26 1998 23:18:12
+Release 8 (Europe)	bu	1.14	Nov 25 1998 10:46:21
+Release 8 (Europe)	bu	1.44	Mar 02 1999 20:54:01
+Release 8 (Europe)	fmMng	1.00	Sep 29 1998 14:42:44
+Release 8 (Europe)	fmMng	1.02	Nov 27 1998 21:17:22
+Release 8 (Europe)	fmMng	1.03	Mar 03 1999 15:43:57
+Release 8 (Europe)	gdFs	1.00	Sep 28 1998 19:43:45
+Release 8 (Europe)	gdFs	1.01	Oct 12 1998 13:54:14
+Release 8 (Europe)	gdFs	1.02	Oct 27 1998 15:24:27
+Release 8 (Europe)	gdFs	1.05	Dec 02 1998 19:06:55
+Release 8 (Europe)	gdFs	1.07	Mar 03 1999 15:41:47
+Release 8 (Europe)	kd	1.21	Sep 24 1998 21:32:40
+Release 8 (Europe)	kd	1.22	Oct 09 1998 18:30:34
+Release 8 (Europe)	kd	1.24	Nov 25 1998 10:46:00
+Release 8 (Europe)	kd	1.45	Mar 02 1999 20:53:33
+Release 8 (Europe)	mpa	1.01	Mar 16 1999 15:50:54
+Release 8 (Europe)	mwGsc	1.01	Oct 14 1998 17:44:39
+Release 8 (Europe)	mwGsc	1.11	Dec 08 1998 14:54:10
+Release 8 (Europe)	mwGsc	1.12	Mar 09 1999 17:09:57
+Release 8 (Europe)	mwMng	1.01	Oct 14 1998 17:45:22
+Release 8 (Europe)	mwMng	1.10	Dec 08 1998 15:29:32
+Release 8 (Europe)	mwMng	1.23	Mar 11 1999 22:49:27
+Release 8 (Europe)	mwPla	1.02	Mar 16 1999 17:39:19
+Release 8 (Europe)	mwPly	1.01	Oct 14 1998 17:45:23
+Release 8 (Europe)	mwPly	1.10	Dec 08 1998 15:29:33
+Release 8 (Europe)	mwPly	1.23	Mar 11 1999 22:49:28
+Release 8 (Europe)	mwRna	1.01	Oct 14 1998 17:27:20
+Release 8 (Europe)	mwRna	1.07	Dec 07 1998 21:00:13
+Release 8 (Europe)	mwRna	1.20	Apr 13 1999 17:30:27
+Release 8 (Europe)	mwRnv	1.10	Dec 08 1998 20:19:40
+Release 8 (Europe)	mwRnv	1.26	Mar 16 1999 20:28:15
+Release 8 (Europe)	mwSfd	1.10	Dec 08 1998 21:29:38
+Release 8 (Europe)	mwSfd	1.28	Apr 24 1999 00:58:24
+Release 8 (Europe)	mwSj	1.10	Dec 08 1998 15:02:37
+Release 8 (Europe)	mwTM	1.00	Mar 09 1999 09:15:24
+Release 8 (Europe)	mwTM	1.00	Mar 11 1999 20:10:41
+Release 8 (Europe)	mwWav	1.01	Oct 14 1998 17:02:45
+Release 8 (Europe)	mwWav	1.05	Dec 08 1998 22:12:03
+Release 8 (Europe)	pd	1.07	Sep 07 1998 11:53:37
+Release 8 (Europe)	pd	1.08	Nov 26 1998 18:43:44
+Release 8 (Europe)	pd	1.09	Dec 01 1998 17:10:32
+Release 8 (Europe)	pd	1.46	Mar 03 1999 11:01:47
+Release 8 (Europe)	pdLcd	1.01	Sep 11 1998 23:34:43
+Release 8 (Europe)	pdLcd	1.02	Nov 25 1998 10:46:29
+Release 8 (Europe)	pdLcd	1.03	Mar 02 1999 20:54:11
+Release 8 (Europe)	pdTmr	1.03	Sep 22 1998 22:56:09
+Release 8 (Europe)	pdTmr	1.04	Nov 25 1998 10:46:32
+Release 8 (Europe)	pdTmr	1.05	Mar 02 1999 20:54:15
+Release 8 (Europe)	pdVib	1.00	Nov 26 1998 14:39:56
+Release 8 (Europe)	pdVib	1.01	Mar 02 1999 21:20:29
+Release 8 (Europe)	sd	0.57.01	Sep 11 1998 17:03:37
+Release 8 (Europe)	sd	1.00.04	Oct 13 1998 19:22:49
+Release 8 (Europe)	sd	1.00.07	Oct 28 1998 18:04:08
+Release 8 (Europe)	sd	1.00.15	Nov 26 1998 23:23:23
+Release 8 (Europe)	sd	1.00.18	Apr 05 1999 19:59:31
+Release 8 (Europe)	syBt	1.01	Oct 09 1998 14:31:23
+Release 8 (Europe)	syBt	1.03	Nov 24 1998 20:10:38
+Release 8 (Europe)	syBt	1.04	Mar 01 1999 11:57:40
+Release 8 (Europe)	syBtCfg	1.00	Sep 29 1998 15:00:47
+Release 8 (Europe)	syBtCfg	1.01	Nov 27 1998 21:21:40
+Release 8 (Europe)	syBtCfg	1.02	Mar 03 1999 15:44:22
+Release 8 (Europe)	syBtFnt	1.00	Sep 29 1998 16:09:15
+Release 8 (Europe)	syBtFnt	1.02	Mar 02 1999 18:50:17
+Release 8 (Europe)	syBtFnt	1.02	Nov 25 1998 15:21:49
+Release 8 (Europe)	syCache	1.03	Sep 30 1998 18:03:31
+Release 8 (Europe)	syCache	1.04	Oct 03 1998 21:58:40
+Release 8 (Europe)	syCache	1.07	Nov 26 1998 22:22:06
+Release 8 (Europe)	syCache	1.35	Mar 03 1999 10:47:24
+Release 8 (Europe)	syCbl	1.00	Sep 29 1998 13:22:53
+Release 8 (Europe)	syCbl	1.10	Mar 02 1999 18:43:53
+Release 8 (Europe)	syCbl	1.10	Nov 30 1998 15:10:32
+Release 8 (Europe)	syCfg	1.11	Dec 01 1998 20:04:56
+Release 8 (Europe)	syCfg	1.14	Mar 31 1999 22:17:33
+Release 8 (Europe)	syChain	1.01	Oct 01 1998 16:37:03
+Release 8 (Europe)	syChain	1.03	Nov 26 1998 22:22:42
+Release 8 (Europe)	syChain	1.35	Mar 03 1999 10:47:40
+Release 8 (Europe)	syDds	1.00	Mar 19 1999 10:45:01
+Release 8 (Europe)	syFbr	1.10	Nov 24 1998 20:11:15
+Release 8 (Europe)	syFbr	1.11	Mar 01 1999 12:00:19
+Release 8 (Europe)	syG2	0.52.08	Sep 11 1998 17:02:48
+Release 8 (Europe)	syG2	1.01.00	Oct 12 1998 05:48:41
+Release 8 (Europe)	syG2	1.01.01	Nov 27 1998 01:47:35
+Release 8 (Europe)	syG2	1.01.02	Mar 03 1999 14:58:36
+Release 8 (Europe)	syHw	1.02	Oct 08 1998 11:45:07
+Release 8 (Europe)	syHw	1.04	Nov 25 1998 10:46:34
+Release 8 (Europe)	syHw	1.06	Mar 02 1999 20:54:17
+Release 8 (Europe)	syInt	1.02	Oct 08 1998 19:31:47
+Release 8 (Europe)	syInt	1.03	Oct 30 1998 11:07:49
+Release 8 (Europe)	syInt	1.05	Nov 26 1998 22:34:35
+Release 8 (Europe)	syInt	1.35	Mar 03 1999 10:48:18
+Release 8 (Europe)	syMalloc	1.00	Sep 16 1998 14:48:33
+Release 8 (Europe)	syMalloc	1.01	Sep 17 1998 19:49:50
+Release 8 (Europe)	syMalloc	1.05	Dec 04 1998 12:08:35
+Release 8 (Europe)	syMalloc	1.35	Mar 03 1999 10:48:43
+Release 8 (Europe)	syMmu	1.02	Nov 26 1998 22:24:02
+Release 8 (Europe)	syMmu	1.35	Mar 03 1999 10:48:57
+Release 8 (Europe)	syRtc	1.00	Sep 28 1998 05:02:55
+Release 8 (Europe)	syRtc	1.00	Sep 28 1998 05:10:44
+Release 8 (Europe)	syRtc	1.02	Mar 02 1999 19:03:33
+Release 8 (Europe)	syRtc	1.02	Nov 25 1998 15:35:02
+Release 8 (Europe)	sySq	1.00	Sep 16 1998 14:38:15
+Release 8 (Europe)	sySq	1.02	Nov 26 1998 22:35:12
+Release 8 (Europe)	sySq	1.35	Mar 03 1999 10:49:28
+Release 8 (Europe)	syStart	1.01	Sep 30 1998 17:05:11
+Release 8 (Europe)	syStart	1.02	Oct 26 1998 19:51:11
+Release 8 (Europe)	syStart	1.04	Nov 25 1998 10:56:49
+Release 8 (Europe)	syStart	1.04	Nov 25 1998 10:56:52
+Release 8 (Europe)	syStart	1.07	Mar 02 1999 18:01:20
+Release 8 (Europe)	syStart	1.07	Mar 02 1999 18:01:22
+Release 8 (Europe)	syTmr	1.00	Sep 25 1998 12:34:18
+Release 8 (Europe)	syTmr	1.02	Nov 25 1998 11:41:00
+Release 8 (Europe)	syTmr	1.03	Mar 01 1999 18:07:27
+Release 8 (Europe)	syWssip	1.01	Mar 02 1999 20:11:42
+Release 8 (Europe)	uf	1.05	Mar 01 1999 12:03:58
+Release 8 (Europe)	wav	1.01	Oct 14 1998 17:02:34
+Release 8 (Europe)	wav	1.02	Dec 04 1998 18:27:32
+Release 8 (Europe)	wav	1.10	Mar 10 1999 18:01:04
 R1.55J	ADXF	5.53	Jun 07 1999 11:44:16
 R1.55J	ADXT	5.58	Jun 10 1999 11:38:47
 R1.55J	ADXT	5.59B	Jun 14 1999 22:27:05

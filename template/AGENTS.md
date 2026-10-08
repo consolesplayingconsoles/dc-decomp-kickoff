@@ -25,7 +25,10 @@ with `bash build.sh` printing `MATCH`.
 ## Naming (fast, safe, worth doing first)
 Rename in `functions.txt`, delete the old `asm/<addr>_FUN_<addr>.src`, re-run `split_asm.py`, build:
 still `MATCH` (names never change bytes). A function missed by the analysis (`tools/missed_funcs.py`
-lists candidates) is added the same way, as `F <addr> <size> FUN_<addr>`.
+lists candidates) is added the same way, as `F <addr> <size> FUN_<addr>`. Its size runs to the end
+of its last `rts` and delay slot before the next entry, pool included: a function with a literal
+pool in the middle of its body (a stray "branch" inside the pool fools a linear sweep) is sized
+that way, not by where the sweep stopped.
 
 ## The C loop (one original source file at a time)
 1. **Find the unit.** The compiler's literal pools are shared by every function of one source file,
