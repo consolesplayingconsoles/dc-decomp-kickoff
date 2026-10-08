@@ -144,7 +144,8 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
    6. **A prototype or debug build.** Pre-release discs often still carry the linker's `.ELF`
       or `.MAP`, with every name. Whether one exists for the game:
       https://www.sega-dreamcast-info.com/en/releases-prototypes-sega-dreamcast-iso (about 300
-      Dreamcast prototypes, with what each one holds) and Hidden Palace's Dreamcast list.
+      Dreamcast prototypes, with what each one holds) and Hidden Palace's Dreamcast list
+      (https://hiddenpalace.org/Prototypes_by_system/Dreamcast).
    Record each answer in the game's evidence entry. Only 1, 4 and 6 feed a tool: 1 ->
    `scripts/cheat_leads.py` (globals candidates, step 7); 4 -> `references/port-symbols.md`,
    symbols check first; 6 -> a symbol scan before anything else. 2, 3 and 5 become references in
