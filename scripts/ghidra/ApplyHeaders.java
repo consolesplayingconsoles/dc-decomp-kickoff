@@ -26,12 +26,22 @@ public class ApplyHeaders extends GhidraScript {
             File f = new File(dirs.get(0), first);
             if (f.isFile()) files.add(f.getAbsolutePath());
         }
+        // then the headers that include the most others first: each include chain is then read once,
+        // whole, in a fresh preprocessor, before its parts are read on their own
         File[] top = new File(dirs.get(0)).listFiles();
-        Arrays.sort(top);
+        List<File> rest = new ArrayList<>();
         for (File f : top)
             if (f.isFile() && f.getName().toLowerCase().endsWith(".h") && !f.getName().toLowerCase().startsWith("sh4_")
                     && !files.contains(f.getAbsolutePath()))
-                files.add(f.getAbsolutePath());
+                rest.add(f);
+        Map<File, Integer> includes = new HashMap<>();
+        for (File f : rest) {
+            int n = 0;
+            try { for (String l : java.nio.file.Files.readAllLines(f.toPath(), java.nio.charset.StandardCharsets.ISO_8859_1)) if (l.trim().startsWith("#include")) n++; } catch (Exception e) { }
+            includes.put(f, n);
+        }
+        rest.sort((x, y) -> includes.get(y) - includes.get(x) != 0 ? includes.get(y) - includes.get(x) : x.getName().compareTo(y.getName()));
+        for (File f : rest) files.add(f.getAbsolutePath());
         DataTypeManager dtm = currentProgram.getDataTypeManager();
         int before = dtm.getDataTypeCount(true);
         // one parse per header: a construct the parser cannot read costs that header, not the rest.
