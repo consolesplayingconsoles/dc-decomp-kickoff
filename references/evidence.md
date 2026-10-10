@@ -182,8 +182,9 @@ as an issue) to add a game.
   form feeds between declarations (every Kamui API header), `(Void)` / `(VOID)` / `(KMVOID)` as an
   empty parameter list (a typedef of void is "not permitted" as a parameter), Shift-JIS comment
   bytes, `KMAPI` / `IN` / `OUT` / `CRIAPI` attribute macros, a missing `machine.h`, and headers
-  that use a type a later header defines (second parse pass). One header still fails (`sg_sm.h`,
-  a forward-declared `OVLIB`)
+  that use a type a later header defines (second parse pass). One header still fails and should:
+  `sg_sm.h` declares `smVcntInitG(OvLib ovl)` with a type no R10.1 header defines (`OVLIB` exists,
+  `OvLib` does not), a bug in the SDK itself
 - parsed: 2,372 function prototypes, 423 structs. Applied: Boku 216 of 1,157 named functions,
   Crazy Taxi 143 of 546; the rest are library internals (`mw*`, `kmi*`, `vmsfs_*`, `mpdrv_*`,
   `sd*` internals) that no public header declares. Pool words pointing at prototyped functions

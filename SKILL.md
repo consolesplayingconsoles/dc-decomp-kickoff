@@ -141,11 +141,13 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
       symbol table: it can name a large share of the functions and globals.
    5. **A decomp of the same game on another console.** Structures, class names and logic;
       no bytes match.
-   6. **A prototype or debug build.** Pre-release discs often still carry the linker's `.ELF`
-      or `.MAP`, with every name. Whether one exists for the game:
+   6. **A prototype, debug build or dev kit dump.** Pre-release discs sometimes carry the
+      linker's `.ELF` or `.MAP`, or a build log inside a data file, with every name; a studio's
+      dev kit dump can hold the project folder with its link maps, ELFs with debug info
+      (`scripts/elf_debug_names.py`) and source. Whether one exists for the game:
       https://www.sega-dreamcast-info.com/en/releases-prototypes-sega-dreamcast-iso (about 300
-      Dreamcast prototypes, with what each one holds) and Hidden Palace's Dreamcast list
-      (https://hiddenpalace.org/Prototypes_by_system/Dreamcast). With no ELF or map, still diff
+      Dreamcast prototypes and the published dev kit dumps, with what each one holds) and Hidden
+      Palace's Dreamcast list (https://hiddenpalace.org/Prototypes_by_system/Dreamcast). With no ELF or map, still diff
       its strings against the release: debug readouts and menus left in early builds carry their
       own labels (`printf("Act    = %d", ...)` names the field it prints).
    Record each answer in the game's evidence entry. Only 1, 4 and 6 feed a tool: 1 ->
@@ -357,6 +359,7 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
 | `scripts/shdis.py` | in the repo: SH-4 disassembly with FPU, pool values and names (stdlib) |
 | `scripts/live.py` | in the repo, optional: read, watch and write the running game by address or name, screenshots, pad input (RetroArch + Flycast core over its network ports, stdlib) |
 | `scripts/map_names.py` | code symbols of a linked library's map, runtime routines included |
+| `scripts/elf_debug_names.py` | function names and addresses from an SHC ELF's DWARF 1 debug section (prototype or dev kit ELFs) |
 | `scripts/ghidra/ExportFeatures.java` | per-function strings, constants, calls and globals, for port matching |
 | `scripts/port/*.py` | pair functions and globals with a port's symbols (`references/port-symbols.md`) |
 | `template/setup.sh` | in the repo: extract + verify the user's executable, regenerate `asm/` and `text-map/` |
