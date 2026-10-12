@@ -68,9 +68,10 @@ data becomes its own piece at that range, in source order; both ranges must star
 file boundaries (add them to `functions.txt`: `F <addr> 0 FUN_<addr>` for a function start,
 `D <addr> 0 data_<addr>` for a data boundary, which is not counted as a function). A unit is one
 original source file: all its functions share literal pools, so it goes in only when all of it
-matches. `python3 tools/progress.py` reports the state in several measures, game code and SDK apart
-(`sdk.txt` marks the SDK): matching C (bytes, functions, units), named functions and globals, and
-functions documented in `docs/*.md`.
+matches. `python3 tools/progress.py` reports the state game code and SDK apart (`sdk.txt` marks the SDK),
+each game function in one bucket: done (equivalent C, matching C part of it), named only (a name is
+not done work), unnamed; plus documented functions and named globals. `docs/equivalent.md` holds
+the evidence for each equivalent function.
 
 ## Progress
 
