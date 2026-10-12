@@ -16,12 +16,15 @@ Three passes per round, over the functions inside the repo's `sdk.txt`:
    the nearest named neighbours (16 bytes or more); byte-identical twins that tie are settled
    by that order when exactly one fits.
 2. Position. Between two named neighbours whose distance in the game equals their distance in
-   a library, every function the library exports between them, by offset: tiny ones included,
+   a library, every function the library
+   exports between them, by offset: tiny ones included,
    and starts the split missed (a function is split there, or a gap gets an entry).
 3. Listings. A source file's listing whose masked code matches the game (98%) at one of its
    functions the game names gives every function of that file by offset, statics included.
 
-A name is used only if one source proposes it for one address and it is not taken. An existing
+Each proposal carries a score (its masked match). Sources that disagree, on the name at an
+address or the address of a name, are settled by the best score when it leads by 0.05; else the
+name waits. A stretch below 0.6 proposes nothing (a span that matches by chance). An existing
 name the layout contradicts is replaced only on a function under 16 bytes (where signature
 names collide), and reported as suspect otherwise. Rounds repeat until nothing new.
 
@@ -33,6 +36,8 @@ from difflib import SequenceMatcher
 
 MIN_SIZE = 16
 MIN_RATIO = 0.85
+MIN_STRETCH = 0.6     # position: masked match of the code between the two neighbours
+MARGIN = 0.05         # a disagreement is settled only by a clearly better score
 
 
 def segments(f):
@@ -86,6 +91,11 @@ def pool_longs(buf, off, n):
             if off + t + 4 <= len(buf):
                 out[i] = struct.unpack_from('<I', buf, off + t)[0]
     return out
+
+
+def unnamed(name):
+    """FUN_ entries and the thunks Ghidra named after them carry no real name."""
+    return name.startswith('FUN_') or name.startswith('thunk_FUN_')
 
 
 def bare(name):
@@ -155,9 +165,9 @@ def load_repo(repo):
 
 def one_round(exe, base, funcs, inside, extra, libs, index, order):
     gnames = dict(extra)
-    gnames.update({a: n for a, _, n in funcs if not n.startswith('FUN_')})
+    gnames.update({a: n for a, _, n in funcs if not unnamed(n)})
     used = {n for _, _, n in funcs}
-    anchors = [(a, n) for a, sz, n in funcs if not n.startswith('FUN_') and sz >= MIN_SIZE]
+    anchors = [(a, n) for a, sz, n in funcs if not unnamed(n) and sz >= MIN_SIZE]
 
     def fits(a, name, key, both):
         """Link order against the nearest named neighbours: both needed to settle twins,
@@ -171,7 +181,7 @@ def one_round(exe, base, funcs, inside, extra, libs, index, order):
 
     found = []
     for a, sz, name in funcs:
-        if not name.startswith('FUN_') or sz < MIN_SIZE or not inside(a):
+        if not unnamed(name) or sz < MIN_SIZE or not inside(a):
             continue
         n = sz // 2
         g = mask(words(exe, a - base, n))
@@ -208,15 +218,12 @@ def one_round(exe, base, funcs, inside, extra, libs, index, order):
         if len(tied) == 1:
             nm, (_, key) = tied[0]
             if nm not in used and fits(a, nm, key, False):
-                found.append((a, nm, 'match', key))
+                found.append((a, nm, 'match', key, top[0]))
         else:
             ok = [(nm, key) for nm, (_, key) in tied if nm not in used and fits(a, nm, key, True)]
             if len(ok) == 1 and len({nm for nm, _ in tied}) > 1:
-                found.append((a, ok[0][0], 'twin, link order', ok[0][1]))
-    counts = {}
-    for _, nm, _, _ in found:
-        counts[nm] = counts.get(nm, 0) + 1
-    return [f for f in found if counts[f[1]] == 1]
+                found.append((a, ok[0][0], 'twin, link order', ok[0][1], top[0]))
+    return found
 
 
 CODE_LINE = re.compile(r'^\s{4}([0-9A-F]{8}) ([0-9A-F]{4}|[0-9A-F]{8})\s')
@@ -262,7 +269,7 @@ def by_listing(exe, base, funcs, mods):
     functions the game names: every function of the module, statics included, by offset."""
     names = {}
     for a, (sz, n) in funcs.items():
-        if not n.startswith('FUN_') and sz >= MIN_SIZE:
+        if not unnamed(n) and sz >= MIN_SIZE:
             names.setdefault(bare(n), []).append(a)
     found = {}
     for fn, fns, lw in mods:
@@ -275,23 +282,35 @@ def by_listing(exe, base, funcs, mods):
                 same = sum(1 for x, y in zip(lw, gw) if x == y or x is None or y is None)
                 if same >= 0.98 * len(lw):
                     for o2, n2 in fns:
-                        found.setdefault(g0 + o2, set()).add((n2, 'listing', fn))
+                        found.setdefault(g0 + o2, set()).add((n2, 'listing', fn, same / float(len(lw))))
     return found
 
 
-def by_position(funcs, inside, order):
+def by_position(exe, base, funcs, inside, order, where):
     """Between two named neighbours whose distance in the game equals their distance in a
-    library: every exported function the library has between them, by offset."""
+    library, and whose code between them matches (masked, 98% of the words): every exported
+    function the library has between them, by offset. The content check matters: another
+    release can have the same span with everything inside shifted."""
     anchors = sorted((a, n) for a, (sz, n) in funcs.items()
-                     if not n.startswith('FUN_') and sz >= MIN_SIZE and inside(a))
+                     if not unnamed(n) and sz >= MIN_SIZE and inside(a))
     found = {}
     for (a1, n1), (a2, n2) in zip(anchors, anchors[1:]):
         n1, n2 = bare(n1), bare(n2)
         for key, d in order.items():
             if n1 in d and n2 in d and d[n1] < d[n2] and d[n2] - d[n1] == a2 - a1:
+                if key + (n1,) not in where:
+                    continue
+                buf, off = where[key + (n1,)]
+                n = (a2 - a1) // 2
+                lw, gw = mask(words(buf, off, n)), mask(words(exe, a1 - base, n))
+                if len(lw) < n:
+                    continue
+                score = sum(1 for x, y in zip(lw, gw) if x == y or x is None or y is None) / float(n)
+                if score < MIN_STRETCH:
+                    continue
                 for nm, la in d.items():
                     if d[n1] < la < d[n2]:
-                        found.setdefault(a1 + la - d[n1], set()).add((nm, 'position', '%s/%s' % key))
+                        found.setdefault(a1 + la - d[n1], set()).add((nm, 'position', '%s/%s' % key, score))
     return found
 
 
@@ -337,6 +356,7 @@ def main(argv):
     for i, lib in enumerate(libs):
         if lib[5] >= 8:
             index.setdefault(mask(words(lib[3], lib[4], 4)), []).append(i)
+    where = {(t, l, nm): (buf, off) for t, l, nm, buf, off, _, _ in libs}
     mods = load_listings(listing_dirs)
     flist, inside, extra = load_repo(repo)
     funcs = {a: [sz, n] for a, sz, n in flist}
@@ -347,41 +367,57 @@ def main(argv):
         rnd += 1
         flist = sorted([a, sz, n] for a, (sz, n) in funcs.items())
         props = {}
-        for a, nm, how, (t, l) in one_round(exe, base, flist, inside, extra, libs, index, order):
-            props.setdefault(a, set()).add((nm, how, '%s/%s' % (t, l)))
-        for src in (by_position(funcs, inside, order), by_listing(exe, base, funcs, mods)):
-            for a, s in src.items():
-                props.setdefault(a, set()).update(s)
+        for a, nm, how, (t, l), sc in one_round(exe, base, flist, inside, extra, libs, index, order):
+            props.setdefault(a, set()).add((nm, how, '%s/%s' % (t, l), sc))
+        for src in (by_position(exe, base, funcs, inside, order, where), by_listing(exe, base, funcs, mods)):
+            for a, s_ in src.items():
+                props.setdefault(a, set()).update(s_)
         used = {n for _, n in funcs.values()}
-        count = {}
-        for a, s in props.items():
-            for nm in {x[0] for x in s}:
-                count[nm] = count.get(nm, 0) + 1
+
+        def pick(scores):
+            """The best key when it beats every other by MARGIN, else None."""
+            ranked = sorted(scores.items(), key=lambda kv: -kv[1])
+            if len(ranked) > 1 and ranked[0][1] - ranked[1][1] < MARGIN:
+                return None
+            return ranked[0][0]
+        best_at = {}
+        for a, s_ in props.items():
+            sc = {}
+            for x in s_:
+                sc[x[0]] = max(sc.get(x[0], 0), x[3])
+            nm = pick(sc)
+            if nm:
+                best_at[a] = (nm, sc[nm])
+        by_name = {}
+        for a, (nm, sc) in best_at.items():
+            by_name.setdefault(nm, {})[a] = sc
+        chosen = {}
+        for nm, addrs in by_name.items():
+            a = pick(addrs)
+            if a is not None:
+                chosen[a] = nm
         n_round = 0
-        for a in sorted(props):
-            nms = {x[0] for x in props[a]}
-            if len(nms) != 1:
-                continue
-            nm = nms.pop()
+        for a in sorted(chosen):
+            nm = chosen[a]
             cur = funcs[a][1] if a in funcs else None
             if cur and bare(cur) == bare(nm):
                 continue
-            if cur and not cur.startswith('FUN_'):
+            if cur and not unnamed(cur):
                 # an existing name the layout contradicts: replaced only on a tiny function
                 # (where signature names collide), reported otherwise
-                if funcs[a][0] >= MIN_SIZE or nm in used or count[nm] > 1:
+                if funcs[a][0] >= MIN_SIZE or nm in used:
                     suspect[a] = (cur, nm)
                     continue
-            elif nm in used or count[nm] > 1:
+            elif nm in used:
                 continue
-            how = sorted(props[a])[0]
+            how = max((x for x in props[a] if x[0] == nm), key=lambda x: x[3])
             r = place(funcs, a, nm, stale)
             if r:
                 used.add(nm)
                 n_round += 1
                 print('%08x %s %s %s%s' % (a, nm, how[1].replace(' ', '_'), how[2],
                                            '' if r == 'named' else ' (new start: %s)' % r)
-                      + ('' if not cur or cur.startswith('FUN_') else ' (was %s)' % cur))
+                      + ('' if not cur or unnamed(cur) else ' (was %s)' % cur))
         done += n_round
         print('# round %d: %d names' % (rnd, n_round), file=sys.stderr)
         if not n_round:

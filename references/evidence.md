@@ -73,6 +73,22 @@ as an issue) to add a game.
   and the Oct 1999 `libintr`/`libspr`: Sega-internal library builds between R9 and R10, never in a
   shipped SDK. The rest is R9's (1999-04 to 1999-08), so R9's compiler (SHC 5.1 Release 08) is the
   matching-C toolchain to try before R10.1's Release 11
+- SDK names past the tables (2026-10-12, `sdk_masked.py`): 52.1% to 82.1% of the library
+  functions (534 to 1,061 of 1,293; the count grew by the starts it found), build MATCH. One run
+  on the pre-pass repo, three rounds, about 15 minutes over 16 tables and the Shinobi listings
+  (27 usable of 73). By pass: listings 228 (statics with their source names: `search_fat_dir`,
+  `read_dir`, `DECtoBCD`), position 240, masked match 58, twins by link order 7. 271 starts the
+  split had missed (stubs reached only through function tables, gaps after a pool). 14 wrong
+  signature names on tiny thunks replaced (`vmsfs_ismount` -> `buIsReady`, `mwRnaSetSfreq` on
+  an `ADXRNA_` stub)
+- what broke or surprised -> what changed:
+  - equal spans between two anchors in R8E and 1.42J had every function inside shifted by 2
+    bytes (another version of the module): position alone named the wrong offsets -> the
+    stretch's masked code is scored (wrong layout 0.82, right one 0.998); a fixed cut lost good
+    stretches (many score 0.84-0.97) -> proposals carry their score, disagreements go to the
+    best by a 0.05 margin, a stretch under 0.6 proposes nothing
+  - `thunk_FUN_` entries counted as names and blocked their neighbours -> treated as unnamed
+  - left: Kamui statics (its dump has no listings) and the libraries no release has
 
 ### Boku Doraemon (Japan), T-41802M V1.003
 - run: 2026-10-05 (v0.4) and 2026-10-06 (v0.5, on macOS and in a claude.ai cloud workspace: same
