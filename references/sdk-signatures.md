@@ -37,6 +37,34 @@ Pipeline (all with the SDK's own Hitachi tools, run under `wibo` in a Linux cont
 Only exported (non-static) functions get names. Coverage follows the SDK version: a copy from the
 game's own era matches best.
 
+## After the tables: masked comparison, position, listings (`scripts/sdk_masked.py`)
+
+Function-ID hashes need the whole function identical. A game linked with a library build no
+release shipped (Sega-internal builds, a `zr` suffix in the banners) differs in a few words and
+misses; short twin stubs (save-file wrappers, `set_*` command builders) hash alike and stay
+ambiguous; static functions are in no map at all. Once the repo exists (`functions.txt`,
+`sdk.txt`), `sdk_masked.py` runs three passes in rounds, against every `sdk_sigs.sh` table's
+linked libraries (`link/*.map` and `*.elf`, kept in the table folder):
+- **masked match**: the instructions compared with pc-relative load displacements, `mova`,
+  branch displacements and the literal-pool words those loads reach masked (exact or a 0.85
+  difflib ratio); where both sides name a pool word the names must agree; kept only when it is
+  the single best and in its library's link order against the nearest named neighbours
+  (16 bytes or more: tiny signature names are poor anchors); twins that tie are settled by
+  that order;
+- **position**: between two named neighbours as far apart in the game as in a library, every
+  function the library exports between them, by offset. It names tiny functions no content
+  match can, finds starts the split missed (stubs reached only through a function table), and
+  shows wrong signature names on tiny thunks (Crazy Taxi: `vmsfs_ismount` where every table's
+  layout has `buIsReady`);
+- **listings** (`--listings <folder>`): SHC object listings (`*.lst`) print every function of a
+  source file, statics included, with its offset and code. The Shinobi source dump carries 73
+  (1999 builds, SHC 5.1). A file whose masked code matches the game at one of its named
+  functions names all of its functions, by their source names (`search_fat_dir`, `read_dir`).
+A name is used only when one source proposes it for one address and it is free; an existing
+name the layout contradicts is replaced only on a function under 16 bytes, reported as suspect
+otherwise. `--apply` writes `functions.txt` (renames, splits, new entries) and deletes stale
+`asm/` files; re-split and build (`MATCH`: names and boundaries never change bytes).
+
 ## When the libraries do not match: sample programs
 
 A game built with a pre-release SDK can carry library versions no shipped `.lib` has. SDK discs

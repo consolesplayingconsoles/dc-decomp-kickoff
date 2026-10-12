@@ -87,7 +87,7 @@ equivalent material lawfully in their possession.
 |---|---|---|
 | Katana SDK (libraries + Hitachi `asmsh`, `shc`, `lnk`, `lbr`, `elf2bin`) | `github.com/Kochise/dreamcast-docs` (`SDK/`) | SDK signatures, the matching build |
 | other Katana SDK releases, optional (disc images: 0.20 Pre 7 to R11b, 1.55J Vol.1 + Vol.2, Network 1.04; Katana 0.40 Release.4 for 1998 games; R1.42J and 2.00J come as InstallShield 3 installers, `is3_extract.py`; R2 and 0.20 Pre 7 carry GNU `ar` libraries this skill does not hash yet) | archive.org item `official-katana-sdks` (`OFFICIAL KATANA SDKs.zip`, one image per release); 1.55J is also catalogued by Redump (discs 87866, 87867); 0.40 and the Shinobi/Kamui library sources from sega-dreamcast-info.com's SDK archive page (https://www.sega-dreamcast-info.com/en/dreamcast-develppement-sdk-library-archive) | the release the game was built with (step 2), more SDK names |
-| the Shinobi and Kamui library sources, optional | sega-dreamcast-info.com ("The source code of the Dreamcast Shinobi/Kamui development library") | exact C and names for the SDK part of every game: reference source for the C loop, and their bundled `.LIB` files are one more signature table |
+| the Shinobi and Kamui library sources, optional | sega-dreamcast-info.com ("The source code of the Dreamcast Shinobi/Kamui development library") | exact C and names for the SDK part of every game: reference source for the C loop, their bundled `.LIB` files are one more signature table, and the Shinobi dump's `.LST` listings name statics (`sdk_masked.py --listings`) |
 | cheat codes, optional | gamehacking.org (per-game pages, public); the Dreamcast-Talk compiled CodeBreaker list (members' attachment, credits its code authors); the community's widescreen code lists | named variables (`scripts/cheat_leads.py`) |
 | a later port, a prototype, other decomps, optional | the user's own copies (ports and prototypes), GitHub, hiddenpalace.org, tcrf.net, segaretro.org | step 2b |
 | an older SDK, optional | archive.org item `dcsdk-9e` (SDK R9 Europe, Nov 1999, disc 1: SHC 5.1 Release 08) | a period compiler for games built in 1999-2000; so far it gave the same bytes as R10.1's (Release 11) |
@@ -232,6 +232,12 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
    changed ones. Always invoke scripts with `bash`/`python3`: downloads can lose execute bits.
    Finally prove the published layout works: empty `asm/`, `objects.txt`, `text-map/`, then
    `bash setup.sh <disc.gdi>` and `bash build.sh` again: `MATCH` again.
+   Then the masked SDK pass, with every table folder from step 4 (and, with the Shinobi or
+   Kamui source dump, `--listings <dump folder>`): `python3 scripts/sdk_masked.py <repo>
+   <repo>/1ST_READ.BIN <table folder>... [--listings <folder>] --apply`, then `split_asm.py`
+   and `bash build.sh` (`MATCH`). It names library code the hashes missed (internal library
+   builds, twin stubs, statics, starts the split missed; `references/sdk-signatures.md`).
+   Report its `suspect` lines as such. Count `@NAMED@` and `@NAMED_SDK@` after it.
    Then `python3 tools/missed_funcs.py 1ST_READ.BIN <base> functions.txt`: code the analysis did
    not make into functions (callbacks reached only through tables, getters only through literal
    pools, state handlers merged into a neighbour). Expect hundreds, about half backed by a
@@ -339,6 +345,7 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
 | `scripts/fill.py` | in the repo: lay a C unit out like the original (nop alignment, 0xEE fill, exact size) |
 | `scripts/progress.py` | in the repo: matching C, named functions and globals, documented, game and SDK apart |
 | `scripts/sdk_txt.py` | mark the SDK's code (boot block, library block, single matches) as `sdk.txt` |
+| `scripts/sdk_masked.py` | after the tables: name more SDK functions by masked instructions, library layout and source listings (statics), link order as the check (stdlib) |
 | `scripts/missed_funcs.py` | list code the analysis did not make into functions |
 | `scripts/cheat_leads.py` | cheat codes (CodeBreaker/Xploder list) as named-variable leads |
 | `scripts/seed_funcs.py` | function starts in stretches no function covers, seeds for `ghidra/SeedFuncs.java` |
