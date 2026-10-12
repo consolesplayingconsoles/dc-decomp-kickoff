@@ -1,6 +1,6 @@
 ---
 name: dc-decomp-kickoff
-description: "Kick off a matching decompilation of a Sega Dreamcast (Katana) game. Use when someone has a Dreamcast disc and wants a decomp repo started: names applied from SDK signatures, the executable split into one assembly file per function, and a build that reproduces the original byte for byte, ready for agents to decompile function by function."
+description: "Kick off a decompilation of a Sega Dreamcast (Katana) game (a byte-identical build; functions done when their C behaves like the original). Use when someone has a Dreamcast disc and wants a decomp repo started: names applied from SDK signatures, the executable split into one assembly file per function, and a build that reproduces the original byte for byte, ready for agents to decompile function by function."
 ---
 
 # Kicking off a Dreamcast decomp
@@ -8,6 +8,9 @@ description: "Kick off a matching decompilation of a Sega Dreamcast (Katana) gam
 The goal is a repo in the best automatable state: it already rebuilds the original executable
 byte for byte, every function is its own file, as many as possible carry real names, and the loop
 for turning a function into C is written down. Decompiling the game is the work that follows.
+A function is done when its C behaves like the original (Equivalent: `tools/equiv.py` runs both
+in an SH-4 interpreter on test cases and compares calls, writes and result); byte-identical C
+(Matching) is the bonus tier. The repo's build keeps matching the original either way.
 
 ## Getting the tools (do this first)
 
@@ -210,7 +213,7 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
      dotfiles);
    - copy into `tools/`: `scripts/gdi_read.py`, `split_asm.py`, `text_map.py`, `file_tables.py`,
      `textures.py`, `disc_patch.py`, `apply_bin.py`, `docker_check.sh`, `units.py`, `fill.py`,
-     `progress.py`, `missed_funcs.py`, `shdis.py`, `live.py`, the `tools-image/` folder and `scripts/hooks/` as `tools/hooks/` (so a cloned repo builds its own
+     `progress.py`, `missed_funcs.py`, `shdis.py`, `live.py`, `sh4sim.py`, `equiv.py`, the `tools-image/` folder and `scripts/hooks/` as `tools/hooks/` (so a cloned repo builds its own
      tools image, nothing pulled from anyone else);
    - write `sdk.txt`: `scripts/sdk_txt.py <repo>/functions.txt <base> <1ST_READ.BIN>
      <SDK ApplySigs output>`. It marks the boot block
@@ -353,6 +356,8 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
 | `scripts/sdk_txt.py` | mark the SDK's code (boot block, library block, single matches) as `sdk.txt` |
 | `scripts/sdk_masked.py` | after the tables: name more SDK functions by masked instructions, library layout and source listings (statics), link order as the check (stdlib) |
 | `scripts/missed_funcs.py` | list code the analysis did not make into functions |
+| `scripts/sh4sim.py` | in the repo: an SH-4 interpreter (integer, single-precision FPU, delay slots) that runs one function from a case (registers, memory, a RAM dump, mocked call returns) and records its calls, writes and result (stdlib) |
+| `scripts/equiv.py` | in the repo: compiles a C file and checks each function against the original on its test cases (`tests/<file>/<function>.json`); the Equivalent tier, written to `tests/equivalent.txt` |
 | `scripts/sibling_names.py` | names from a sibling decomp (same team, shared library): exact masked matches unique both ways, twins listed |
 | `scripts/cheat_leads.py` | cheat codes (CodeBreaker/Xploder list) as named-variable leads |
 | `scripts/seed_funcs.py` | function starts in stretches no function covers, seeds for `ghidra/SeedFuncs.java` |

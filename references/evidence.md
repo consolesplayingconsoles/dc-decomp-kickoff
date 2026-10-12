@@ -239,3 +239,17 @@ as an issue) to add a game.
 - effect: `pPVar2 = (*PTR_pdGetPeripheral)(0x12)` now carries `PDS_PERIPHERAL *`; the decompiler
   does not fold the constant pool pointer into a direct call, so the call keeps its pointer name
 
+
+### Equivalent tier (2026-10-12, Crazy Taxi's `src/extrand.c`)
+- the bar for game code changed from byte-matching to behaviour: `scripts/sh4sim.py` (an SH-4
+  interpreter, stdlib) runs a function from a case, `scripts/equiv.py` compiles a C file and
+  runs each function twice per case (original bytes, compiled C), comparing calls out (target,
+  r4-r7, fr4-fr11), memory writes and the return register taken from the C prototype
+- first run: `extRand` (no byte match: its mask lands in r2, the original's in r3, after 22
+  wordings) is Equivalent on 6 seeds; `extRandomSeed` and `extRandom` too. Two planted bugs (the
+  seed's 0x3039 as 0x3038, the scale 1/32768 as 1/32767) were caught as a different write and a
+  different return value
+- what broke -> what changed: the C's call to its own `extRand` went to the C copy's address, and
+  `extRandom` left a pointer in r0 -> calls and writes into the file's own names are mapped back
+  to the game's addresses; only the prototype's return register is compared. Docker cannot mount
+  macOS's /private/tmp: run the check inside the repo (its `build/equiv/`)
