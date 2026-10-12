@@ -102,7 +102,3 @@ solely responsible for determining whether you are entitled to obtain and use an
 
 @TITLE@ and its publisher's trademarks belong to their owners. This project is not affiliated with
 or endorsed by them.
-
-## Licence
-
-The code and documentation in this repository: @LICENSE@ (`LICENSE`).

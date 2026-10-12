@@ -222,14 +222,15 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
    - fill the placeholders: in `setup.sh` and `disc.sh` `@BOOT@` (boot file from IP.BIN) and `@SHA1@` (of that
      file); in `README.md` `@TITLE@`, `@RELEASE@` (IP.BIN: title, product number, version, date,
      region), `@BOOT@`, `@SIZE@`, `@SHA1@`, `@BASE@`, `@SDK@` (main banners), `@FUNCS@`, `@NAMED@`,
-     `@NAMED_SDK@`, `@LICENSE@`, `@SKILL_VERSION@` (the content of this skill's `VERSION` file, e.g.
+     `@NAMED_SDK@`, `@SKILL_VERSION@` (the content of this skill's `VERSION` file, e.g.
      `v0.5`: the README names the kickoff version the repo came from), and `@PROGRESS@` (after the first `MATCH`: the
      output of `python3 tools/progress.py` in a ``` fence). No `@...@` may remain in those three files
      (`grep -n '@[A-Z_]*@' README.md setup.sh disc.sh`; `tools/` has its own `@N@` tokens, ignore).
      `@NAMED@` = functions whose name is not `FUN_...` (what `split_asm.py` prints). It can exceed
      `@NAMED_SDK@`: small wrappers (thunks) inherit the name of what they call.
-   - **ask the user for a licence** for the repo's own code and docs (suggest GPL-3.0-or-later or
-     MIT) and add its text as `LICENSE`.
+   - **no licence**: the repo gets no `LICENSE` file and no licence section. Its contents derive
+     from the game's own code, whose rights are the publisher's: claiming ownership or granting
+     others rights would overreach, and default copyright says nothing more than it should.
    - `chmod +x build.sh setup.sh tools/hooks/pre-commit` (tell the user; it is one command).
    - write `.env` in the repo with `SDK_PATH="<absolute SDK folder>"` (gitignored, machine-local),
      so the user can rebuild with a plain `bash build.sh` later.
