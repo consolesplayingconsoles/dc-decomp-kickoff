@@ -13,7 +13,7 @@ as an issue) to add a game.
 ### <Title> (<region>), <product number> <version>
 - run: <date>, skill <version or commit>, on <OS / cloud workspace>
 - executable: <size> bytes, linked at <base>; SDK by banners: <release, n/m library builds>; SDKs used: <...>
-- functions: <n>; named: <n> (<n> SDK signatures, <n> other table); build: MATCH (also after setup.sh)
+- functions: <n>; named: <n> (<n> SDK signatures, <n> sibling decomp); build: MATCH (also after setup.sh)
 - text map: <strings, with pointers>; file tables: <files with a table in the executable>; textures: <n decoded>
 - missed functions: <n candidates>
 - C units: <matched units, functions>
@@ -24,10 +24,10 @@ as an issue) to add a game.
 - run: 2026-10-05 (v0.4) and later sessions, on macOS (Docker)
 - executable: linked at 0x0C010000 (most Katana games use 0x8C010000: imported at the wrong base,
   Ghidra found 1,113 functions instead of 2,389); SDK by banners: R9 closest (19 of 29 known
-  modules, against 11 for R10.1); SDKs used: R10.1 (Kochise, and a second copy laid out like the
-  that table's: same results), later R9
-- functions: 2,389; named: 429 at kick-off (385 SDK R10.1, 30 from a names table since dropped, the rest
-  wrappers); an R9 table named 112 more SDK functions (SDK coverage 42% to 53%); build: MATCH
+  modules, against 11 for R10.1); SDKs used: R10.1 (Kochise, and a second copy in another layout:
+  same results), later R9
+- functions: 2,389; named: 429 at kick-off (385 SDK R10.1, 30 from a names table since dropped, the
+  rest wrappers); an R9 table named 112 more SDK functions (SDK coverage 42% to 53%); build: MATCH
 - port: Crazy Taxi Classic 6.0 for Android (`libgl2jni.so`, arm64) kept its symbols: 310 functions
   and 29 globals paired, 257 new names (functions named 20% to 31%)
 - text map: 2,513 strings, 1,144 with every pointer found; 16 image files flagged (5 languages);
@@ -54,7 +54,7 @@ as an issue) to add a game.
     "Changing the game" note in the template
   - 2026-10-08, the four early-SDK tables: +7 unique matches, 4 applied; 3 collided with
     confident names on tiny functions and were left out: `vmsio_init` on a 12-byte helicopter
-    init, `nwSetWindowClip` on a 22-byte function a names table since dropped names
+    init, `nwSetWindowClip` on a 22-byte function that is the NAOMI library's
     `nlObjPutUseViewMatrix`, `ADXERR_EntryErrFunc` on a 10-byte `njSetConstantAttr` -> the
     suspect-name rule in step 4 holds; cheat leads for the USA release carried to the Europe
     build by locating each variable in the code (two different shifts, two leads unconfirmed)
@@ -100,6 +100,26 @@ as an issue) to add a game.
   - sample programs came as S-records, not ELF -> `sdk_masked.py` reads `<name>.mot` beside a map
   - moving the block into `sdk.txt` lowered the SDK percentage while adding names -> compare
     named totals (`references/sdk-signatures.md`, NAOMI section)
+- Virtua Tennis game naming (2026-10-12, its own repo): three things the run hit ->
+  - Ghidra decompiled every float instruction as two branches on FPSCR's PR/SZ bits (unknown at
+    entry) -> `Query.java` sets both to 0 at every function entry, in memory: float code reads as
+    plain single precision. Set over every address instead, it broke functions that switch SZ with
+    `fschg` mid-way: entries only
+  - a 21 KB function (`playerControl`) no pass found: it sat in a 21 KB gap after its neighbour's
+    analysed end, and `missed_funcs.py` skipped gaps over 2 KB as data -> big gaps now count a
+    pointed-to address that looks like an entry (after an rts, or a prologue). Crazy Taxi: 437 to
+    454 candidates, Virtua Tennis: 694 to 838
+  - library names the tables missed came from the sibling decomp by hand -> `sibling_names.py`;
+    on Virtua Tennis's earlier list it proposes 4 names (`nlObjPutLoadTexture`, `nlSetIntrFunction`,
+    `nlSetIntrPriority`, `nlSynchFunction`) and lists 10 twin groups (the second copies of the heap
+    and event functions, ADX twins)
+- Crazy Taxi live RAM capture (2026-10-12): RetroArch's Flycast core has no memory map
+  (`READ_CORE_MEMORY` answers -1), and `READ_CORE_RAM` answers up to 3,000 bytes (a 3,500-byte
+  reply never comes); writes went through a 1 s timeout each first -> `live.py` reads in 2 KB
+  pieces, writes in 256-byte ones, and goes straight to the RAM view once the core has shown it
+  has no map. A 16 MB dump takes about 90 s paused. `Query.java`: a Ghidra project can lack
+  starts `functions.txt` has (2,389 vs 2,824 here): `dec` there now says to use `mkdec`, and a
+  query that throws no longer loses the output of the ones before it
 
 ### Boku Doraemon (Japan), T-41802M V1.003
 - run: 2026-10-05 (v0.4) and 2026-10-06 (v0.5, on macOS and in a claude.ai cloud workspace: same
@@ -107,9 +127,9 @@ as an issue) to add a game.
 - executable: 978,148 bytes, linked at 0x8C010000; SDK by banners: no release has all 48 library
   builds (newest Shinobi 1.75, Oct 2000), closest R11b (26/48) then R10.1 (23/48); SDKs used:
   R10.1, R11b, 1.55J
-- functions: 3,034; named: 1,164 on 2026-10-08 (1,091 from nine SDK tables merged, 18 from the
-  a names table since dropped, the rest wrappers; 1,060 the day before with three tables,
-  975 at v0.4 with R10.1 and the 176-name reference); build: MATCH, also after setup.sh
+- functions: 3,034; named: 1,164 on 2026-10-08 (1,091 from nine SDK tables merged, 18 from a
+  names table since dropped, the rest wrappers; 1,060 the day before with three tables,
+  975 at v0.4 with R10.1 and that table); build: MATCH, also after setup.sh
 - text map: 2,155 strings (80 Shift-JIS, 1,962 with pointers); file tables: STORY.PAC (76 scenes,
   sector and length at 0x8C04B704), KAOGRA.PAC, STORYGRA.PAC; textures: 887 decoded, 222 not
 - missed functions: 860 candidates, plus 9 merged functions reached through tables
@@ -139,7 +159,7 @@ as an issue) to add a game.
 - functions: 1,906 at first (27% of the executable), 2,306 after seeding (32%); the other team's
   own baseline is 2,398 (37%): most of the executable is data
 - named (after seeding): 126 (97 SDK, of which 0.40 added 44; 22 from the Crazy Taxi decomp's
-  NAOMI library names; from a names table since dropped; 4 wrappers); before seeding, 97 of 116 signature names did not
+  NAOMI library names; 3 from a names table since dropped; 4 wrappers); before seeding, 97 of 116 signature names did not
   appear anywhere in that team's repo
 - what broke or surprised -> what changed:
   - 1998 libraries use another banner form -> `banners.py` / `sdk_scan.py` read both; 0.40 added

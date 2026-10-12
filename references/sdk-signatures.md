@@ -7,8 +7,7 @@ the source's library order.
 
 ## From another decomp's names
 
-Any decomp whose build reproduces its game's executable is a names source, not only the reference
-one: a names list from its `functions.txt` (`<hex addr> <name>` for every non-`FUN_` entry) and its
+Any decomp whose build reproduces its game's executable is a names source: a names list from its `functions.txt` (`<hex addr> <name>` for every non-`FUN_` entry) and its
 executable go through `ExportSigs.java` the same way. Games from the same developer share
 libraries no SDK has (a middleware or engine library): one such decomp named a sister game's
 rendering-library functions that no SDK table could. Apply it with `fill`, after the SDK tables.

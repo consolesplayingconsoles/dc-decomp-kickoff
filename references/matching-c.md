@@ -21,7 +21,7 @@ that leaf's size. `units.py` now refuses such a unit.
 
 ## Compiler and flags
 
-- The flags of a matching build reproduce Katana game code:
+- These flags reproduce Katana game code:
   `-cpu=sh4 -endian=little -fpu=single -division=cpu -round=nearest -pic=0 -macsave=0
   -optimize=1 -size -string=const -section=p=P,c=C,d=D,b=B` (in `build.sh`).
 - `-size`, `-speed` and `-optimize=1` alone gave the same code on what was tried; `-optimize=0` is

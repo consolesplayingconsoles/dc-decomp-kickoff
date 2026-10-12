@@ -6,7 +6,7 @@ You get a repo that:
 
 * rebuilds the game's executable **byte for byte**, from one assembly file per function, with the
   SDK's own Hitachi assembler and linker;
-* already names every function it can match by signature (SDK libraries);
+* already names every function it can match by signature (the SDK's own libraries);
 * has a text map for translators: every string with every pointer to it, which disc files hold
   text and which code opens them, and image files that probably have text in them;
 * describes the loop for taking functions from assembly to C, with the build checking each step;

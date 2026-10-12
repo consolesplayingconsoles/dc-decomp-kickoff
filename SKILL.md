@@ -46,7 +46,7 @@ uploads or a connected folder; the repo is built there, so offer to hand it back
   empty (a build that "can't find" files it plainly has is this).
 - About 4 GB free (Docker images ~1.5 GB, the SDK clone, the disc copy for the game image).
 
-**The SDK folder can have any layout** (`bin/ shc/ shinobi/`, or the
+**The SDK folder can have any layout** (`bin/ shc/ shinobi/` as the disc images lay it out, or the
 Kochise repository's `.../R10.1_000518/Utl/Dev/Hitachi` + `Lib`): scripts find `asmsh.exe`,
 `lbr.exe`, `lnk.exe` and the `.lib` files by name. Point `SDK_PATH` at the SDK's top folder. In the
 Kochise repository that is `SDK/EXES/INSTALL KATANA SDK/INPUT/R10.1_000518` (quote it: it has
@@ -135,7 +135,7 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
       game): each is the game's projection or aspect value, a named global.
    2. **Other regions or revisions of the game.** Same code: names and addresses carry across.
    3. **Existing reverse-engineering notes or a partial decomp** (a repo, thread or wiki page).
-      Names and pitfalls.
+      Reference names and pitfalls.
    4. **A later port** (Android `.apk`, iOS, PC, another console). The big one when it kept its
       symbol table: it can name a large share of the functions and globals.
    5. **A decomp of the same game on another console.** Structures, class names and logic;
@@ -179,9 +179,9 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
      With the 1.55J folder too, run it again into a second folder (`<out155>/katana-sdk.sigs`) and
      apply both tables.
    - **Apply every table you have, all in one Ghidra run**, then `DcReport.java`:
-     1. all the SDK tables merged into one (`cat` them into one file), with `ApplySigs.java <sigs>
-        <out> apply`: a hash that two releases name differently stays ambiguous, so twin stubs
-        (byte-identical code under unrelated names) are never named by which release has which;
+     all the SDK tables merged into one (`cat` them into one file), with `ApplySigs.java <sigs>
+     <out> apply`: a hash that two releases name differently stays ambiguous, so twin stubs
+     (byte-identical code under unrelated names) are never named by which release has which.
      Only unique matches are applied; the same tables always give the same names. A unique match
      on a tiny function (a few instructions) can still be a collision with unrelated library code:
      report short names that make no sense where they sit (a video-player function in a game that
@@ -213,7 +213,7 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
      `progress.py`, `missed_funcs.py`, `shdis.py`, `live.py`, the `tools-image/` folder and `scripts/hooks/` as `tools/hooks/` (so a cloned repo builds its own
      tools image, nothing pulled from anyone else);
    - write `sdk.txt`: `scripts/sdk_txt.py <repo>/functions.txt <base> <1ST_READ.BIN>
-     <SDK ApplySigs output>` (SDK tables only). It marks the boot block
+     <SDK ApplySigs output>`. It marks the boot block
      and the SDK library block, so `tools/progress.py` reports game code and SDK apart;
    - write the base to `BASE` (hex, no `0x`); `split_asm.py` already wrote `functions.txt`;
    - fill the placeholders: in `setup.sh` and `disc.sh` `@BOOT@` (boot file from IP.BIN) and `@SHA1@` (of that
@@ -241,10 +241,14 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
    Report its `suspect` lines as such. Count `@NAMED@` and `@NAMED_SDK@` after it.
    Then `python3 tools/missed_funcs.py 1ST_READ.BIN <base> functions.txt`: code the analysis did
    not make into functions (callbacks reached only through tables, getters only through literal
-   pools, state handlers merged into a neighbour). Expect hundreds, about half backed by a
-   pointer. They matter for C units, whose ends must be function boundaries. Report the count
+   pools, state handlers merged into a neighbour, whole functions in a big gap when something
+   points at an entry). Expect hundreds, about half backed by a pointer. They matter for C units, whose ends must be function boundaries. Report the count
    and leave the list for review: adding an entry never changes the bytes (still `MATCH`), only
-   where files split. `python3 tools/progress.py` gives the starting state.
+   where files split. If a sibling decomp exists (same team: games that link the same in-house
+   library, an engine or maths layer no SDK table knows), `python3 scripts/sibling_names.py
+   <sibling repo> <repo>` proposes its names for exact masked matches that are unique both ways
+   and lists the twins; `--apply`, then `split_asm.py` and `bash build.sh` (`MATCH`).
+   `python3 tools/progress.py` gives the starting state.
 7. **Text map** (for translators, English included: any language can be a source as well as a
    target): `scripts/text_map.py <1ST_READ.BIN> <base> <report> <repo>/text-map <disc.gdi> [tier]`.
    - `exe_strings.tsv`: every executable string, the functions using it, and every pointer to it
@@ -316,7 +320,7 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
 | `scripts/linkbase.py` | pick the import base from self-pointer counts |
 | `scripts/banners.py` | SDK module banners: name, version, build date |
 | `scripts/ghidra/dghidra.sh` | headless Ghidra in Docker (image from `scripts/ghidra/Dockerfile`, built on first use) |
-| `scripts/ghidra/*.java` | seed + report (`DcPre`, `DcReport`), signatures (`ExportSigs`, `ApplySigs`), prototypes and structs from the SDK's headers (`ApplyHeaders`), queries (`Query`) |
+| `scripts/ghidra/*.java` | seed + report (`DcPre`, `DcReport`), signatures (`ExportSigs`, `ApplySigs`), prototypes and structs from the SDK's headers (`ApplyHeaders`), queries (`Query`: decompiles with FPSCR's PR and SZ at 0 on entry, so float code reads as single precision instead of two branches per instruction) |
 | `scripts/sdk_headers.py` | an SDK's C headers copied in a form Ghidra's C parser reads (form feeds, Shift-JIS comments, `(Void)` parameter lists, empty attribute macros) |
 | `references/sdk-signatures.md` | naming library code from the SDK's libraries |
 | `references/evidence.md` | each game the skill was run on: numbers, what broke, what changed |
@@ -348,6 +352,7 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
 | `scripts/sdk_txt.py` | mark the SDK's code (boot block, library block, single matches) as `sdk.txt` |
 | `scripts/sdk_masked.py` | after the tables: name more SDK functions by masked instructions, library layout and source listings (statics), link order as the check (stdlib) |
 | `scripts/missed_funcs.py` | list code the analysis did not make into functions |
+| `scripts/sibling_names.py` | names from a sibling decomp (same team, shared library): exact masked matches unique both ways, twins listed |
 | `scripts/cheat_leads.py` | cheat codes (CodeBreaker/Xploder list) as named-variable leads |
 | `scripts/seed_funcs.py` | function starts in stretches no function covers, seeds for `ghidra/SeedFuncs.java` |
 | `scripts/shdis.py` | in the repo: SH-4 disassembly with FPU, pool values and names (stdlib) |

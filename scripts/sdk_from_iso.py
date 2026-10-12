@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Lay out the Katana SDK 1.55J from its two disc images, the way the skill's scripts expect. Stdlib only.
+"""Lay out the Katana SDK 1.55J from its two disc images (bin/, shc/, shinobi/). Stdlib only.
 
     sdk_from_iso.py <out folder> <Vol.1 image> <Vol.2 image>
 

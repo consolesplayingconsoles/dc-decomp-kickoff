@@ -15,8 +15,15 @@ public class Query extends GhidraScript {
   @Override public void run() throws Exception {
     String[] a = getScriptArgs();
     PrintWriter o = new PrintWriter(a[0]);
+    // SH-4 FPU code reads FPSCR's PR and SZ bits at run time: unknown at a function's entry, every
+    // float instruction decompiles as both a single and a double branch. Compiled C runs with both 0
+    // (single precision, 32-bit moves; fschg/fpchg inside a function still flow through): set them
+    // at every entry, in memory only (a -readOnly run saves nothing).
+    for (var fn : currentProgram.getFunctionManager().getFunctions(true))
+      singleFpu(fn);
     DecompInterface dec = new DecompInterface();
     dec.openProgram(currentProgram);
+    try {                                         // a query that throws keeps the ones before it
     for (int i = 1; i + 1 < a.length; i += 2) {
       var addr = toAddr(Long.parseLong(a[i + 1].replace("0x", ""), 16));
       Function f = getFunctionContaining(addr);
@@ -31,6 +38,8 @@ public class Query extends GhidraScript {
             var start = p.add(4);
             disassemble(start);
             f = createFunction(start, null);
+            if (f != null)
+              singleFpu(f);
             o.println("  created " + (f == null ? "nothing" : f.getName()) + " at " + start);
           }
           // fall through
@@ -38,7 +47,9 @@ public class Query extends GhidraScript {
           if (f != null) {
             var r = dec.decompileFunction(f, 120, monitor);
             o.println(r.decompileCompleted() ? r.getDecompiledFunction().getC() : "decompile failed: " + r.getErrorMessage());
-          }
+          } else
+            o.println("  no function here in the Ghidra project: use mkdec (functions.txt can know more starts than the project)");
+          o.flush();
           break;
         case "xref":
           for (Reference r : getReferencesTo(addr)) {
@@ -69,7 +80,18 @@ public class Query extends GhidraScript {
           break;
       }
     }
-    dec.dispose();
-    o.close();
+    } finally {
+      dec.dispose();
+      o.close();
+    }
+  }
+
+  void singleFpu(Function fn) throws Exception {
+    var ctx = currentProgram.getProgramContext();
+    for (String r : new String[] {"FPSCR_PR", "FPSCR_SZ"}) {
+      var reg = currentProgram.getRegister(r);
+      if (reg != null)
+        ctx.setValue(reg, fn.getEntryPoint(), fn.getEntryPoint(), java.math.BigInteger.ZERO);
+    }
   }
 }
