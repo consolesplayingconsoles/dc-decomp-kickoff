@@ -219,7 +219,8 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
    - fill the placeholders: in `setup.sh` and `disc.sh` `@BOOT@` (boot file from IP.BIN) and `@SHA1@` (of that
      file); in `README.md` `@TITLE@`, `@RELEASE@` (IP.BIN: title, product number, version, date,
      region), `@BOOT@`, `@SIZE@`, `@SHA1@`, `@BASE@`, `@SDK@` (main banners), `@FUNCS@`, `@NAMED@`,
-     `@NAMED_SDK@`, `@LICENSE@`, and `@PROGRESS@` (after the first `MATCH`: the
+     `@NAMED_SDK@`, `@LICENSE@`, `@SKILL_VERSION@` (the content of this skill's `VERSION` file, e.g.
+     `v0.5`: the README names the kickoff version the repo came from), and `@PROGRESS@` (after the first `MATCH`: the
      output of `python3 tools/progress.py` in a ``` fence). No `@...@` may remain in those three files
      (`grep -n '@[A-Z_]*@' README.md setup.sh disc.sh`; `tools/` has its own `@N@` tokens, ignore).
      `@NAMED@` = functions whose name is not `FUN_...` (what `split_asm.py` prints). It can exceed
