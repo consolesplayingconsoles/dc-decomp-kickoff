@@ -65,6 +65,23 @@ name the layout contradicts is replaced only on a function under 16 bytes, repor
 otherwise. `--apply` writes `functions.txt` (renames, splits, new entries) and deletes stale
 `asm/` files; re-split and build (`MATCH`: names and boundaries never change bytes).
 
+## Games built on the NAOMI library
+
+Arcade ports from Sega's own studios carry the NAOMI library (`nl*` maths, matrices, events,
+textures, sprites, print; `nla*`, `nlsnd*`) as a block of their executable, usually between the
+game's code and its data. Its signs: `nl*` names from a port or a reference, and code two games of
+the same studio share byte for byte while their game code shares nothing.
+- Table: the NAOMI SDK's `.lib` files through `sdk_sigs.sh` (the NAOMI dump has no `lbr.exe` or
+  `lnk.exe`: copy a Katana SDK's `bin/` beside its `lib/`); its sample programs (`t.map` with a
+  `t.mot` S-record image) as one more table folder (`link/<name>.map` + `<name>.mot`), which
+  `sdk_masked.py` reads like a library's map and ELF.
+- The block is library code: mark it in `sdk.txt` with a `range` from its first library function
+  to the last code before data, or the passes (which work inside `sdk.txt`) never look at it.
+  Find the ends by the matches, not by guessing: the first function the NAOMI tables name, and
+  the end of the last code before data.
+- Counting: the block moves from game code to SDK, so both percentages move; compare the named
+  totals, not the percentages.
+
 ## When the libraries do not match: sample programs
 
 A game built with a pre-release SDK can carry library versions no shipped `.lib` has. SDK discs

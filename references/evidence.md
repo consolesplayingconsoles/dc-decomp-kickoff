@@ -89,6 +89,17 @@ as an issue) to add a game.
     best by a 0.05 margin, a stretch under 0.6 proposes nothing
   - `thunk_FUN_` entries counted as names and blocked their neighbours -> treated as unnamed
   - left: Kamui statics (its dump has no listings) and the libraries no release has
+- NAOMI library (2026-10-12): the game's `nl*` layer (0x0C0739C0-0x0C089F26, 91 KB, between the
+  game code and data) is the NAOMI SDK's library; Virtua Tennis carries the same block byte for
+  byte (237 functions, 39 KB identical once masked) while the two games share no game code. The
+  NAOMI SDK 001002's libraries named 87 more (block marked as a `range` in `sdk.txt`), its 21
+  sample programs (`t.map` + `t.mot` S-records) 73 more: named functions 1,547 to 1,708 of
+  2,779. Virtua Tennis: 1,159 to 1,375. Two of the libraries Crazy Taxi's banners listed as in no
+  release (`libintr`, `libspr`) are NAOMI libraries
+- what broke or surprised -> what changed:
+  - sample programs came as S-records, not ELF -> `sdk_masked.py` reads `<name>.mot` beside a map
+  - moving the block into `sdk.txt` lowered the SDK percentage while adding names -> compare
+    named totals (`references/sdk-signatures.md`, NAOMI section)
 
 ### Boku Doraemon (Japan), T-41802M V1.003
 - run: 2026-10-05 (v0.4) and 2026-10-06 (v0.5, on macOS and in a claude.ai cloud workspace: same

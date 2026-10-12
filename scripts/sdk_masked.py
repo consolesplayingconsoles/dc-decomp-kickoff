@@ -3,7 +3,8 @@
 
     python3 sdk_masked.py <repo> <executable> <table dir>... [--listings <dir>]... [--apply]
 
-<table dir>: an `sdk_sigs.sh` output folder (its `link/*.map` + `link/*.elf`), any number.
+<table dir>: an `sdk_sigs.sh` output folder (its `link/*.map` + `link/*.elf`), any number; a folder
+of sample programs works too (`link/<name>.map` with `<name>.elf` or a `<name>.mot` S-record image).
 --listings: a folder searched for SHC object listings (`*.lst`, e.g. a library source dump).
 Three passes per round, over the functions inside the repo's `sdk.txt`:
 
@@ -51,6 +52,29 @@ def segments(f):
         if fs:
             out.append((va, off, fs))
     return out
+
+
+def srecords(path):
+    """A Motorola S-record image (*.mot, how SDK sample programs often ship): one buffer and its
+    segments as (address, offset, size), contiguous records merged."""
+    chunks = []
+    for line in open(path, errors='replace'):
+        line = line.strip()
+        if len(line) < 4 or line[0] != 'S' or line[1] not in '123':
+            continue
+        alen = {'1': 2, '2': 3, '3': 4}[line[1]]
+        raw = bytes.fromhex(line[4:])
+        addr = int.from_bytes(raw[:alen], 'big')
+        chunks.append((addr, raw[alen:-1]))
+    chunks.sort()
+    buf, segs = bytearray(), []
+    for addr, data in chunks:
+        if segs and segs[-1][0] + segs[-1][2] == addr:
+            segs[-1] = (segs[-1][0], segs[-1][1], segs[-1][2] + len(data))
+        else:
+            segs.append((addr, len(buf), len(data)))
+        buf += data
+    return bytes(buf), segs
 
 
 def words(buf, off, n):
@@ -107,11 +131,14 @@ def load_tables(dirs):
     for d in dirs:
         table = os.path.basename(os.path.normpath(d))
         for mp in sorted(glob.glob(os.path.join(d, 'link', '*.map'))):
-            elf = mp[:-4] + '.elf'
-            if not os.path.exists(elf):
+            elf, mot = mp[:-4] + '.elf', mp[:-4] + '.mot'
+            if os.path.exists(elf):
+                f = open(elf, 'rb').read()
+                segs = segments(f)
+            elif os.path.exists(mot):
+                f, segs = srecords(mot)
+            else:
                 continue
-            f = open(elf, 'rb').read()
-            segs = segments(f)
             if not segs:
                 continue
             lib = os.path.basename(mp)[:-4]
