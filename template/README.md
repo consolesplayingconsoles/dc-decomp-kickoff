@@ -60,10 +60,27 @@ Docker, `DC_LOCAL=1` runs the tools through `wibo` instead.
 of each disc file with the code that opens it, how text is drawn, and image files that probably
 hold text (candidates). These are heuristics for you to check, not a verdict.
 
-`model-map/game.dcgs` (generated and committed: addresses, offsets, sizes and names only, no game bytes or text; `setup.sh` rebuilds it) lists every 3D model in the disc files with the name the executable's tables give it
-(`models.txt` holds the tables whose layout is known; the rest are named by table address and the functions that use
-it), the characters' skeletons placed on their parts, and the texture lists. It is plain tab-separated text in
-sections: a model viewer or a spreadsheet can read it.
+## Model map
+
+`setup.sh` also builds `model-map/game.dcgs` (with `tools/model_map.py`): every 3D model in the disc files, the
+table in the executable that holds it, the texture lists, and, where a skeleton is known, characters assembled from
+their parts. It is plain tab-separated text in sections (`[models]`, `[assemblies]`, `[textures]`) and it is
+**committed**: it holds addresses, offsets, sizes and names only, no game bytes or text (the text map is the one
+that stays local). Regenerate it with `python3 tools/model_map.py 1ST_READ.BIN "$(cat BASE)" functions.txt "<your disc>.gdi" model-map`.
+
+- **No setup needed to start.** With no rules the map still lists every model, grouped by the table that holds it.
+- **`models.txt` is what is known about the game's models**, one rule per line: `chars` and `structs` (tables whose
+  layout is understood), `rig` / `bone` / `assemble` (a skeleton posed from a motion record), `textures` (pairs a
+  model file with a texture file of another name; matching names are found by themselves), `note`, and the two a
+  person adds by naming things: `name <file> <offset> <text>` (one model) and `table <address> <group> <label>`
+  (a whole table). The syntax is in the header of `tools/model_map.py`.
+- **Naming convention.** A row shows the name first and the id beside it, and only the id when there is no name.
+  Names are tidied the same way everywhere: words separated by single spaces (underscores and camelCase become
+  spaces), each word starting with a capital, no parentheses. Ids (hex offsets, table addresses, the game's own
+  identifiers) are never changed.
+- **Naming things.** Edit `models.txt` and rerun the tool, or use a model viewer that opens this folder and writes
+  the `name` and `table` lines for you, into two sorted blocks at the end of the file, so a naming session is a small
+  `git diff`. Commit the diff.
 
 ## Equivalent C and shared library code
 

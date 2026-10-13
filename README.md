@@ -12,6 +12,12 @@ You get a repo that:
 * already names every function it can match by signature (the SDK's own libraries);
 * has a text map for translators: every string with every pointer to it, which disc files hold
   text and which code opens them, and image files that probably have text in them;
+* has a model map: every 3D model in the disc files (the NAOMI library's format), the table in the
+  executable that holds each, the texture lists, and characters assembled from a known skeleton, in one
+  plain-text file, `model-map/game.dcgs`. It starts with no knowledge of the game, and a `models.txt` per
+  game records what people learn (tables, names): anyone can run the skill, name what they recognise and commit
+  it back. The kickoff asks which asset kinds to map, **All** first, and commits the map: it holds addresses,
+  offsets, sizes and names, no game bytes or text;
 * describes the loop for taking functions from assembly to C, with the build checking each step, and
   `tools/equiv.py` checking each function's C against the original (calls, memory writes and result,
   on test cases, in an SH-4 interpreter): **Equivalent C** is what counts as done, so a function
@@ -19,7 +25,8 @@ You get a repo that:
 * has the tools that made that fast: size, instruction and literal-pool checks per function, and
   `port_equiv.py`, which carries a sibling decomp's verified C for shared library code (the NAOMI
   library, the C runtime) into a new one, each function checked again on the new game's own bytes;
-* contains **no game code or data**: everything game-derived is generated from your disc.
+* contains **no game code or data**: what carries the game's bytes or text is generated from your disc and kept out
+  of git; what only describes it (addresses, sizes, names) is committed.
 
 Worked examples: [crazy-taxi-decomp](https://github.com/consolesplayingconsoles/crazy-taxi-decomp),
 [virtua-tennis-decomp](https://github.com/consolesplayingconsoles/virtua-tennis-decomp)
