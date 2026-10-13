@@ -353,7 +353,7 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
 | `template/build.sh` | assemble, compile C units, link (`start P(<base>)`), `elf2bin`, compare with the original |
 | `scripts/units.py` | in the repo: the link order with C units in place of the asm files they replace |
 | `scripts/fill.py` | in the repo: lay a C unit out like the original (nop alignment, 0xEE fill, exact size) |
-| `scripts/progress.py` | in the repo: matching C, named functions and globals, documented, game and SDK apart |
+| `scripts/progress.py` | in the repo: done (equivalent C), matching C, named functions and globals, documented, game and SDK apart. "done: equivalent C" stays the first row of the first section: Pluto finds the main metric by that label |
 | `scripts/sdk_txt.py` | mark the SDK's code (boot block, library block, single matches) as `sdk.txt` |
 | `scripts/sdk_masked.py` | after the tables: name more SDK functions by masked instructions, library layout and source listings (statics), link order as the check (stdlib) |
 | `scripts/missed_funcs.py` | list code the analysis did not make into functions |
