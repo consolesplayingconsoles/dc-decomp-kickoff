@@ -256,19 +256,14 @@ committed: the repo shares as much as is safe.
    <sibling repo> <repo>` proposes its names for exact masked matches that are unique both ways
    and lists the twins; `--apply`, then `split_asm.py` and `bash build.sh` (`MATCH`).
    `python3 tools/progress.py` gives the starting state.
-7. **Asset maps.** First one question (`AskUserQuestion`): "Which assets do you want mapped?" with
-   **All (recommended)** first (text, images, models), then **Choose which kinds**; only that second answer
-   is followed by a multi-select of the kinds (text map, textures, model map). An empty answer, or a client
-   without questions, means everything: the user opts out, never in. A kind left out is skipped here and its
-   line is left out of the repo's `setup.sh`. Then **Text map** (for translators, English included: any language can be a source as well as a
+7. **Asset maps**: all of them, with no question to answer. **Text map** (for translators, English included: any language can be a source as well as a
    target): `scripts/text_map.py <1ST_READ.BIN> <base> <report> <repo>/text-map <disc.gdi> [tier]`.
    - `exe_strings.tsv`: every executable string, the functions using it, and every pointer to it
      (what lets a translation move text somewhere bigger instead of fitting the old bytes).
    - `files.tsv`: text density per disc file and the code that opens it (where its offsets live).
    - `font.tsv`: BIOS ROM-font callers and font-looking files.
-   - `image_candidates.tsv`: files that probably hold text drawn as images, with the reason.
-     **Candidates only; the user decides.** Today's signal: language variants (`SPRMENG`/`SPRMJAP`).
-     A single-language game gets an explicit "no automatic signal" line, never an empty file.
+   - `images.tsv`: every disc file that holds images (PVR textures found in it, or an image file extension). It
+     makes no guess about text in images: that is for a person to see, on the contact sheet below.
    - `file_tables.tsv` (`scripts/file_tables.py`): for each disc file made of repeating records, the
      table in the executable that locates them (bytes or sectors, with or without sizes). **This is
      what lets a container grow:** repack its records, rewrite that table (proof in `references/evidence.md`). No false hits
@@ -282,8 +277,8 @@ committed: the repo shares as much as is safe.
      before applying it. `cheat_leads.py fetch <title>` takes the list from libretro-database.
    - Textures are their **own step** (`bash textures.sh <disc.gdi>`, seconds to a minute): every
      standard (PVR) texture decoded to PNG on one page with checkboxes (`text-map/textures/`), for a
-     person to mark the ones with text. A game that keeps its art in its own formats gets 0 here and a
-     note saying so; then `image_candidates.tsv` is the lead.
+     person to look through. A game that keeps its art in its own formats gets 0 here and a
+     note saying so; its textures are then in the model map's `[textures]` section, if it has one.
    - **Model map** (`scripts/model_map.py <1ST_READ.BIN> <base> <report> <disc.gdi> <repo>/model-map
      [<repo>/models.txt]`): every NAOMI-library model in the disc files (records that parse exactly), the
      address each file is loaded at (found by matching the executable's pointers to the models' starts, no
@@ -299,13 +294,12 @@ committed: the repo shares as much as is safe.
      function-level users only; the kick-off's own run (from the full Ghidra report) has more.
    - Tiers: `quick` = executable only (seconds); `standard` = plus a 2 MiB sample of every disc file
      (seconds to a minute); `deep` = whole files (minutes on a full disc).
-   - Density and the Shift-JIS count are heuristics: binary data scores as text sometimes.
+   - Density and the Shift-JIS count are counts, not a verdict: binary data scores as text sometimes.
    - **OCR is not included, on purpose.** Finding baked text in single-language games would mean
      decoding every texture (PVR, often thousands per disc) and running OCR on each: tens of
      minutes to hours, plus an OCR engine and its Japanese data, and game fonts are stylised, so it
-     misses text and flags noise. If a user wants it, warn them of that cost first, and still
-     present the results as candidates. A contact sheet of all textures for a human to tick is
-     often faster and is the only reliable method.
+     misses text and flags noise. If a user wants it, warn them of that cost first. A contact sheet
+     of all textures, looked at by a person, is the method this skill provides.
 8. **Game build**: `bash disc.sh <original .gdi>` writes `build/disc/`: a copy of the user's disc
    with the rebuilt executable and every file under `disc/` (same path as on the disc) written in
    place, error correction recomputed, read back to verify. A smaller file is padded; a **bigger**
@@ -357,7 +351,7 @@ committed: the repo shares as much as is safe.
 | `scripts/iso_extract.py` | copy every file out of a disc image or zip (Joliet or ISO9660, no mounting) |
 | `references/sdk-banners.tsv` | library banners (module, version, build date) of every preserved Katana release |
 | `references/sdk-releases.md` | every Katana release: date, the file names it circulates under (search terms), what it gave; prototypes and dev kit dumps as material |
-| `scripts/text_map.py` | strings with pointers, file text density, font path, image candidates |
+| `scripts/text_map.py` | strings with pointers, text per disc file, font path, the list of images |
 | `scripts/file_tables.py` | tables in the executable that locate records inside disc files |
 | `scripts/textures.py` | every standard texture to PNG + a contact sheet (`index.html`) |
 | `scripts/disc_patch.py` | copy a GDI with files replaced in place, error correction recomputed |
