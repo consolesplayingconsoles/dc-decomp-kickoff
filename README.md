@@ -1,21 +1,32 @@
 # dc-decomp-kickoff
 
-A Claude skill that starts a matching decompilation of a Sega Dreamcast game from your own disc.
+A Claude skill that starts a decompilation of a Sega Dreamcast game from your own disc: a repo where
+a function is done when its C **behaves like the original** (proven in an SH-4 simulator), with
+byte-identical C as the bonus tier.
 
 You get a repo that:
 
 * rebuilds the game's executable **byte for byte**, from one assembly file per function, with the
-  SDK's own Hitachi assembler and linker;
+  SDK's own Hitachi assembler and linker (the baseline: the build keeps matching as C replaces
+  assembly);
 * already names every function it can match by signature (the SDK's own libraries);
 * has a text map for translators: every string with every pointer to it, which disc files hold
   text and which code opens them, and image files that probably have text in them;
-* describes the loop for taking functions from assembly to C, with the build checking each step;
+* describes the loop for taking functions from assembly to C, with the build checking each step, and
+  `tools/equiv.py` checking each function's C against the original (calls, memory writes and result,
+  on test cases, in an SH-4 interpreter): **Equivalent C** is what counts as done, so a function
+  can be decompiled and proven without reproducing the compiler's exact output;
+* has the tools that made that fast: size, instruction and literal-pool checks per function, and
+  `port_equiv.py`, which carries a sibling decomp's verified C for shared library code (the NAOMI
+  library, the C runtime) into a new one, each function checked again on the new game's own bytes;
 * contains **no game code or data**: everything game-derived is generated from your disc.
 
-Worked examples: [crazy-taxi-decomp](https://github.com/consolesplayingconsoles/crazy-taxi-decomp)
+Worked examples: [crazy-taxi-decomp](https://github.com/consolesplayingconsoles/crazy-taxi-decomp),
+[virtua-tennis-decomp](https://github.com/consolesplayingconsoles/virtua-tennis-decomp)
 and [boku-doraemon-decomp](https://github.com/consolesplayingconsoles/boku-doraemon-decomp). What the
 skill did on each game it has been run on is in [`references/evidence.md`](references/evidence.md);
 if you run it on a game, the last step prints your run in that format: send it as an issue.
+How Equivalent C is written fast, and checked, at scale: [`references/equivalent-pipeline.md`](references/equivalent-pipeline.md).
 
 ## Install
 

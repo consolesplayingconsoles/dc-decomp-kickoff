@@ -213,7 +213,7 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
      dotfiles);
    - copy into `tools/`: `scripts/gdi_read.py`, `split_asm.py`, `text_map.py`, `file_tables.py`,
      `textures.py`, `disc_patch.py`, `apply_bin.py`, `docker_check.sh`, `units.py`, `fill.py`,
-     `progress.py`, `missed_funcs.py`, `shdis.py`, `live.py`, `sh4sim.py`, `equiv.py`, `checksizes.py`, `classify.py`, `poollist.py`, the `tools-image/` folder and `scripts/hooks/` as `tools/hooks/` (so a cloned repo builds its own
+     `progress.py`, `missed_funcs.py`, `shdis.py`, `live.py`, `sh4sim.py`, `equiv.py`, `checksizes.py`, `classify.py`, `poollist.py`, `port_equiv.py` with `sdk_masked.py` (which it imports), the `tools-image/` folder and `scripts/hooks/` as `tools/hooks/` (so a cloned repo builds its own
      tools image, nothing pulled from anyone else);
    - write `sdk.txt`: `scripts/sdk_txt.py <repo>/functions.txt <base> <1ST_READ.BIN>
      <SDK ApplySigs output>`. It marks the boot block
@@ -359,6 +359,7 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
 | `scripts/missed_funcs.py` | list code the analysis did not make into functions |
 | `scripts/sh4sim.py` | in the repo: an SH-4 interpreter (integer, single-precision FPU, delay slots) that runs one function from a case (registers, memory, a RAM dump, mocked call returns) and records its calls, writes and result (stdlib) |
 | `scripts/equiv.py` | in the repo: compiles a C file and checks each function against the original on its test cases (`tests/<file>/<function>.json`); the Equivalent tier, written to `tests/equivalent.txt` |
+| `scripts/port_equiv.py` | in the repo: carries Equivalent C for shared library code from a sibling decomp into this one (masked-code match, pool-word mapping, ported cases), every function re-checked by this repo's `equiv.py` |
 | `scripts/checksizes.py` | in the repo: functions whose size in `functions.txt` looks wrong (a literal pool mid-body ended the listing early), with the size that covers the code after it |
 | `scripts/classify.py` | in the repo: which functions can have C at all (FPU banks, `fsrra`, control registers: blocked) |
 | `scripts/poollist.py` | in the repo: a function's literal pool as functions, RAM addresses (named, or MISSING) and numbers |
