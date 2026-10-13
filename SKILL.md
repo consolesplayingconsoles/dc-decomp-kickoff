@@ -284,12 +284,16 @@ committed: the repo shares as much as is safe.
      address each file is loaded at (found by matching the executable's pointers to the models' starts, no
      profile needed), every pointer to a model followed back to its table, and the table named by a rule in
      `models.txt` (curated: characters, cars, a skeleton, a texture list), a data symbol, or the functions
-     that use it. One file, `model-map/game.dcgs`: sections `[models]`, `[assemblies]`, `[textures]`, tab-separated.
+     that use it. One file, `model-map/game.dcgs`: sections `[models]`, `[assemblies]`, `[audio]`, `[textures]`, tab-separated.
      **It is committed, unlike `text-map/`**: only the game's text and bytes are kept out of git, and this file holds
      addresses, offsets, sizes, our names and one standing pose's matrices, no bytes and no text.
      `models.txt` starts as only its syntax comments; fill it from the notes as tables are understood. A game
      whose models are in another format lists none here, and the step says so. Texture lists matter: the
      texture's real size, type and format come from the game's own list, not the model records.
+   - **Audio** (the `[audio]` section of the same file): every CRI ADX / AHX stream the disc holds, inside AFS archives or
+     on its own, found by its header, with channels, sample rate, samples and seconds; DTPK sound banks are listed as banks
+     and not opened. An AFS archive counts only when at least one entry is audio (a city or model archive is skipped). The
+     archives carry no entry names, so a sound is `FILE:index`, named by a `sound <file> <entry> <name>` rule in `models.txt`.
    - `setup.sh` rebuilds the text map from `functions.txt`, so a cloned repo's `files.tsv` lists
      function-level users only; the kick-off's own run (from the full Ghidra report) has more.
    - Tiers: `quick` = executable only (seconds); `standard` = plus a 2 MiB sample of every disc file

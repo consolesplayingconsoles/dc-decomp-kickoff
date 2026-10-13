@@ -8,4 +8,5 @@
 #   note <group> <first id> <last id> <text>        adds " (<text>)" to the sub-group of those characters
 #   rig / bone / assemble                           a skeleton posed from a motion record: whole characters
 #   textures <model file> <texture file> <texture base> <table addr>   a texture list: number -> place in the file
+#   name <file> <offset> <text>   /   table <addr> <group> <label>   /   sound <file> <entry> <text>   names (the viewer writes these)
 # Nothing is needed here to start: with no rules the map still lists every model, grouped by the table that holds it.
