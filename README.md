@@ -1,9 +1,9 @@
 # dc-decomp-kickoff
 
-Give Claude your Dreamcast disc and a Katana SDK, and it starts a decompilation of your game.
+Give Claude your Dreamcast game disc and a Katana SDK, and it kicks off the decompilation project of your game from zero, giving you and your AI agents a fully formed repo with everything you need to start decompiling: function names, mappings, asset references, documentation for AI agents, and the whole toolchain running in Docker. Welcome to 1998.
 
 The repo it makes rebuilds the game's executable byte for byte, names what it can match, and maps the game's
-text and 3D models, so you start by reading and naming instead of setting up. A function counts as done when
+text, 3D models and sounds, so you start by reading and naming instead of setting up. A function counts as done when
 its C **behaves like the original** (proven in an SH-4 simulator), with byte-identical C as the bonus tier.
 
 It came out of real work: [Crazy Taxi](https://github.com/consolesplayingconsoles/crazy-taxi-decomp) and
