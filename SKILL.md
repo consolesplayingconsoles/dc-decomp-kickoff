@@ -96,8 +96,10 @@ equivalent material lawfully in their possession.
 | a later port, a prototype, other decomps, optional | the user's own copies (ports and prototypes), GitHub, hiddenpalace.org, tcrf.net, segaretro.org | step 2b |
 | an older SDK, optional | archive.org item `dcsdk-9e` (SDK R9 Europe, Nov 1999, disc 1: SHC 5.1 Release 08) | a period compiler for games built in 1999-2000; so far it gave the same bytes as R10.1's (Release 11) |
 
-Ask before cloning each one. Never commit the SDK, the game's files, or anything derived from them
-(hash tables included) to the new repo: its `.gitignore` already excludes them.
+Ask before cloning each one. Never commit the SDK, the game's files, or anything that carries their bytes or
+text (assembly, hash tables, the text map) to the new repo: its `.gitignore` already excludes them. What only
+describes them (addresses, offsets, sizes, names: `functions.txt`, `globals.txt`, `models.txt`, `model-map/`) is
+committed: the repo shares as much as is safe.
 
 ## Procedure
 
@@ -208,11 +210,11 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
    data words, exported labels, `objects.txt` in link order.
 6. **Make the repo publishable and build it.** A pushed repo holds no game bytes, so it must be
    able to regenerate them from each user's own disc. Into the repo:
-   - copy `template/` (`build.sh`, `setup.sh`, `disc.sh`, `textures.sh`, `README.md`, `AGENTS.md`),
+   - copy `template/` (`build.sh`, `setup.sh`, `disc.sh`, `textures.sh`, `models.txt`, `README.md`, `AGENTS.md`),
      and `template/gitignore` as **`.gitignore`** (shipped without the dot: some installs drop
      dotfiles);
    - copy into `tools/`: `scripts/gdi_read.py`, `split_asm.py`, `text_map.py`, `file_tables.py`,
-     `textures.py`, `disc_patch.py`, `apply_bin.py`, `docker_check.sh`, `units.py`, `fill.py`,
+     `textures.py`, `model_map.py`, `disc_patch.py`, `apply_bin.py`, `docker_check.sh`, `units.py`, `fill.py`,
      `progress.py`, `missed_funcs.py`, `shdis.py`, `live.py`, `sh4sim.py`, `equiv.py`, `checksizes.py`, `classify.py`, `poollist.py`, `port_equiv.py` with `sdk_masked.py` (which it imports), the `tools-image/` folder and `scripts/hooks/` as `tools/hooks/` (so a cloned repo builds its own
      tools image, nothing pulled from anyone else);
    - write `sdk.txt`: `scripts/sdk_txt.py <repo>/functions.txt <base> <1ST_READ.BIN>
@@ -254,7 +256,11 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
    <sibling repo> <repo>` proposes its names for exact masked matches that are unique both ways
    and lists the twins; `--apply`, then `split_asm.py` and `bash build.sh` (`MATCH`).
    `python3 tools/progress.py` gives the starting state.
-7. **Text map** (for translators, English included: any language can be a source as well as a
+7. **Asset maps.** First one question (`AskUserQuestion`): "Which assets do you want mapped?" with
+   **All (recommended)** first (text, images, models), then **Choose which kinds**; only that second answer
+   is followed by a multi-select of the kinds (text map, textures, model map). An empty answer, or a client
+   without questions, means everything: the user opts out, never in. A kind left out is skipped here and its
+   line is left out of the repo's `setup.sh`. Then **Text map** (for translators, English included: any language can be a source as well as a
    target): `scripts/text_map.py <1ST_READ.BIN> <base> <report> <repo>/text-map <disc.gdi> [tier]`.
    - `exe_strings.tsv`: every executable string, the functions using it, and every pointer to it
      (what lets a translation move text somewhere bigger instead of fitting the old bytes).
@@ -278,6 +284,17 @@ Ask before cloning each one. Never commit the SDK, the game's files, or anything
      standard (PVR) texture decoded to PNG on one page with checkboxes (`text-map/textures/`), for a
      person to mark the ones with text. A game that keeps its art in its own formats gets 0 here and a
      note saying so; then `image_candidates.tsv` is the lead.
+   - **Model map** (`scripts/model_map.py <1ST_READ.BIN> <base> <report> <disc.gdi> <repo>/model-map
+     [<repo>/models.txt]`): every NAOMI-library model in the disc files (records that parse exactly), the
+     address each file is loaded at (found by matching the executable's pointers to the models' starts, no
+     profile needed), every pointer to a model followed back to its table, and the table named by a rule in
+     `models.txt` (curated: characters, cars, a skeleton, a texture list), a data symbol, or the functions
+     that use it. One file, `model-map/game.dcgs`: sections `[models]`, `[assemblies]`, `[textures]`, tab-separated.
+     **It is committed, unlike `text-map/`**: only the game's text and bytes are kept out of git, and this file holds
+     addresses, offsets, sizes, our names and one standing pose's matrices, no bytes and no text.
+     `models.txt` starts as only its syntax comments; fill it from the notes as tables are understood. A game
+     whose models are in another format lists none here, and the step says so. Texture lists matter: the
+     texture's real size, type and format come from the game's own list, not the model records.
    - `setup.sh` rebuilds the text map from `functions.txt`, so a cloned repo's `files.tsv` lists
      function-level users only; the kick-off's own run (from the full Ghidra report) has more.
    - Tiers: `quick` = executable only (seconds); `standard` = plus a 2 MiB sample of every disc file

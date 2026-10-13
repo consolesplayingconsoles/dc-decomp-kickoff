@@ -45,19 +45,25 @@ Docker, `DC_LOCAL=1` runs the tools through `wibo` instead.
 | `src/` | C: Equivalent files (checked by `tools/equiv.py`, not built) and matching C units (built, see below) |
 | `tests/` | test cases per function (`tests/<file>/<function>.json`) and `tests/equivalent.txt`, the functions found Equivalent |
 | `docs/equivalent.md` | the evidence for each Equivalent function (written by `tools/equiv.py`) |
+| `models.txt` | what is known about the game's 3D models: tables whose layout is understood (read by `tools/model_map.py`) |
 | `symbols.txt` | addresses the C units use that no file defines yet (RAM, data inside asm) |
 | `sdk.txt` | which code is Sega's SDK, not the game (for `tools/progress.py`) |
 | `BASE` | link address |
-| `setup.sh` | extract + verify your executable, generate `asm/` and `text-map/` |
+| `setup.sh` | extract + verify your executable, generate `asm/`, `text-map/` and `model-map/` |
 | `build.sh` | assemble, link, convert, compare with your original |
 | `disc.sh` | build a playable disc image of your version (files you put under `disc/`) |
 | `textures.sh` | optional: every standard texture on one page, to find text drawn into images |
-| `tools/` | disc reader, splitter, text mapper, C-unit layout, progress report, missed-function finder, SH-4 disassembler and simulator, the Equivalent check (`equiv.py`) with its helpers (`checksizes.py`, `classify.py`, `poollist.py`, `port_equiv.py`), live checks against the running game (optional) |
+| `tools/` | disc reader, splitter, text mapper, model mapper, C-unit layout, progress report, missed-function finder, SH-4 disassembler and simulator, the Equivalent check (`equiv.py`) with its helpers (`checksizes.py`, `classify.py`, `poollist.py`, `port_equiv.py`), live checks against the running game (optional) |
 | `AGENTS.md` | the per-function decompilation loop: Equivalent first, Matching as the bonus |
 
 `text-map/` (generated) lists the executable's strings with every pointer to them, the text density
 of each disc file with the code that opens it, how text is drawn, and image files that probably
 hold text (candidates). These are heuristics for you to check, not a verdict.
+
+`model-map/game.dcgs` (generated and committed: addresses, offsets, sizes and names only, no game bytes or text; `setup.sh` rebuilds it) lists every 3D model in the disc files with the name the executable's tables give it
+(`models.txt` holds the tables whose layout is known; the rest are named by table address and the functions that use
+it), the characters' skeletons placed on their parts, and the texture lists. It is plain tab-separated text in
+sections: a model viewer or a spreadsheet can read it.
 
 ## Equivalent C and shared library code
 
