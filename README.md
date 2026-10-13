@@ -4,20 +4,18 @@ A Claude skill that starts a decompilation of a Sega Dreamcast game from your ow
 a function is done when its C **behaves like the original** (proven in an SH-4 simulator), with
 byte-identical C as the bonus tier.
 
-## What you get
+You get a repo that:
 
-The repo it makes:
-
-| # | Feature | What it does |
+| # | Feature | Does this |
 |---|---|---|
-| 1 | Byte-for-byte rebuild | Rebuilds the game's executable **byte for byte**, from one assembly file per function, with the SDK's own Hitachi assembler and linker (the baseline: the build keeps matching as C replaces assembly). |
-| 2 | Names | Already names every function it can match by signature (the SDK's own libraries). |
-| 3 | Text map | For translators: every string with every pointer to it, which disc files hold text and which code opens them, and image files that probably have text in them. |
-| 4 | Model map | Every 3D model in the disc files (the NAOMI library's format), the table in the executable that holds each, the texture lists, and characters assembled from a known skeleton, in one plain-text file, `model-map/game.dcgs`. It starts with no knowledge of the game, and a `models.txt` per game records what people learn (tables, names): anyone can run the skill, name what they recognise and commit it back. |
-| 5 | Equivalent C | Describes the loop for taking functions from assembly to C, with the build checking each step, and `tools/equiv.py` checking each function's C against the original (calls, memory writes and result, on test cases, in an SH-4 interpreter). **Equivalent C** is what counts as done, so a function can be decompiled and proven without reproducing the compiler's exact output. |
-| 6 | Tools | The tools that made that fast: size, instruction and literal-pool checks per function, and `port_equiv.py`, which carries a sibling decomp's verified C for shared library code (the NAOMI library, the C runtime) into a new one, each function checked again on the new game's own bytes. |
-| 7 | Asset choice | The kickoff asks which asset kinds to map, **All** first. You opt out, never in. |
-| 8 | No game code or data | What carries the game's bytes or text is generated from your disc and kept out of git; what only describes it (addresses, sizes, names, the model map) is committed. |
+| 1 | Byte-for-byte rebuild | rebuilds the game's executable **byte for byte**, from one assembly file per function, with the SDK's own Hitachi assembler and linker (the baseline: the build keeps matching as C replaces assembly); |
+| 2 | Names | already names every function it can match by signature (the SDK's own libraries); |
+| 3 | Text map | has a text map for translators: every string with every pointer to it, which disc files hold text and which code opens them, and image files that probably have text in them; |
+| 4 | Model map | has a model map: every 3D model in the disc files (the NAOMI library's format), the table in the executable that holds each, the texture lists, and characters assembled from a known skeleton, in one plain-text file, `model-map/game.dcgs`. It starts with no knowledge of the game, and a `models.txt` per game records what people learn (tables, names): anyone can run the skill, name what they recognise and commit it back; |
+| 5 | Asset choice | asks which asset kinds to map, **All** first: you opt out, never in; |
+| 6 | Equivalent C | describes the loop for taking functions from assembly to C, with the build checking each step, and `tools/equiv.py` checking each function's C against the original (calls, memory writes and result, on test cases, in an SH-4 interpreter): **Equivalent C** is what counts as done, so a function can be decompiled and proven without reproducing the compiler's exact output; |
+| 7 | Tools | has the tools that made that fast: size, instruction and literal-pool checks per function, and `port_equiv.py`, which carries a sibling decomp's verified C for shared library code (the NAOMI library, the C runtime) into a new one, each function checked again on the new game's own bytes; |
+| 8 | No game code or data | contains **no game code or data**: what carries the game's bytes or text is generated from your disc and kept out of git; what only describes it (addresses, sizes, names, the model map) is committed. |
 
 ## What is in this folder
 
