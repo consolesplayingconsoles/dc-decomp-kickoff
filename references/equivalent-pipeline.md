@@ -44,6 +44,32 @@ anything named `_...` in `functions.txt`) run for real in both versions, so a di
 by helper and the C inlines agree, and a struct copy is compared by what it wrote. Memory writes by their
 final value per address; the return register by the prototype; `-q` prints only what is not Equivalent.
 
+## Things the second pilot (100 more functions in a second game) taught
+- 16-bit pool constants (`mov.w @(...),Rn  ; =4304 (0x10d0)`) are field offsets or counts: read the decimal
+  and the hex that `shdis.py` now prints; do not treat a decimal as hex.
+- A pool word that is a RAM address is the address of a global; whether that global holds a pointer (a
+  double dereference) is only visible in the instructions after the load.
+- Stack arguments after the fourth are set with `poke` at `0DFFFF00`, `0DFFFF04`, ... (r15 starts there);
+  hardware registers with `device_reads`; a call's output slot with `poke_arg`.
+- A variadic callee is fine to declare `(char *fmt, ...)`: both versions leave the same registers.
+  Only a function whose own definition is variadic cannot be written in C.
+- A function that compiles to `_divlu` or `_modlu` needs `extern void _divlu(void); extern void _modlu(void);`
+  (like `_quick_odd_mvn`) so the linker defines the helpers.
+- Read each `tst` / `bf` polarity from the disassembly, not from what the code should do. A case for every
+  failure branch is what shows a wrong prototype that passed by luck.
+- A loop that polls millions of times cannot be covered (the mocked calls are a finite list): leave that
+  path out of the cases and say so.
+- `tools/shdis.py --func` on a compiled file: copy `build/equiv/<file>.bin` into a scratch dir as
+  `1ST_READ.BIN` beside a `BASE` holding `0E100000` to see what the compiler made of your C.
+- Pass one name to `checksizes.py`, `classify.py` and `poollist.py` per call when scripting in zsh: an
+  unquoted variable holding several names is not split there.
+
+## Carrying the C to another game
+`scripts/port_equiv.py <source repo> <destination repo>` finds the source's Equivalent functions in the
+destination by masked code, maps globals and callees from the aligned pools, ports the C and the cases
+and lets the destination's own `equiv.py` decide. Between two NAOMI games it moved 39 library functions
+(CT to VT) and 46 (VT to CT) with no hand work; what does not match is a different library version.
+
 ## Running many workers at once
 - Split the candidate list into groups of about 20 (smallest, named, plain C first). One worker per group,
   its own `src/<group>.c` and `tests/<group>/`, nothing else of its own.
