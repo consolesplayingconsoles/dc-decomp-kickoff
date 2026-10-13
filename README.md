@@ -1,40 +1,54 @@
 # dc-decomp-kickoff
 
-A Claude skill that starts a decompilation of a Sega Dreamcast game from your own disc: a repo where
-a function is done when its C **behaves like the original** (proven in an SH-4 simulator), with
-byte-identical C as the bonus tier.
+Give Claude your Dreamcast disc and a Katana SDK, and it starts a decompilation of your game.
+
+The repo it makes rebuilds the game's executable byte for byte, names what it can match, and maps the game's
+text and 3D models, so you start by reading and naming instead of setting up. A function counts as done when
+its C **behaves like the original** (proven in an SH-4 simulator), with byte-identical C as the bonus tier.
+
+It came out of real work: [Crazy Taxi](https://github.com/consolesplayingconsoles/crazy-taxi-decomp) and
+[Virtua Tennis](https://github.com/consolesplayingconsoles/virtua-tennis-decomp) are used for modding, and
+Boku Doraemon and Illbleed were run as translation targets. Whatever carries a game's own code or data stays
+git-ignored on your machine and is generated from your disc, so the repo is yours to publish.
 
 You get a repo that:
 
 | # | Feature | Does this |
 |---|---|---|
-| 1 | Byte-for-byte rebuild | rebuilds the game's executable **byte for byte**, from one assembly file per function, with the SDK's own Hitachi assembler and linker (the baseline: the build keeps matching as C replaces assembly); |
-| 2 | Names | already names every function it can match by signature (the SDK's own libraries); |
-| 3 | Text map | has a text map for translators: every string with every pointer to it, which disc files hold text and which code opens them, and image files that probably have text in them; |
-| 4 | Model map | has a model map: every 3D model in the disc files (the NAOMI library's format), the table in the executable that holds each, the texture lists, and characters assembled from a known skeleton, in one plain-text file, `model-map/game.dcgs`. It starts with no knowledge of the game, and a `models.txt` per game records what people learn (tables, names): anyone can run the skill, name what they recognise and commit it back; |
-| 5 | Asset choice | asks which asset kinds to map, **All** first: you opt out, never in; |
-| 6 | Equivalent C | describes the loop for taking functions from assembly to C, with the build checking each step, and `tools/equiv.py` checking each function's C against the original (calls, memory writes and result, on test cases, in an SH-4 interpreter): **Equivalent C** is what counts as done, so a function can be decompiled and proven without reproducing the compiler's exact output; |
-| 7 | Tools | has the tools that made that fast: size, instruction and literal-pool checks per function, and `port_equiv.py`, which carries a sibling decomp's verified C for shared library code (the NAOMI library, the C runtime) into a new one, each function checked again on the new game's own bytes; |
-| 8 | No game code or data | contains **no game code or data**: what carries the game's bytes or text is generated from your disc and kept out of git; what only describes it (addresses, sizes, names, the model map) is committed. |
+| 1 | Byte-for-byte rebuild | Rebuilds the game's executable **byte for byte**, from one assembly file per function, with the SDK's own Hitachi assembler and linker (the baseline: the build keeps matching as C replaces assembly). |
+| 2 | Names | Already names every function it can match by signature (the SDK's own libraries). |
+| 3 | Text map | Has a text map for translators: every string in the executable with every pointer to it, how much text each disc file holds and which code opens it, and a list of every image file. |
+| 4 | Model map | Has a model map: every model it recognises in the disc files (the NAOMI library's format), the table in the executable that holds each, the texture lists, and characters assembled from a known skeleton, in one plain-text file, `model-map/game.dcgs`. It starts with no knowledge of the game, and a `models.txt` per game records what people learn (tables, names): whoever runs the skill can name what they recognise and commit it back. |
+| 5 | Equivalent C | Describes the loop for taking functions from assembly to C, with the build checking each step, and `tools/equiv.py` checking each function's C against the original (calls, memory writes and result, on test cases, in an SH-4 interpreter): **Equivalent C** is what counts as done, so a function can be decompiled and proven without reproducing the compiler's exact output. |
+| 6 | Tools | Has the tools that made that fast: size, instruction and literal-pool checks per function, and `port_equiv.py`, which carries a sibling decomp's verified C for shared library code (the NAOMI library, the C runtime) into a new one, each function checked again on the new game's own bytes. |
+| 7 | Progress | Reports one status the same way for every project: done (equivalent C), matching C, named and documented, game and SDK code apart, so projects compare. |
+| 8 | Git-ignored game code and data | Keeps the game's code and data out of git: what carries its bytes or text is generated from your disc and git-ignored; what only describes it (addresses, sizes, names, the model map) is committed. |
 
-## What is in this folder
+## What is in this repository
 
 | Path | What |
 |---|---|
-| `SKILL.md` | The procedure Claude follows. |
-| `scripts/` | The tools it runs and copies into each repo's `tools/`: disc reader, splitter, text and model mappers, SH-4 simulator, the Equivalent check and its helpers. |
-| `template/` | What each new repo starts from: `build.sh`, `setup.sh`, `disc.sh`, `textures.sh`, `models.txt`, `README.md`, `AGENTS.md`, `gitignore`. |
-| `references/` | Evidence from every game it has run on, SDK notes, the Equivalent pipeline, the memory map. |
-| `zip.sh`, `dist/` | Builds the zip you upload to claude.ai. |
-| `VERSION`, `LICENSE` | The kickoff version a repo records, and the licence. |
+| [`SKILL.md`](SKILL.md) | The procedure Claude follows. |
+| [`scripts/`](scripts/) | The tools it runs and copies into each repo's `tools/`: disc reader, splitter, text and model mappers, SH-4 simulator, the Equivalent check and its helpers. |
+| [`template/`](template/) | What each new repo starts from: `build.sh`, `setup.sh`, `disc.sh`, `textures.sh`, `models.txt`, `README.md`, `AGENTS.md`, `gitignore`. |
+| [`references/`](references/) | Evidence from every game it has run on, SDK notes, the Equivalent pipeline, the memory map. |
+| [`zip.sh`](zip.sh), [`dist/`](dist/) | Builds the zip you upload to claude.ai. |
+| [`VERSION`](VERSION), [`LICENSE`](LICENSE) | The kickoff version a repo records, and the licence. |
 
 ## Worked examples
 
-| Game | Repo |
-|---|---|
-| Crazy Taxi | [crazy-taxi-decomp](https://github.com/consolesplayingconsoles/crazy-taxi-decomp) |
-| Virtua Tennis | [virtua-tennis-decomp](https://github.com/consolesplayingconsoles/virtua-tennis-decomp) |
-| Boku Doraemon | [boku-doraemon-decomp](https://github.com/consolesplayingconsoles/boku-doraemon-decomp) |
+| Game | Release | Repo | What it is | Evidence |
+|---|---|---|---|---|
+| Crazy Taxi | Europe, MK-51035, V1.000 | [crazy-taxi-decomp](https://github.com/consolesplayingconsoles/crazy-taxi-decomp) | A decomp built for modding: named functions and globals, functions proven as Equivalent C, and a model map | [Evidence](references/evidence.md#crazy-taxi-europe) |
+| Virtua Tennis | USA, MK-51054, V1.001 | [virtua-tennis-decomp](https://github.com/consolesplayingconsoles/virtua-tennis-decomp) | A decomp started beside Crazy Taxi, which shares its library with it, for a combined mod: the same names, Equivalent C and model map | None yet |
+| Boku Doraemon | Japan, T-41802M, V1.003 | [boku-doraemon-decomp](https://github.com/consolesplayingconsoles/boku-doraemon-decomp) | An experiment: a translation target | [Evidence](references/evidence.md#boku-doraemon-japan-t-41802m-v1003) |
+| Illbleed | Japan, T45601M, V1.003 | [illbleed-decomp](https://github.com/consolesplayingconsoles/illbleed-decomp) | An experiment: a second translation target, also doable | [Evidence](references/evidence.md#illbleed-japan-crazy-games-t45601m-v1003) |
+| Virtua Fighter 3 | US, MK-51001, V1.002 | [vf3-decomp](https://github.com/celsowm/vf3-decomp) (another team's) | An experiment: names for their decomp, no repo of ours ([the merged PR](https://github.com/celsowm/vf3-decomp/pull/1)) | [Evidence](references/evidence.md#virtua-fighter-3tb-us-mk-51001-v1002) |
+| Phantasy Star Online Ver. 2 | US, MK-51193, V1.004 | None | **Not compatible**: the boot file has none of the game's code, which loads from over 600 files at runtime, so the kickoff stops at step 1 | [Evidence](references/evidence.md#phantasy-star-online-ver-2-us-mk-51193-v1004) |
+
+## Evidence and method
+
+The evidence behind the examples above, and the method the repos follow.
 
 | Read | What it is |
 |---|---|
@@ -43,8 +57,8 @@ You get a repo that:
 
 ## Install
 
-The skill is a folder: `SKILL.md` plus the `scripts/`, `template/` and `references/` it runs.
-Install the whole folder, not `SKILL.md` alone.
+The skill is a folder: [`SKILL.md`](SKILL.md) plus the [`scripts/`](scripts/), [`template/`](template/) and [`references/`](references/) it runs.
+Install the whole folder, not [`SKILL.md`](SKILL.md) alone.
 
 * **Claude (claude.ai or the desktop app):** build the zip, then upload it as a skill (Settings,
   Capabilities, Skills):
@@ -52,20 +66,32 @@ Install the whole folder, not `SKILL.md` alone.
   git clone https://github.com/consolesplayingconsoles/dc-decomp-kickoff
   bash dc-decomp-kickoff/zip.sh
   ```
-  It writes `dc-decomp-kickoff/dist/dc-decomp-kickoff.zip`. Then ask Claude to start a decomp of
-  your game. The work runs in Claude's own workspace, so you upload your disc and SDK images there
+  It writes `dc-decomp-kickoff/dist/dc-decomp-kickoff.zip`. Then run `/dc-decomp-kickoff` to start a
+  decomp of your game. The work runs in Claude's own workspace, so you upload your disc and SDK images there
   when it asks.
-* **Claude Code:** clone it into your skills folder, then ask Claude to start a decomp of your game:
+* **Claude Code:** clone it into your skills folder, then run `/dc-decomp-kickoff` to start a decomp of your game:
   ```
   git clone https://github.com/consolesplayingconsoles/dc-decomp-kickoff ~/.claude/skills/dc-decomp-kickoff
   ```
-  The work runs on your machine, with your disc and SDK where they already are.
+  The work runs on your machine, with your game and SDK images where they already are.
 
-If only `SKILL.md` got installed, the skill fetches its own tools from this repo before starting.
+If only [`SKILL.md`](SKILL.md) got installed, the skill fetches its own tools from this repo before starting.
 
 **What you provide:** your game disc (`.gdi` or `.chd`) and a Katana SDK. The skill reads your
 disc and tells you which SDK release it was built with, so you know which one to get. You also
 need Docker and Python 3 wherever it runs (Claude's workspace has them).
+
+**Optional, and worth having:** each of these gives the decomp a stronger starting point. The skill asks for them
+one by one (a path, a link, or "no"), and never fetches any of it by itself.
+
+| # | Material | What it gives you |
+|---|---|---|
+| 1 | A later port | The big one when it kept its symbol table: it can name a large share of the functions and globals. **Android** (an `.apk`) is particularly effective; **PC** ports rarely carry symbols. iOS and other consoles count too. |
+| 2 | A prototype, debug build or dev kit dump | Pre-release discs sometimes carry the linker's `.ELF` or `.MAP`, or a build log, with every name. Debug text left in early builds names what it prints. |
+| 3 | Cheat codes for the game | A saved code list (CodeBreaker or Xploder format, or a saved gamehacking.org page). Every code is an address with a meaning: named variables. Widescreen codes count too. |
+| 4 | Other regions or revisions | The same code, so names and addresses carry across. |
+| 5 | Existing reverse-engineering notes or a partial decomp | A repo, thread or wiki page: reference names and pitfalls. |
+| 6 | A decomp of the same game on another console | Structures, class names and logic; no bytes match. |
 
 ## Third-party sources
 

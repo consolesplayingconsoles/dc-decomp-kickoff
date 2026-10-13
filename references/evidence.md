@@ -11,46 +11,46 @@ as an issue) to add a game.
 
 ```
 ### <Title> (<region>), <product number> <version>
-- run: <date>, skill <version or commit>, on <OS / cloud workspace>
-- executable: <size> bytes, linked at <base>; SDK by banners: <release, n/m library builds>; SDKs used: <...>
-- functions: <n>; named: <n> (<n> SDK signatures, <n> sibling decomp); build: MATCH (also after setup.sh)
-- text map: <strings, with pointers>; file tables: <files with a table in the executable>; textures: <n decoded>
-- missed functions: <n candidates>
+- Run: <date>, skill <version or commit>, on <OS / cloud workspace>
+- Executable: <size> bytes, linked at <base>; SDK by banners: <release, n/m library builds>; SDKs used: <...>
+- Functions: <n>; named: <n> (<n> SDK signatures, <n> sibling decomp); build: MATCH (also after setup.sh)
+- Text map: <strings, with pointers>; file tables: <files with a table in the executable>; textures: <n decoded>
+- Missed functions: <n candidates>
 - C units: <matched units, functions>
-- what broke or surprised -> what changed in the skill
+- What broke or surprised -> what changed in the skill
 ```
 
 ### Crazy Taxi (Europe)
-- run: 2026-10-05 (v0.4) and later sessions, on macOS (Docker)
-- executable: linked at 0x0C010000 (most Katana games use 0x8C010000: imported at the wrong base,
+- Run: 2026-10-05 (v0.4) and later sessions, on macOS (Docker)
+- Executable: linked at 0x0C010000 (most Katana games use 0x8C010000: imported at the wrong base,
   Ghidra found 1,113 functions instead of 2,389); SDK by banners: R9 closest (19 of 29 known
   modules, against 11 for R10.1); SDKs used: R10.1 (Kochise, and a second copy in another layout:
   same results), later R9
-- functions: 2,389; named: 429 at kick-off (385 SDK R10.1, 30 from a names table since dropped, the
+- Functions: 2,389; named: 429 at kick-off (385 SDK R10.1, 30 from a names table since dropped, the
   rest wrappers); an R9 table named 112 more SDK functions (SDK coverage 42% to 53%); build: MATCH
-- port: Crazy Taxi Classic 6.0 for Android (`libgl2jni.so`, arm64) kept its symbols: 310 functions
+- Port: Crazy Taxi Classic 6.0 for Android (`libgl2jni.so`, arm64) kept its symbols: 310 functions
   and 29 globals paired, 257 new names (functions named 20% to 31%)
-- text map: 2,513 strings, 1,144 with every pointer found; 16 image files flagged (5 languages);
+- Text map: 2,513 strings, 1,144 with every pointer found; 16 image files flagged (5 languages);
   textures: 1 standard texture on the disc (the art is in the game's own formats)
-- missed functions: 644 candidates, about half backed by a pointer
+- Missed functions: 644 candidates, about half backed by a pointer
 - C units: a Naomi-library file (3 functions) and the heap/event list (9 of 12) matching; SHC 5.1
   Release 04 (R1.42J), 08 (R9) and 11 (R10.1) compiled identically on everything compared
-- what broke or surprised -> what changed:
-  - wrong import base -> `linkbase.py`
-  - a unit swallowed a 16-byte leaf the split did not have, build 16 bytes short -> `units.py`
+- What broke or surprised -> what changed:
+  - Wrong import base -> `linkbase.py`
+  - A unit swallowed a 16-byte leaf the split did not have, build 16 bytes short -> `units.py`
     refuses units whose ends are not file boundaries; `missed_funcs.py`
-  - library code (`nl*`) padded with nops to 16/32 bytes -> `-align16` in the unit header
-  - register allocation decided by how C is written -> the idioms tables in `matching-c.md`
-  - constant data had nowhere to go -> `@data` and `D` lines
-  - functions reached only through a function-pointer table were merged into a neighbour ->
+  - Library code (`nl*`) padded with nops to 16/32 bytes -> `-align16` in the unit header
+  - Register allocation decided by how C is written -> the idioms tables in `matching-c.md`
+  - Constant data had nowhere to go -> `@data` and `D` lines
+  - Functions reached only through a function-pointer table were merged into a neighbour ->
     `missed_funcs.py` flags pointers into a body
-  - two signature names on game code were wrong (a state entry, an angle helper) and spread as
+  - Two signature names on game code were wrong (a state entry, an angle helper) and spread as
     port seeds -> `validate.py` lists short signature names with no family nearby
-  - port work: PLT stubs hid callers (`Query.java callers`), relocations pair whole pointer tables,
+  - Port work: PLT stubs hid callers (`Query.java callers`), relocations pair whole pointer tables,
     32-bit Dreamcast constants line up structs (+4 per widened pointer) -> `port-symbols.md`
   - SHC runtime routines (`__modls`, `__bfslu`, `__quick_*_mvn`) never named: typed as data in the
     library map -> `map_names.py`
-  - code placed in the boot block's filler gave a black screen once gameplay started -> the
+  - Code placed in the boot block's filler gave a black screen once gameplay started -> the
     "Changing the game" note in the template
   - 2026-10-08, the four early-SDK tables: +7 unique matches, 4 applied; 3 collided with
     confident names on tiny functions and were left out: `vmsio_init` on a 12-byte helicopter
@@ -58,7 +58,7 @@ as an issue) to add a game.
     `nlObjPutUseViewMatrix`, `ADXERR_EntryErrFunc` on a 10-byte `njSetConstantAttr` -> the
     suspect-name rule in step 4 holds; cheat leads for the USA release carried to the Europe
     build by locating each variable in the code (two different shifts, two leads unconfirmed)
-  - a menu handler reached only from a handler table started right after another function's
+  - A menu handler reached only from a handler table started right after another function's
     mid-body literal pool, which neither rts nor padding seeding caught -> `seed_funcs.py`
     also seeds right after a pool (+47 candidates here, +71 on VF3)
   - 2026-10-08, a mode reading from the port's names was wrong (`MainMode` 1 taken for the arcade
@@ -81,14 +81,14 @@ as an issue) to add a game.
   split had missed (stubs reached only through function tables, gaps after a pool). 14 wrong
   signature names on tiny thunks replaced (`vmsfs_ismount` -> `buIsReady`, `mwRnaSetSfreq` on
   an `ADXRNA_` stub)
-- what broke or surprised -> what changed:
-  - equal spans between two anchors in R8E and 1.42J had every function inside shifted by 2
+- What broke or surprised -> what changed:
+  - Equal spans between two anchors in R8E and 1.42J had every function inside shifted by 2
     bytes (another version of the module): position alone named the wrong offsets -> the
     stretch's masked code is scored (wrong layout 0.82, right one 0.998); a fixed cut lost good
     stretches (many score 0.84-0.97) -> proposals carry their score, disagreements go to the
     best by a 0.05 margin, a stretch under 0.6 proposes nothing
   - `thunk_FUN_` entries counted as names and blocked their neighbours -> treated as unnamed
-  - left: Kamui statics (its dump has no listings) and the libraries no release has
+  - Left: Kamui statics (its dump has no listings) and the libraries no release has
 - NAOMI library (2026-10-12): the game's `nl*` layer (0x0C0739C0-0x0C089F26, 91 KB, between the
   game code and data) is the NAOMI SDK's library; Virtua Tennis carries the same block byte for
   byte (237 functions, 39 KB identical once masked) while the two games share no game code. The
@@ -96,20 +96,20 @@ as an issue) to add a game.
   sample programs (`t.map` + `t.mot` S-records) 73 more: named functions 1,547 to 1,708 of
   2,779. Virtua Tennis: 1,159 to 1,375. Two of the libraries Crazy Taxi's banners listed as in no
   release (`libintr`, `libspr`) are NAOMI libraries
-- what broke or surprised -> what changed:
-  - sample programs came as S-records, not ELF -> `sdk_masked.py` reads `<name>.mot` beside a map
-  - moving the block into `sdk.txt` lowered the SDK percentage while adding names -> compare
+- What broke or surprised -> what changed:
+  - Sample programs came as S-records, not ELF -> `sdk_masked.py` reads `<name>.mot` beside a map
+  - Moving the block into `sdk.txt` lowered the SDK percentage while adding names -> compare
     named totals (`references/sdk-signatures.md`, NAOMI section)
 - Virtua Tennis game naming (2026-10-12, its own repo): three things the run hit ->
   - Ghidra decompiled every float instruction as two branches on FPSCR's PR/SZ bits (unknown at
     entry) -> `Query.java` sets both to 0 at every function entry, in memory: float code reads as
     plain single precision. Set over every address instead, it broke functions that switch SZ with
     `fschg` mid-way: entries only
-  - a 21 KB function (`playerControl`) no pass found: it sat in a 21 KB gap after its neighbour's
+  - A 21 KB function (`playerControl`) no pass found: it sat in a 21 KB gap after its neighbour's
     analysed end, and `missed_funcs.py` skipped gaps over 2 KB as data -> big gaps now count a
     pointed-to address that looks like an entry (after an rts, or a prologue). Crazy Taxi: 437 to
     454 candidates, Virtua Tennis: 694 to 838
-  - library names the tables missed came from the sibling decomp by hand -> `sibling_names.py`;
+  - Library names the tables missed came from the sibling decomp by hand -> `sibling_names.py`;
     on Virtua Tennis's earlier list it proposes 4 names (`nlObjPutLoadTexture`, `nlSetIntrFunction`,
     `nlSetIntrPriority`, `nlSynchFunction`) and lists 10 twin groups (the second copies of the heap
     and event functions, ADX twins)
@@ -122,27 +122,27 @@ as an issue) to add a game.
   query that throws no longer loses the output of the ones before it
 
 ### Boku Doraemon (Japan), T-41802M V1.003
-- run: 2026-10-05 (v0.4) and 2026-10-06 (v0.5, on macOS and in a claude.ai cloud workspace: same
+- Run: 2026-10-05 (v0.4) and 2026-10-06 (v0.5, on macOS and in a claude.ai cloud workspace: same
   names)
-- executable: 978,148 bytes, linked at 0x8C010000; SDK by banners: no release has all 48 library
+- Executable: 978,148 bytes, linked at 0x8C010000; SDK by banners: no release has all 48 library
   builds (newest Shinobi 1.75, Oct 2000), closest R11b (26/48) then R10.1 (23/48); SDKs used:
   R10.1, R11b, 1.55J
-- functions: 3,034; named: 1,164 on 2026-10-08 (1,091 from nine SDK tables merged, 18 from a
+- Functions: 3,034; named: 1,164 on 2026-10-08 (1,091 from nine SDK tables merged, 18 from a
   names table since dropped, the rest wrappers; 1,060 the day before with three tables,
   975 at v0.4 with R10.1 and that table); build: MATCH, also after setup.sh
-- text map: 2,155 strings (80 Shift-JIS, 1,962 with pointers); file tables: STORY.PAC (76 scenes,
+- Text map: 2,155 strings (80 Shift-JIS, 1,962 with pointers); file tables: STORY.PAC (76 scenes,
   sector and length at 0x8C04B704), KAOGRA.PAC, STORYGRA.PAC; textures: 887 decoded, 222 not
-- missed functions: 860 candidates, plus 9 merged functions reached through tables
+- Missed functions: 860 candidates, plus 9 merged functions reached through tables
 - C units: none yet
-- proof beyond the build: rewriting STORY.PAC's table let the story script grow past its slot
+- Proof beyond the build: rewriting STORY.PAC's table let the story script grow past its slot
   (moved into the filler track, 10 KB bigger, a scene at 1.7x its budget); played through in
   Flycast and on GDEMU. The game's Catalan translation went from about 40% to 99% this way.
-- what broke or surprised -> what changed:
-  - the scene table was found by `file_tables.py`; tested blind on 6 other games: no false hits
+- What broke or surprised -> what changed:
+  - The scene table was found by `file_tables.py`; tested blind on 6 other games: no false hits
     and no hits, so a missing row proves nothing
-  - per-release SDK tables named twin stubs (byte-identical code under unrelated names) by which
+  - Per-release SDK tables named twin stubs (byte-identical code under unrelated names) by which
     release has which -> SDK tables are merged into one before applying
-  - the cloud workspace dropped dotfiles and execute bits from the uploaded skill, and could not
+  - The cloud workspace dropped dotfiles and execute bits from the uploaded skill, and could not
     pull Docker images -> `template/gitignore` without the dot, `DC_LOCAL` for every script
   - 2026-10-08, four more SDK tables (R4, R1.42J samples, R1.42J, 2.00J): +122 SDK names on top
     of the 992 (measured in a scratch project): 86 from 2.00J (Sep 2000 libraries, the closest to
@@ -151,50 +151,74 @@ as an issue) to add a game.
     keep paying, each game by the one nearest its build date, and sample programs count
 
 ### Virtua Fighter 3tb (US), MK-51001 V1.002
-- run: 2026-10-07, naming only (for another team's decomp; no repo kicked off), on macOS (Docker)
-- executable: 1,179,648 bytes, linked at 0x0C010000 (16,517 pointers; 11 at 0x8C010000); SDK by
+- Run: 2026-10-07, naming only (for another team's decomp; no repo kicked off), on macOS (Docker)
+- Executable: 1,179,648 bytes, linked at 0x0C010000 (16,517 pointers; 11 at 0x8C010000); SDK by
   banners: none of the game's 6 library builds (Jan 1999, GDFS 0.53 of Aug 1998) is in any
   preserved release: it sits between Katana 0.40 and 1.0B2; SDKs used: 0.40 Release.4, 1.55J, R9,
   R10.1, R11b
-- functions: 1,906 at first (27% of the executable), 2,306 after seeding (32%); the other team's
+- Functions: 1,906 at first (27% of the executable), 2,306 after seeding (32%); the other team's
   own baseline is 2,398 (37%): most of the executable is data
-- named (after seeding): 126 (97 SDK, of which 0.40 added 44; 22 from the Crazy Taxi decomp's
+- Named (after seeding): 126 (97 SDK, of which 0.40 added 44; 22 from the Crazy Taxi decomp's
   NAOMI library names; 3 from a names table since dropped; 4 wrappers); before seeding, 97 of 116 signature names did not
   appear anywhere in that team's repo
-- what broke or surprised -> what changed:
+- What broke or surprised -> what changed:
   - 1998 libraries use another banner form -> `banners.py` / `sdk_scan.py` read both; 0.40 added
-  - a sister decomp (same developer's library) named what no SDK could -> "From another decomp's
+  - A sister decomp (same developer's library) named what no SDK could -> "From another decomp's
     names" in `sdk-signatures.md`
-  - the other team's best SDK matches came from an SDK sample program's ELF of the exact library
+  - The other team's best SDK matches came from an SDK sample program's ELF of the exact library
     version -> "sample programs" note
-  - analysis reached a quarter of the executable -> `seed_funcs.py` + `SeedFuncs.java`, coverage
+  - Analysis reached a quarter of the executable -> `seed_funcs.py` + `SeedFuncs.java`, coverage
     note in step 3
-  - tiny collisions (a video-player function name in a fighting game) -> suspect-name note in step 4
+  - Tiny collisions (a video-player function name in a fighting game) -> suspect-name note in step 4
   - PC (Sega ALLS, 2023) version: a modern host engine around the arcade original, no symbols
-  - more 1998-1999 SDK tables tried after that (R4: 1,035 signatures; R1.42J's 13 prebuilt
+  - More 1998-1999 SDK tables tried after that (R4: 1,035 signatures; R1.42J's 13 prebuilt
     samples with their link maps: 2,141; R1.42J's own libraries, unpacked from its InstallShield 3
     installer with `is3_extract.py`: 2,943): +0, +0 and +1 names. The game's libraries are in no
     preserved release; the tables stay for the next early game
-  - cheat codes (the Dreamcast-Talk CodeBreaker list, same release): 5 RAM variables named
+  - Cheat codes (the Dreamcast-Talk CodeBreaker list, same release): 5 RAM variables named
     (both players' health, the round timer, the win counters), none of them in that team's repo
-  - the 1998 Set 5.05 table from the Tower of Babel dev kit demo (below): +0, 1 ambiguous. VF3tb's
+  - The 1998 Set 5.05 table from the Tower of Babel dev kit demo (below): +0, 1 ambiguous. VF3tb's
     Kamui is not Set 5's either
 
 ### Phantasy Star Online Ver. 2 (US), MK-51193 V1.004
-- run: 2026-10-07, stopped at step 1
-- the boot file (157 KB, Shinobi 1.757) has none of the game's text: a core that loads the game's
+- Run: 2026-10-07, stopped at step 1
+- The boot file (157 KB, Shinobi 1.757) has none of the game's text: a core that loads the game's
   code at runtime (the disc holds 129 `.BIN` and 516 `.REL` files); the big `2_DP.BIN` (2.8 MB,
   SDK R9 exact) is the bundled Dream Passport 2 browser, kicked off by mistake before checking its
   text (kept as its own local repo)
-- ports checked for names: PC (no symbols, no `.pdb`), GameCube Episode I & II (no map; its extra
+- Ports checked for names: PC (no symbols, no `.pdb`), GameCube Episode I & II (no map; its extra
   `.dol`s are a web browser and its debug build), the GameCube decomp (9 game files, C++ classes
   whose names do not appear in the Dreamcast build): none carries names over automatically
-- what changed: step 1 "check it is the game", runtime-loaded code named as a limit; "check for
+- What changed: step 1 "check it is the game", runtime-loaded code named as a limit; "check for
   symbols first" in `port-symbols.md`
+- What it would need: a second phase. The skill expects the whole game in one executable at a fixed
+  address; PSO loads its game code into RAM at runtime from other files on the disc. Asked on the
+  Dreamcast-Talk thread how PSO DC loads its code; nothing from the PC or GameCube builds carried over
+
+### Illbleed (Japan, Crazy Games), T45601M V1.003
+- Run: 2026-10-13, on request from a Dreamcast-Talk member as a Spanish translation target; the
+  Japanese release, as they suggested
+- Executable: 1,391,108 bytes, linked at 0x8C010000; SDK by banners: libraries dated 1999 to Nov
+  2000, no preserved release contains them all; SDK era: KAMUI 1.11, Shinobi 1.76, Ninja
+  01100114, ADX 5.93
+- Functions: 4,245; named: about 2,000, mostly Sega library code; build: rebuilds the executable
+  byte for byte
+- Text map: the executable has almost no text of its own (developer error messages). The game keeps
+  its text in separate message files on the disc, one set per language (found from the file
+  names), so nothing has to be decompiled to reach it; textures: 17,269 dumped to one page for a
+  person to look through
+- The disc also carries the Dreamarena online browser, a separate program: left out of the analysis
+- What it showed: a translation here is doable, with four jobs the skill does not do for you:
+  the message files are not plain text (their format has to be worked out); the font needs room
+  for Spanish characters (ñ á é í ó ú ¿ ¡); Spanish runs longer than English and the game may have
+  fixed buffers (a long-text test, as on Boku Doraemon, shows it); text drawn into images has to be
+  found by eye on the texture page. The same four were solved on Boku Doraemon
+- What changed in the skill: the text map lists every image (`images.tsv`) instead of guessing
+  which ones have text
 
 ### Dev kit dumps (sega-dreamcast-info.com, 11 "Set 5" Katana kits on archive.org)
-- run: 2026-10-08, three kits opened (Tower of Babel 70 MB, Rage Software 0.2 GB, Eurocom 1.4 GB)
-- the disk images are the studios' project folders (NBA Hoopz, Hydro Thunder, UEFA Striker), no
+- Run: 2026-10-08, three kits opened (Tower of Babel 70 MB, Rage Software 0.2 GB, Eurocom 1.4 GB)
+- The disk images are the studios' project folders (NBA Hoopz, Hydro Thunder, UEFA Striker), no
   SDK install on any of them; the recovered-files archives hold the useful pieces. By design: the
   dev box's own disk holds GD-ROM emulation images (`.HCD`/`.VDS`), the SDK lives on the Windows
   host, so no dev box dump will ever carry an SDK release
@@ -214,42 +238,42 @@ as an issue) to add a game.
   builds = Release 8 (Europe), and 964 of those 1,032 names are already in the R8E table; the 68
   left are Eurocom/Midway wrappers (`Bup*`, `dc*`, `SN_*`). Nothing new to hash, two things
   confirmed: `sdk_scan.py` works on an ELF, and a prototype's data files can carry the link map
-- also pulled (`~/cpc/dreamcast/prototypes/`): Crazy Taxi Dec 3 / Dec 13 1999, Jan 14 2000 (the
+- Also pulled (`~/cpc/dreamcast/prototypes/`): Crazy Taxi Dec 3 / Dec 13 1999, Jan 14 2000 (the
   untitled "Dreamcast prototype" item is the same Jan 14 build) and VF3tb Jul 27 1999: only
   `1ST_READ.BIN` on each, no ELF or map; earlier revisions of the executable. A strings diff
   against the release still paid: Dec 3 keeps a debug readout ("Beta Version DEBUG ASCII") whose
   printf labels name the cab driver's struct fields (`ManType`, `Act`, `Mode`, `ParamA`, `ParamB`,
   `Addr`, `Frm`, `isIp`), and pairing functions build to build (pools, pool addresses and `bsr`
   offsets allowed to move) shows what changed late: Jan 14 differs from the release in 58 functions
-- what changed: dev kit dumps added as extra material (link maps, ELFs with debug info, source);
+- What changed: dev kit dumps added as extra material (link maps, ELFs with debug info, source);
   a DWARF-1 reader is worth a script if a second ELF like this turns up
 
 ### SDK headers as types (R10.1 headers on the Boku and Crazy Taxi projects)
-- run: 2026-10-08. 174 headers; what Ghidra's C parser tripped on, all handled by `sdk_headers.py`:
+- Run: 2026-10-08. 174 headers; what Ghidra's C parser tripped on, all handled by `sdk_headers.py`:
   form feeds between declarations (every Kamui API header), `(Void)` / `(VOID)` / `(KMVOID)` as an
   empty parameter list (a typedef of void is "not permitted" as a parameter), Shift-JIS comment
   bytes, `KMAPI` / `IN` / `OUT` / `CRIAPI` attribute macros, a missing `machine.h`, and headers
   that use a type a later header defines (second parse pass). One header still fails and should:
   `sg_sm.h` declares `smVcntInitG(OvLib ovl)` with a type no R10.1 header defines (`OVLIB` exists,
   `OvLib` does not), a bug in the SDK itself
-- parsed: 2,372 function prototypes, 423 structs. Applied: Boku 216 of 1,157 named functions,
+- Parsed: 2,372 function prototypes, 423 structs. Applied: Boku 216 of 1,157 named functions,
   Crazy Taxi 143 of 546; the rest are library internals (`mw*`, `kmi*`, `vmsfs_*`, `mpdrv_*`,
   `sd*` internals) that no public header declares. Pool words pointing at prototyped functions
   typed (Boku 795), every pool word pointing at a function marked constant (7,303)
-- effect: `pPVar2 = (*PTR_pdGetPeripheral)(0x12)` now carries `PDS_PERIPHERAL *`; the decompiler
+- Effect: `pPVar2 = (*PTR_pdGetPeripheral)(0x12)` now carries `PDS_PERIPHERAL *`; the decompiler
   does not fold the constant pool pointer into a direct call, so the call keeps its pointer name
 
 
 ### Equivalent tier (2026-10-12, Crazy Taxi's `src/extrand.c`)
-- the bar for game code changed from byte-matching to behaviour: `scripts/sh4sim.py` (an SH-4
+- The bar for game code changed from byte-matching to behaviour: `scripts/sh4sim.py` (an SH-4
   interpreter, stdlib) runs a function from a case, `scripts/equiv.py` compiles a C file and
   runs each function twice per case (original bytes, compiled C), comparing calls out (target,
   r4-r7, fr4-fr11), memory writes and the return register taken from the C prototype
-- first run: `extRand` (no byte match: its mask lands in r2, the original's in r3, after 22
+- First run: `extRand` (no byte match: its mask lands in r2, the original's in r3, after 22
   wordings) is Equivalent on 6 seeds; `extRandomSeed` and `extRandom` too. Two planted bugs (the
   seed's 0x3039 as 0x3038, the scale 1/32768 as 1/32767) were caught as a different write and a
   different return value
-- what broke -> what changed: the C's call to its own `extRand` went to the C copy's address, and
+- What broke -> what changed: the C's call to its own `extRand` went to the C copy's address, and
   `extRandom` left a pointer in r0 -> calls and writes into the file's own names are mapped back
   to the game's addresses; only the prototype's return register is compared. Docker cannot mount
   macOS's /private/tmp: run the check inside the repo (its `build/equiv/`)
