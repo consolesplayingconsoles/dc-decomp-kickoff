@@ -19,10 +19,23 @@ You get a repo that:
 | 2 | Names | Already names every function it can match by signature (the SDK's own libraries). |
 | 3 | Text map | Has a text map for translators: every string in the executable with every pointer to it, how much text each disc file holds and which code opens it, and a list of every image file. |
 | 4 | Model map | Has a model map: every model it recognises in the disc files (the NAOMI library's format), the table in the executable that holds each, the texture lists, and characters assembled from a known skeleton, in one plain-text file, `model-map/game.dcgs`. It starts with no knowledge of the game, and a `models.txt` per game records what people learn (tables, names): whoever runs the skill can name what they recognise and commit it back. |
-| 5 | Equivalent C | Describes the loop for taking functions from assembly to C, with the build checking each step, and `tools/equiv.py` checking each function's C against the original (calls, memory writes and result, on test cases, in an SH-4 interpreter): **Equivalent C** is what counts as done, so a function can be decompiled and proven without reproducing the compiler's exact output. |
-| 6 | Tools | Has the tools that made that fast: size, instruction and literal-pool checks per function, and `port_equiv.py`, which carries a sibling decomp's verified C for shared library code (the NAOMI library, the C runtime) into a new one, each function checked again on the new game's own bytes. |
-| 7 | Progress | Reports one status the same way for every project: done (equivalent C), matching C, named and documented, game and SDK code apart, so projects compare. |
-| 8 | Git-ignored game code and data | Keeps the game's code and data out of git: what carries its bytes or text is generated from your disc and git-ignored; what only describes it (addresses, sizes, names, the model map) is committed. |
+| 5 | Audio map | Lists every sound it recognises: CRI ADX and AHX streams, in archives or on their own, with channels, sample rate and length, and the DTPK sound banks. The archives carry no names, so a sound is named the same way a model is. |
+| 6 | Equivalent C | Describes the loop for taking functions from assembly to C, with the build checking each step, and `tools/equiv.py` checking each function's C against the original (calls, memory writes and result, on test cases, in an SH-4 interpreter): **Equivalent C** is what counts as done, so a function can be decompiled and proven without reproducing the compiler's exact output. |
+| 7 | Tools | Has the tools that made that fast: size, instruction and literal-pool checks per function, and `port_equiv.py`, which carries a sibling decomp's verified C for shared library code (the NAOMI library, the C runtime) into a new one, each function checked again on the new game's own bytes. |
+| 8 | Progress | Reports one status the same way for every project: done (equivalent C), matching C, named and documented, game and SDK code apart, so projects compare. |
+| 9 | Git-ignored game code and data | Keeps the game's code and data out of git: what carries its bytes or text is generated from your disc and git-ignored; what only describes it (addresses, sizes, names, the model map) is committed. |
+
+## What it reads
+
+| Map | Reads today | Otherwise |
+|---|---|---|
+| Executable | A boot file with the game at a fixed address | A game that loads its code from other files stops at step 1, like PSO |
+| Text | ASCII and Shift-JIS strings, with every pointer to them | Other encodings and compressed text are counted per file |
+| Models | The NAOMI library's flat format | Other formats are not listed |
+| Textures | PowerVR twiddled and VQ, through the executable's own lists | Other formats are listed in `images.tsv` |
+| Audio | CRI ADX and AHX streams | DTPK sound banks are listed as banks |
+
+A game outside these? Open an issue with what you've worked out about its format, or open a pull request. Every game contributes to improving future decomps for everyone.
 
 ## What is in this repository
 
@@ -43,7 +56,7 @@ You get a repo that:
 | Virtua Tennis | USA, MK-51054, V1.001 | [virtua-tennis-decomp](https://github.com/consolesplayingconsoles/virtua-tennis-decomp) | A decomp started beside Crazy Taxi, which shares its library with it, for a combined mod: the same names, Equivalent C and model map | None yet |
 | Boku Doraemon | Japan, T-41802M, V1.003 | [boku-doraemon-decomp](https://github.com/consolesplayingconsoles/boku-doraemon-decomp) | An experiment: a translation target | [Evidence](references/evidence.md#boku-doraemon-japan-t-41802m-v1003) |
 | Illbleed | Japan, T45601M, V1.003 | [illbleed-decomp](https://github.com/consolesplayingconsoles/illbleed-decomp) | An experiment: a second translation target, also doable | [Evidence](references/evidence.md#illbleed-japan-crazy-games-t45601m-v1003) |
-| Virtua Fighter 3 | US, MK-51001, V1.002 | [vf3-decomp](https://github.com/celsowm/vf3-decomp) (another team's) | An experiment: names for their decomp, no repo of ours ([the merged PR](https://github.com/celsowm/vf3-decomp/pull/1)) | [Evidence](references/evidence.md#virtua-fighter-3tb-us-mk-51001-v1002) |
+| Virtua Fighter 3 | US, MK-51001, V1.002 | [vf3-decomp](https://github.com/celsowm/vf3-decomp) (another team's) | An experiment: names for their decomp ([the merged PR](https://github.com/celsowm/vf3-decomp/pull/1)) | [Evidence](references/evidence.md#virtua-fighter-3tb-us-mk-51001-v1002) |
 | Phantasy Star Online Ver. 2 | US, MK-51193, V1.004 | None | **Not compatible**: the boot file has none of the game's code, which loads from over 600 files at runtime, so the kickoff stops at step 1 | [Evidence](references/evidence.md#phantasy-star-online-ver-2-us-mk-51193-v1004) |
 
 ## Evidence and method
