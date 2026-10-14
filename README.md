@@ -43,10 +43,10 @@ Found a game outside these? Open an issue with what you've worked out about its 
 |---|---|
 | [`SKILL.md`](SKILL.md) | The procedure Claude follows. |
 | [`scripts/`](scripts/) | The tools it runs and copies into each repo's `tools/`: disc reader, splitter, text and model mappers, SH-4 simulator, the Equivalent check and its helpers. |
-| [`template/`](template/) | What each new repo starts from: `build.sh`, `setup.sh`, `disc.sh`, `textures.sh`, `models.txt`, `README.md`, `AGENTS.md`, `gitignore`. |
+| [`template/`](template/) | What each new repo starts from: `build.sh`, `setup.sh`, `disc.sh`, `textures.sh`, `models.txt`, `README.md`, `AGENTS.md`, `KICKOFF`, `gitignore`. |
 | [`references/`](references/) | Evidence from every game it has run on, SDK notes, the Equivalent pipeline, the memory map. |
 | [`zip.sh`](zip.sh), [`dist/`](dist/) | Builds the zip you upload to claude.ai. |
-| [`VERSION`](VERSION), [`LICENSE`](LICENSE) | The kickoff version a repo records, and the licence. |
+| [`VERSION`](VERSION), [`LICENSE`](LICENSE) | The skill's version (each repo records the one it is at in `KICKOFF`; [upgrading](references/upgrade.md) brings it to a newer one), and the licence. |
 
 ## Worked examples
 

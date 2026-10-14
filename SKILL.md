@@ -101,6 +101,13 @@ text (assembly, hash tables, the text map) to the new repo: its `.gitignore` alr
 describes them (addresses, offsets, sizes, names: `functions.txt`, `globals.txt`, `models.txt`, `model-map/`) is
 committed: the repo shares as much as is safe.
 
+## New decomp or upgrade (ask first)
+
+Before anything else, ask the user one question: start a new decomp, or upgrade one this skill
+started? For an upgrade, ask for the repo's folder, then follow `references/upgrade.md` (it asks for
+the target version: the latest tag recommended, `main` offered as the dev version) and skip the
+procedure below.
+
 ## Procedure
 
 0. **Name the conversation after the game.** As soon as IP.BIN gives the title (step 1), rename
@@ -213,7 +220,7 @@ committed: the repo shares as much as is safe.
    data words, exported labels, `objects.txt` in link order.
 6. **Make the repo publishable and build it.** A pushed repo holds no game bytes, so it must be
    able to regenerate them from each user's own disc. Into the repo:
-   - copy `template/` (`build.sh`, `setup.sh`, `disc.sh`, `textures.sh`, `models.txt`, `README.md`, `AGENTS.md`),
+   - copy `template/` (`build.sh`, `setup.sh`, `disc.sh`, `textures.sh`, `models.txt`, `README.md`, `AGENTS.md`, `KICKOFF`),
      and `template/gitignore` as **`.gitignore`** (shipped without the dot: some installs drop
      dotfiles);
    - copy into `tools/`: `scripts/gdi_read.py`, `split_asm.py`, `text_map.py`, `file_tables.py`,
@@ -227,10 +234,13 @@ committed: the repo shares as much as is safe.
    - fill the placeholders: in `setup.sh` and `disc.sh` `@BOOT@` (boot file from IP.BIN) and `@SHA1@` (of that
      file); in `README.md` `@TITLE@`, `@RELEASE@` (IP.BIN: title, product number, version, date,
      region), `@BOOT@`, `@SIZE@`, `@SHA1@`, `@BASE@`, `@SDK@` (main banners), `@FUNCS@`, `@NAMED@`,
-     `@NAMED_SDK@`, `@SKILL_VERSION@` (the content of this skill's `VERSION` file, e.g.
-     `v0.5`: the README names the kickoff version the repo came from), and `@PROGRESS@` (after the first `MATCH`: the
-     output of `python3 tools/progress.py` in a ``` fence). No `@...@` may remain in those three files
-     (`grep -n '@[A-Z_]*@' README.md setup.sh disc.sh`; `tools/` has its own `@N@` tokens, ignore).
+     `@NAMED_SDK@`, `@SKILL_VERSION@` (the skill version the repo came from: `v0.5` for a tagged release,
+     `v0.5+1a2b3c4` for a dev version, the commit `1a2b3c4` after tag `v0.5`; in a git checkout it is
+     `git describe --tags --exact-match` if that succeeds, otherwise the last tag + `+` + the short commit;
+     without git, the content of this skill's `VERSION` file, which `zip.sh` writes the same way; also in
+     `KICKOFF`, the version an upgrade starts from: `references/upgrade.md`), and `@PROGRESS@` (after the first `MATCH`: the
+     output of `python3 tools/progress.py` in a ``` fence). No `@...@` may remain in those files
+     (`grep -n '@[A-Z_]*@' README.md setup.sh disc.sh KICKOFF`; `tools/` has its own `@N@` tokens, ignore).
      `@NAMED@` = functions whose name is not `FUN_...` (what `split_asm.py` prints). It can exceed
      `@NAMED_SDK@`: small wrappers (thunks) inherit the name of what they call.
    - **no licence**: the repo gets no `LICENSE` file and no licence section. Its contents derive
@@ -352,6 +362,7 @@ committed: the repo shares as much as is safe.
 | `references/sdk-signatures.md` | naming library code from the SDK's libraries |
 | `references/evidence.md` | each game the skill was run on: numbers, what broke, what changed |
 | `references/memory-map.md` | Dreamcast addresses worth labelling on sight |
+| `references/upgrade.md` | bringing a repo this skill started to a newer skill version: versions, `KICKOFF`, the steps |
 | `references/matching-c.md` | getting a source file to match: units, flags, fill, idioms, compare loop |
 | `references/port-symbols.md` | naming from a later port that kept its symbols (Android, iOS, PC builds) |
 | `scripts/sdk_sigs.sh` | signature table for every exported function in an SDK's libraries |
