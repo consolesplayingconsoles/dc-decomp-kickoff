@@ -9,5 +9,5 @@
 #   rig / bone / assemble                           a skeleton posed from a motion record: whole characters
 #   nodes / nodelayout                              node trees in the executable (per character), placed in their bind pose
 #   textures <model file> <texture file> <texture base> <table addr>   a texture list: number -> place in the file
-#   name <file> <offset> <text>   /   table <addr> <group> <label>   /   sound <file> <entry> <text>   names (the viewer writes these)
+#   name <file> <offset> <text>   /   table <addr> <group> <label>   /   sound <file> <entry> <text>   /   image <file> <offset> <text>   names (the viewer writes these)
 # Nothing is needed here to start: with no rules the map still lists every model, grouped by the table that holds it.

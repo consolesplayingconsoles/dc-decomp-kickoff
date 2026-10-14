@@ -105,7 +105,7 @@ committed: the repo shares as much as is safe.
 
 Before anything else, ask the user one question: start a new decomp, or upgrade one this skill
 started? For an upgrade, ask for the repo's folder, then follow `references/upgrade.md` (it asks for
-the target version: the latest tag recommended, `main` offered as the dev version) and skip the
+the target version: the latest tag recommended, `main` offered as the dev version, never recommended) and skip the
 procedure below.
 
 ## Procedure
@@ -224,7 +224,7 @@ procedure below.
      and `template/gitignore` as **`.gitignore`** (shipped without the dot: some installs drop
      dotfiles);
    - copy into `tools/`: `scripts/gdi_read.py`, `split_asm.py`, `text_map.py`, `file_tables.py`,
-     `textures.py`, `model_map.py`, `disc_patch.py`, `apply_bin.py`, `docker_check.sh`, `units.py`, `fill.py`,
+     `textures.py`, `model_map.py`, `find_extras.py`, `disc_patch.py`, `apply_bin.py`, `docker_check.sh`, `units.py`, `fill.py`,
      `progress.py`, `missed_funcs.py`, `shdis.py`, `live.py`, `sh4sim.py`, `equiv.py`, `checksizes.py`, `classify.py`, `poollist.py`, `port_equiv.py` with `sdk_masked.py` (which it imports), `sdk_source.py`, the `tools-image/` folder and `scripts/hooks/` as `tools/hooks/` (so a cloned repo builds its own
      tools image, nothing pulled from anyone else);
    - write `sdk.txt`: `scripts/sdk_txt.py <repo>/functions.txt <base> <1ST_READ.BIN>
@@ -301,7 +301,7 @@ procedure below.
      address each file is loaded at (found by matching the executable's pointers to the models' starts, no
      profile needed), every pointer to a model followed back to its table, and the table named by a rule in
      `models.txt` (curated: characters, cars, a skeleton, a texture list), a data symbol, or the functions
-     that use it. One file, `model-map/game.dcgs`: sections `[models]`, `[assemblies]`, `[rigs]`, `[bones]`, `[audio]`, `[textures]`, tab-separated; its first line `# dcgs <version>` is the skill version (`KICKOFF`).
+     that use it. One file, `model-map/game.dcgs`: sections `[models]`, `[assemblies]`, `[rigs]`, `[bones]`, `[motions]`, `[images]`, `[audio]`, `[textures]`, tab-separated; its first line `# dcgs <version>` is the skill version (`KICKOFF`).
      **It is committed, unlike `text-map/`**: only the game's text and bytes are kept out of git, and this file holds
      addresses, offsets, sizes, our names and one standing pose's matrices, no bytes and no text.
      `models.txt` starts as only its syntax comments; fill it from the notes as tables are understood. A game
@@ -391,6 +391,7 @@ procedure below.
 | `scripts/sdk_masked.py` | after the tables: name more SDK functions by masked instructions, library layout and source listings (statics), link order as the check (stdlib) |
 | `scripts/missed_funcs.py` | list code the analysis did not make into functions |
 | `scripts/sh4sim.py` | in the repo: an SH-4 interpreter (integer, single-precision FPU, delay slots) that runs one function from a case (registers, memory, a RAM dump, mocked call returns) and records its calls, writes and result (stdlib) |
+| `scripts/find_extras.py` | in the repo: the `extra` rules of a character draw function, found by running its branches per character (draws behind state the run cannot know are listed as gated, not as rules) |
 | `scripts/equiv.py` | in the repo: compiles a C file and checks each function against the original on its test cases (`tests/<file>/<function>.json`); the Equivalent tier, written to `tests/equivalent.txt` |
 | `scripts/sdk_source.py` | in the repo: compiles the library sources the user supplied with the SDK's shc; the functions whose bytes they reproduce go to `sdk-source/` (exact C, git-ignored) and `sdk-verified.txt` (names, counted by `progress.py`) |
 | `scripts/port_equiv.py` | in the repo: carries Equivalent C for shared library code from a sibling decomp into this one (masked-code match, pool-word mapping, ported cases), every function re-checked by this repo's `equiv.py` |

@@ -75,7 +75,7 @@ that stays local). Regenerate it with `python3 tools/model_map.py 1ST_READ.BIN "
   layout is understood), `rig` / `bone` / `assemble` (a skeleton posed from a motion record), `nodes` / `nodelayout` (linked node structs in
   the executable, each character placed in its bind pose), `textures` (pairs a
   model file with a texture file of another name; matching names are found by themselves), `note`, and the two a
-  person adds by naming things: `name <file> <offset> <text>` (one model), `sound <file> <entry> <text>` (one sound) and `table <address> <group> <label>`
+  person adds by naming things: `name <file> <offset> <text>` (one model), `sound <file> <entry> <text>` (one sound), `image <file> <offset> <text>` (one picture) and `table <address> <group> <label>`
   (a whole table). The syntax is in the header of `tools/model_map.py`.
 - **Naming convention.** A row shows the name first and the id beside it, and only the id when there is no name.
   Names are tidied the same way everywhere: words separated by single spaces (underscores and camelCase become
