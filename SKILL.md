@@ -301,7 +301,7 @@ procedure below.
      address each file is loaded at (found by matching the executable's pointers to the models' starts, no
      profile needed), every pointer to a model followed back to its table, and the table named by a rule in
      `models.txt` (curated: characters, cars, a skeleton, a texture list), a data symbol, or the functions
-     that use it. One file, `model-map/game.dcgs`: sections `[models]`, `[assemblies]`, `[audio]`, `[textures]`, tab-separated.
+     that use it. One file, `model-map/game.dcgs`: sections `[models]`, `[assemblies]`, `[rigs]`, `[bones]`, `[audio]`, `[textures]`, tab-separated; its first line `# dcgs <version>` is the skill version (`KICKOFF`).
      **It is committed, unlike `text-map/`**: only the game's text and bytes are kept out of git, and this file holds
      addresses, offsets, sizes, our names and one standing pose's matrices, no bytes and no text.
      `models.txt` starts as only its syntax comments; fill it from the notes as tables are understood. A game
