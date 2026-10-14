@@ -119,7 +119,10 @@ committed: the repo shares as much as is safe.
    (`references/sdk-releases.md` lists every release with the file names it has been seen under, as
    search terms for the user)
    ranks the publicly preserved Katana releases by how many of the game's library builds they
-   contain. A full match: ask the user for that release. None: say the game was built with a
+   contain. A full match: ask the user for that release, and for its library sources if they have them (the Shinobi and
+   Kamui dumps, or those of another release). Say that not all games have a later port or a prototype, but where they do,
+   providing them is encouraged, as they can be the strongest source of information available. Say that skipping the
+   optional steps can result in a weaker kickoff output. None: say the game was built with a
    release not in the list, and to pick a close one; suggest the one or two the script names. If
    the user already has several SDKs, they can instead point at one folder holding all of them
    (images, zips or folders) and run `sdk_scan.py <that folder> <1ST_READ.BIN>`. Older releases
@@ -215,11 +218,11 @@ committed: the repo shares as much as is safe.
      dotfiles);
    - copy into `tools/`: `scripts/gdi_read.py`, `split_asm.py`, `text_map.py`, `file_tables.py`,
      `textures.py`, `model_map.py`, `disc_patch.py`, `apply_bin.py`, `docker_check.sh`, `units.py`, `fill.py`,
-     `progress.py`, `missed_funcs.py`, `shdis.py`, `live.py`, `sh4sim.py`, `equiv.py`, `checksizes.py`, `classify.py`, `poollist.py`, `port_equiv.py` with `sdk_masked.py` (which it imports), the `tools-image/` folder and `scripts/hooks/` as `tools/hooks/` (so a cloned repo builds its own
+     `progress.py`, `missed_funcs.py`, `shdis.py`, `live.py`, `sh4sim.py`, `equiv.py`, `checksizes.py`, `classify.py`, `poollist.py`, `port_equiv.py` with `sdk_masked.py` (which it imports), `sdk_source.py`, the `tools-image/` folder and `scripts/hooks/` as `tools/hooks/` (so a cloned repo builds its own
      tools image, nothing pulled from anyone else);
    - write `sdk.txt`: `scripts/sdk_txt.py <repo>/functions.txt <base> <1ST_READ.BIN>
      <SDK ApplySigs output>`. It marks the boot block
-     and the SDK library block, so `tools/progress.py` reports game code and SDK apart;
+     and the SDK library block;
    - write the base to `BASE` (hex, no `0x`); `split_asm.py` already wrote `functions.txt`;
    - fill the placeholders: in `setup.sh` and `disc.sh` `@BOOT@` (boot file from IP.BIN) and `@SHA1@` (of that
      file); in `README.md` `@TITLE@`, `@RELEASE@` (IP.BIN: title, product number, version, date,
@@ -245,6 +248,10 @@ committed: the repo shares as much as is safe.
    <repo>/1ST_READ.BIN <table folder>... [--listings <folder>] --apply`, then `split_asm.py`
    and `bash build.sh` (`MATCH`). It names library code the hashes missed (internal library
    builds, twin stubs, statics, starts the split missed; `references/sdk-signatures.md`).
+   With library sources from the user (step 2): `python3 tools/sdk_source.py <source folder>...` in the repo. It
+   compiles them with the SDK's own shc and keeps every function whose bytes they reproduce: the exact C goes to
+   `sdk-source/` (git-ignored), the names to `sdk-verified.txt`, and `progress.py` counts them in. Tell the user
+   what it wrote, and that `sdk-source/` is the SDK's own code: adding it to the repo is their choice.
    Report its `suspect` lines as such. Count `@NAMED@` and `@NAMED_SDK@` after it.
    Then `python3 tools/missed_funcs.py 1ST_READ.BIN <base> functions.txt`: code the analysis did
    not make into functions (callbacks reached only through tables, getters only through literal
@@ -368,15 +375,16 @@ committed: the repo shares as much as is safe.
 | `template/build.sh` | assemble, compile C units, link (`start P(<base>)`), `elf2bin`, compare with the original |
 | `scripts/units.py` | in the repo: the link order with C units in place of the asm files they replace |
 | `scripts/fill.py` | in the repo: lay a C unit out like the original (nop alignment, 0xEE fill, exact size) |
-| `scripts/progress.py` | in the repo: done (equivalent C), matching C, named functions and globals, documented, game and SDK apart. "done: equivalent C" stays the first row of the first section: Pluto finds the main metric by that label |
+| `scripts/progress.py` | in the repo: done (equivalent C), matching C, named functions and globals, documented. "done: equivalent C" stays the first row of the first section: Pluto finds the main metric by that label |
 | `scripts/sdk_txt.py` | mark the SDK's code (boot block, library block, single matches) as `sdk.txt` |
 | `scripts/sdk_masked.py` | after the tables: name more SDK functions by masked instructions, library layout and source listings (statics), link order as the check (stdlib) |
 | `scripts/missed_funcs.py` | list code the analysis did not make into functions |
 | `scripts/sh4sim.py` | in the repo: an SH-4 interpreter (integer, single-precision FPU, delay slots) that runs one function from a case (registers, memory, a RAM dump, mocked call returns) and records its calls, writes and result (stdlib) |
 | `scripts/equiv.py` | in the repo: compiles a C file and checks each function against the original on its test cases (`tests/<file>/<function>.json`); the Equivalent tier, written to `tests/equivalent.txt` |
+| `scripts/sdk_source.py` | in the repo: compiles the library sources the user supplied with the SDK's shc; the functions whose bytes they reproduce go to `sdk-source/` (exact C, git-ignored) and `sdk-verified.txt` (names, counted by `progress.py`) |
 | `scripts/port_equiv.py` | in the repo: carries Equivalent C for shared library code from a sibling decomp into this one (masked-code match, pool-word mapping, ported cases), every function re-checked by this repo's `equiv.py` |
 | `scripts/checksizes.py` | in the repo: functions whose size in `functions.txt` looks wrong (a literal pool mid-body ended the listing early), with the size that covers the code after it |
-| `scripts/classify.py` | in the repo: which functions can have C at all (FPU banks, `fsrra`, control registers: blocked) |
+| `scripts/classify.py` | in the repo: which functions can have C at all (FPU banks, `fsrra`, control registers other than SR: blocked) |
 | `scripts/poollist.py` | in the repo: a function's literal pool as functions, RAM addresses (named, or MISSING) and numbers |
 | `references/equivalent-pipeline.md` | writing Equivalent C at scale: the three checks, what the check compares, the lock for parallel workers, the worker brief |
 | `scripts/sibling_names.py` | names from a sibling decomp (same team, shared library): exact masked matches unique both ways, twins listed |

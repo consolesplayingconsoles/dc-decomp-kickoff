@@ -78,8 +78,6 @@ the same studio share byte for byte while their game code shares nothing.
   to the last code before data, or the passes (which work inside `sdk.txt`) never look at it.
   Find the ends by the matches, not by guessing: the first function the NAOMI tables name, and
   the end of the last code before data.
-- Counting: the block moves from game code to SDK, so both percentages move; compare the named
-  totals, not the percentages.
 
 ## When the libraries do not match: sample programs
 

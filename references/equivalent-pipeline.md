@@ -12,8 +12,9 @@ this is what makes it fast.
    (`functions.txt`), re-run `split_asm.py` and `build.sh` (still `MATCH`). Read the function first:
    `python3 tools/shdis.py --func <name>`.
 2. **It can be C.** `python3 tools/classify.py [name ...]`: the FPU register banks (`frchg`, `fschg`,
-   `ftrv`), `fsrra`/`fsca` (not in the simulator), control registers, cache and trap instructions have
-   no C. `fipr` and `fmac` are fine with values that are exact in float (they round once). Classify
+   `ftrv`), `fsrra`/`fsca` (not in the simulator), control registers other than SR, cache and trap instructions
+   have no C. Moving SR to or from a register is fine: SHC's `get_imask`/`set_imask` (`_builtin_get_imask`,
+   `_builtin_set_imask`) write it in C. `fipr` and `fmac` are fine with values that are exact in float (they round once). Classify
    first; do not spend a try on a function that cannot be done. Run `checksizes.py` first: the
    classifier reads only the listed size.
 3. **Every name it uses exists.** `python3 tools/poollist.py <name>`: each literal-pool value, as a
@@ -43,6 +44,9 @@ a local's address is the compiler's frame layout. The compiler's own helpers (`_
 anything named `_...` in `functions.txt`) run for real in both versions, so a division the original does
 by helper and the C inlines agree, and a struct copy is compared by what it wrote. Memory writes by their
 final value per address; the return register by the prototype; `-q` prints only what is not Equivalent.
+The final SR is compared too, without its M, Q, S and T flags (a condition flag left over is not behaviour); a
+case may set the starting SR with `"sr"`, so a function that saves and restores the interrupt mask is checked
+with several masks.
 
 ## Things the second pilot (100 more functions in a second game) taught
 - 16-bit pool constants (`mov.w @(...),Rn  ; =4304 (0x10d0)`) are field offsets or counts: read the decimal

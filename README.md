@@ -8,8 +8,8 @@ its C **behaves like the original** (proven in an SH-4 simulator), with byte-ide
 
 It came out of real work: [Crazy Taxi](https://github.com/consolesplayingconsoles/crazy-taxi-decomp) and
 [Virtua Tennis](https://github.com/consolesplayingconsoles/virtua-tennis-decomp) are used for modding, and
-Boku Doraemon and Illbleed were run as translation targets. Whatever carries a game's own code or data stays
-git-ignored on your machine and is generated from your disc, so the repo is yours to publish.
+[Boku Doraemon](https://github.com/consolesplayingconsoles/boku-doraemon-decomp) and [Illbleed](https://github.com/consolesplayingconsoles/illbleed-decomp) were run as test translation targets. Whatever carries a game's own code or data stays
+git-ignored on your machine and is generated from the assets you provide, so the repo is yours to publish.
 
 You get a repo that:
 
@@ -22,8 +22,8 @@ You get a repo that:
 | 5 | Audio map | Lists every sound it recognises: CRI ADX and AHX streams, in archives or on their own, with channels, sample rate and length, and the DTPK sound banks. The archives carry no names, so a sound is named the same way a model is. |
 | 6 | Equivalent C | Describes the loop for taking functions from assembly to C, with the build checking each step, and `tools/equiv.py` checking each function's C against the original (calls, memory writes and result, on test cases, in an SH-4 interpreter): **Equivalent C** is what counts as done, so a function can be decompiled and proven without reproducing the compiler's exact output. |
 | 7 | Tools | Has the tools that made that fast: size, instruction and literal-pool checks per function, and `port_equiv.py`, which carries a sibling decomp's verified C for shared library code (the NAOMI library, the C runtime) into a new one, each function checked again on the new game's own bytes. |
-| 8 | Progress | Reports one status the same way for every project: done (equivalent C), matching C, named and documented, game and SDK code apart, so projects compare. |
-| 9 | Git-ignored game code and data | Keeps the game's code and data out of git: what carries its bytes or text is generated from your disc and git-ignored; what only describes it (addresses, sizes, names, the model map) is committed. |
+| 8 | Progress | Reports one status the same way for every project: done (equivalent C), matching C, named and documented, so projects compare. |
+| 9 | Git-ignored game code and data | Keeps the game's code and data out of git: what carries its bytes or text is generated from your disc, or from your SDK's sources, and git-ignored; what only describes it (addresses, sizes, names, the model map) is committed. |
 
 ## What it reads
 
@@ -35,7 +35,7 @@ You get a repo that:
 | Textures | PowerVR twiddled and VQ, through the executable's own lists | Other formats are listed in `images.tsv` |
 | Audio | CRI ADX and AHX streams | DTPK sound banks are listed as banks |
 
-A game outside these? Open an issue with what you've worked out about its format, or open a pull request. Every game contributes to improving future decomps for everyone.
+Found a game outside these? Open an issue with what you've worked out about its format, or open a pull request. Every game contributes to improving future decomps for everyone.
 
 ## What is in this repository
 
@@ -53,7 +53,7 @@ A game outside these? Open an issue with what you've worked out about its format
 | Game | Release | Repo | What it is | Evidence |
 |---|---|---|---|---|
 | Crazy Taxi | Europe, MK-51035, V1.000 | [crazy-taxi-decomp](https://github.com/consolesplayingconsoles/crazy-taxi-decomp) | A decomp built for modding: named functions and globals, functions proven as Equivalent C, and a model map | [Evidence](references/evidence.md#crazy-taxi-europe) |
-| Virtua Tennis | USA, MK-51054, V1.001 | [virtua-tennis-decomp](https://github.com/consolesplayingconsoles/virtua-tennis-decomp) | A decomp started beside Crazy Taxi, which shares its library with it, for a combined mod: the same names, Equivalent C and model map | None yet |
+| Virtua Tennis | USA, MK-51054, V1.001 | [virtua-tennis-decomp](https://github.com/consolesplayingconsoles/virtua-tennis-decomp) | A decomp started beside Crazy Taxi, which shares its library with it, for a combined mod: the same names, Equivalent C and model map | [Evidence](references/evidence.md#virtua-tennis-usa-mk-51054-v1001) |
 | Boku Doraemon | Japan, T-41802M, V1.003 | [boku-doraemon-decomp](https://github.com/consolesplayingconsoles/boku-doraemon-decomp) | An experiment: a translation target | [Evidence](references/evidence.md#boku-doraemon-japan-t-41802m-v1003) |
 | Illbleed | Japan, T45601M, V1.003 | [illbleed-decomp](https://github.com/consolesplayingconsoles/illbleed-decomp) | An experiment: a second translation target, also doable | [Evidence](references/evidence.md#illbleed-japan-crazy-games-t45601m-v1003) |
 | Virtua Fighter 3 | US, MK-51001, V1.002 | [vf3-decomp](https://github.com/celsowm/vf3-decomp) (another team's) | An experiment: names for their decomp ([the merged PR](https://github.com/celsowm/vf3-decomp/pull/1)) | [Evidence](references/evidence.md#virtua-fighter-3tb-us-mk-51001-v1002) |
@@ -90,9 +90,11 @@ Install the whole folder, not [`SKILL.md`](SKILL.md) alone.
 
 If only [`SKILL.md`](SKILL.md) got installed, the skill fetches its own tools from this repo before starting.
 
-**What you provide:** your game disc (`.gdi` or `.chd`) and a Katana SDK. The skill reads your
-disc and tells you which SDK release it was built with, so you know which one to get. You also
-need Docker and Python 3 wherever it runs (Claude's workspace has them).
+**What you provide:** the game disc (`.gdi` or `.chd`) and a Katana SDK. The skill reads the disc and reports which SDK
+release it was built with; that release's library sources, or those of another release, are accepted as well. Not all
+games have a later port or a prototype, but where they do, providing them is encouraged, as they can be the strongest
+source of information available. Skipping the optional steps can result in a weaker kickoff output. Docker and Python 3
+are required wherever it runs (Claude's workspace has them).
 
 **Optional, and worth having:** each of these gives the decomp a stronger starting point. The skill asks for them
 one by one (a path, a link, or "no"), and never fetches any of it by itself.

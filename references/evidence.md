@@ -98,8 +98,6 @@ as an issue) to add a game.
   release (`libintr`, `libspr`) are NAOMI libraries
 - What broke or surprised -> what changed:
   - Sample programs came as S-records, not ELF -> `sdk_masked.py` reads `<name>.mot` beside a map
-  - Moving the block into `sdk.txt` lowered the SDK percentage while adding names -> compare
-    named totals (`references/sdk-signatures.md`, NAOMI section)
 - Virtua Tennis game naming (2026-10-12, its own repo): three things the run hit ->
   - Ghidra decompiled every float instruction as two branches on FPSCR's PR/SZ bits (unknown at
     entry) -> `Query.java` sets both to 0 at every function entry, in memory: float code reads as
@@ -120,6 +118,33 @@ as an issue) to add a game.
   has no map. A 16 MB dump takes about 90 s paused. `Query.java`: a Ghidra project can lack
   starts `functions.txt` has (2,389 vs 2,824 here): `dec` there now says to use `mkdec`, and a
   query that throws no longer loses the output of the ones before it
+
+### Virtua Tennis (USA), MK-51054 V1.001
+- Run: 2026-10-12 (v0.5) and later sessions, on macOS (Docker), started beside Crazy Taxi for a combined mod
+- Executable: 2,084,052 bytes, linked at 0x8C010000; SDK by banners: R10.1 (25 of 30 library builds match R10.1/R11b;
+  ADXT 5.66 is R9 only)
+- Functions: 3,232 at kick-off; named: 1,250 at kick-off (SDK tables, the masked SDK pass with the Shinobi listings, the
+  NAOMI library block, Crazy Taxi's shared names); the NAOMI sample programs named 126 more; build: MATCH
+- Shared code: the NAOMI library and C runtime are byte for byte the same as in Crazy Taxi: 31 Equivalent functions
+  carried over with `port_equiv.py`, each re-checked on this game's bytes
+- SDK source (2026-10-14): 280 functions reproduced by the Shinobi and Kamui source dumps. Unlike Crazy Taxi, Kamui
+  partly matches here (34 functions), so the two games were linked from different Kamui revisions
+- Model map: 1,644 textures through the executable's lists; the HUMAN, SSELE and WTC_MAIN texture lists not found.
+  Audio map: 1,546 sounds, about 83 minutes
+- What broke or surprised -> what changed:
+  - Two identical copies of the overlay lock functions; the signature name landed on the copy the overlay code does not
+    call -> each copy gets its own name (`ovLockCs_8c200114`)
+  - `gdFsCreateHnG` has its literal pool in the middle: `functions.txt` listed 92 of its 112 bytes in both games, and the
+    port missed it (the pool and filler differ between the games) -> sizes corrected, ported by hand
+  - `pdExecPeripheralServer` was listed with a data table after its 12 bytes of code, which `classify.py` read as
+    control-register instructions -> size corrected, a `D` line for the table
+  - The committed list counted 29 functions whose C an earlier port had overwritten -> ported again; `port_equiv.py`
+    keeps what a port file already holds, and drops the C and cases of a function that does not pass
+  - Three library functions are different builds in the two games: `nlCosf` and `nlCosh` (each constant one bit
+    apart) and `nlRenderTextureInit` (this game also sets a ready flag) -> each game's own build in its own file
+    (`vtsdk_g.c` here, `sdk_f.c` in Crazy Taxi), outside the port files
+  - Callees the port cannot map (reached by a branch, not a pool word) -> named the same in both games
+    (`nlFogTableSet`, `nlSpriteLoadTextureOnce_Sub`)
 
 ### Boku Doraemon (Japan), T-41802M V1.003
 - Run: 2026-10-05 (v0.4) and 2026-10-06 (v0.5, on macOS and in a claude.ai cloud workspace: same

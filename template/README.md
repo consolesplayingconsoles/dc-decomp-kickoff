@@ -41,20 +41,22 @@ Docker, `DC_LOCAL=1` runs the tools through `wibo` instead.
 
 | path | what |
 |---|---|
-| `functions.txt` | every function: address, size, name (`FUN_<addr>` = not named yet) |
+| `setup.sh` | Extract and verify your executable, generate `asm/`, `text-map/` and `model-map/` |
+| `build.sh` | Assemble, link, convert, compare with your original |
+| `disc.sh` | Build a playable disc image of your version (files you put under `disc/`) |
+| `textures.sh` | Optional: every standard texture on one page, to look through |
+| `BASE` | Link address |
+| `functions.txt` | Every function: address, size, name (`FUN_<addr>` = not named yet) |
+| `symbols.txt` | Addresses the C units use that no file defines yet (RAM, data inside asm) |
+| `sdk.txt` | The bundled Sega SDK's code (for `tools/progress.py`) |
+| `models.txt` | What is known about the game's 3D models: tables whose layout is understood (read by `tools/model_map.py`) |
 | `src/` | C: Equivalent files (checked by `tools/equiv.py`, not built) and matching C units (built, see below) |
-| `tests/` | test cases per function (`tests/<file>/<function>.json`) and `tests/equivalent.txt`, the functions found Equivalent |
-| `docs/equivalent.md` | the evidence for each Equivalent function (written by `tools/equiv.py`) |
-| `models.txt` | what is known about the game's 3D models: tables whose layout is understood (read by `tools/model_map.py`) |
-| `symbols.txt` | addresses the C units use that no file defines yet (RAM, data inside asm) |
-| `sdk.txt` | which code is Sega's SDK, not the game (for `tools/progress.py`) |
-| `BASE` | link address |
-| `setup.sh` | extract + verify your executable, generate `asm/`, `text-map/` and `model-map/` |
-| `build.sh` | assemble, link, convert, compare with your original |
-| `disc.sh` | build a playable disc image of your version (files you put under `disc/`) |
-| `textures.sh` | optional: every standard texture on one page, to look through |
-| `tools/` | disc reader, splitter, text mapper, model mapper, C-unit layout, progress report, missed-function finder, SH-4 disassembler and simulator, the Equivalent check (`equiv.py`) with its helpers (`checksizes.py`, `classify.py`, `poollist.py`, `port_equiv.py`), live checks against the running game (optional) |
-| `AGENTS.md` | the per-function decompilation loop: Equivalent first, Matching as the bonus |
+| `tests/` | Test cases per function (`tests/<file>/<function>.json`) and `tests/equivalent.txt`, the functions found Equivalent |
+| `docs/equivalent.md` | The evidence for each Equivalent function (written by `tools/equiv.py`) |
+| `sdk-verified.txt` | Library functions whose bytes the SDK source you supplied reproduces (written by `tools/sdk_source.py`) |
+| `sdk-source/` | The C of those library functions, from the SDK source you supplied (local, git-ignored) |
+| `AGENTS.md` | The per-function decompilation loop: Equivalent first, Matching as the bonus |
+| `tools/` | Disc reader, splitter, text mapper, model mapper, C-unit layout, progress report, missed-function finder, SH-4 disassembler and simulator, the Equivalent check (`equiv.py`) with its helpers (`checksizes.py`, `classify.py`, `poollist.py`, `port_equiv.py`), the SDK-source check (`sdk_source.py`), live checks against the running game (optional) |
 
 `text-map/` (generated) lists the executable's strings with every pointer to them, how much text each disc file holds
 with the code that opens it, how text is drawn, and every image file (`images.tsv`). Counts and lists for you to read,
@@ -105,8 +107,8 @@ data becomes its own piece at that range, in source order; both ranges must star
 file boundaries (add them to `functions.txt`: `F <addr> 0 FUN_<addr>` for a function start,
 `D <addr> 0 data_<addr>` for a data boundary, which is not counted as a function). A unit is one
 original source file: all its functions share literal pools, so it goes in only when all of it
-matches. `python3 tools/progress.py` reports the state game code and SDK apart (`sdk.txt` marks the SDK),
-each game function in one bucket: done (equivalent C, matching C part of it), named only (a name is
+matches. `python3 tools/progress.py` reports the state,
+each function in one bucket: done (equivalent C; matching C and SDK source part of it), named only (a name is
 not done work), unnamed; plus documented functions and named globals. `docs/equivalent.md` holds
 the evidence for each equivalent function.
 

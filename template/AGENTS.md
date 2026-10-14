@@ -20,7 +20,7 @@ rebuilds the original bytes (Matching) is the bonus tier: it goes into the build
   `D <addr> 0 data_<addr>` lines in `functions.txt` (data boundaries, not counted as functions).
 - `symbols.txt`: `<addr> <name>` for what the C uses that no file defines yet (RAM, data still inside
   asm); the linker gets them as defines.
-- `sdk.txt`: which code is Sega's SDK. `python3 tools/progress.py` reports game and SDK apart.
+- `sdk.txt`: the bundled Sega SDK's code. `python3 tools/progress.py` reports the state.
 - `tests/<file>/<function>.json`: test cases for a function (a list; each gives registers, bytes to
   put in memory, return values for the calls it makes, optionally a RAM dump to start from:
   `tools/sh4sim.py`). `tests/equivalent.txt`: the functions `tools/equiv.py` found equivalent.
@@ -55,7 +55,7 @@ no arguments. Reading the code stays the evidence; a live value confirms it or s
    Before writing C, run the three checks (`references/equivalent-pipeline.md` in the kickoff skill): the
    size is right (`python3 tools/checksizes.py <name>`: a literal pool mid-body ends a listing early), the
    function can be C (`python3 tools/classify.py <name>`: FPU register banks, `fsrra`, control registers
-   cannot) and every name it uses exists (`python3 tools/poollist.py <name>`; `python3 tools/shdis.py --func <name>`
+   other than SR cannot) and every name it uses exists (`python3 tools/poollist.py <name>`; `python3 tools/shdis.py --func <name>`
    prints it).
 3. **Check**: `python3 tools/equiv.py src/<file>.c` (`-q`: only what is not Equivalent). Each function runs in the SH-4 interpreter
    twice per case, the original bytes and your compiled C, and must agree on calls (target and the
