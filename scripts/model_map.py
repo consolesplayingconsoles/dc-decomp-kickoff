@@ -14,7 +14,9 @@ Writes <out dir>/game.dcgs (tab-separated text in sections, for a model viewer o
 that wrote it: the repo's KICKOFF file, or the skill's VERSION file when run from the skill), `# sha1`
 (of the executable), `# base`, `# sections ...`, then each section as `[name]`, a header row and its rows:
   [models]       one row per model: file offset bytes records radius group sub sublabel name table index used_by texset
-                 (a Ninja model: file is its disc path, offset its NJCM chunk, records its object count)
+                 (a Ninja model: file is its disc path, offset its NJCM chunk, records its object count; an object tree
+                 stored as the game's memory image: offset its root object, records its objects, bytes 0x34 times that.
+                 In a `.PRS` file (Sega's compression) every offset is into the decompressed data)
                  (sub is the id of its table or collection, sublabel its name if it has one; name is the model's own name,
                  empty when it has none; every name is tidied: no parentheses, each word capitalised; texset is the
                  texture set it takes its textures from, empty when its file's rows apply)
@@ -183,6 +185,45 @@ def record_ok(w, i):
     return p == e
 
 
+def prs_decompress(src):
+    """Sega's PRS compression (a Lempel-Ziv variant: a control byte of 8 flags, then literals and short or long copies
+    from earlier output) to the original bytes. Raises ValueError when the data is not valid PRS."""
+    dst, pos, ctrl, bits = bytearray(), 0, 0, 0
+
+    def flag():
+        nonlocal ctrl, pos, bits
+        if bits == 0:
+            ctrl, pos, bits = src[pos], pos + 1, 8
+        f, ctrl, bits = ctrl & 1, ctrl >> 1, bits - 1
+        return f
+
+    try:
+        while True:
+            if flag():                                     # a literal byte
+                dst.append(src[pos])
+                pos += 1
+                continue
+            if flag():                                     # a long copy: a 16-bit word gives the offset and the size
+                word = src[pos] | src[pos + 1] << 8
+                pos += 2
+                if word == 0:
+                    return bytes(dst)                      # the end marker
+                size, off = word & 7, (word >> 3) - 0x2000
+                if size == 0:
+                    size, pos = src[pos] + 1, pos + 1
+                else:
+                    size += 2
+            else:                                          # a short copy: two flags give the size, a byte the offset
+                high = flag()
+                size, off, pos = (high << 1 | flag()) + 2, src[pos] - 0x100, pos + 1
+            if len(dst) + off < 0:
+                raise ValueError("copy before the start")
+            for _ in range(size):
+                dst.append(dst[len(dst) + off])
+    except IndexError:
+        raise ValueError("PRS data ends early")
+
+
 def ninja_objects(data, base, size):
     """Object offsets of the NJCM tree whose root sits at the start of the chunk data (pointers count from there), or
     None when it is not a plausible tree. Object: eval flags, model, position (3 floats), angles, scale (3 floats),
@@ -208,6 +249,203 @@ def ninja_objects(data, base, size):
         if child:
             todo.append(child)
     return out
+
+
+CHUNK_POLY = frozenset(list(range(0, 6)) + [8, 9] + list(range(16, 32)) + [56, 57, 58] + list(range(64, 76)))
+
+
+def chunk_model_ok(data, m, base):
+    """Is the 0x18-byte chunk model at file offset m (vertex list, polygon list, centre, radius; pointers are memory
+    addresses, `base` the address of the file's first byte) one whose two chunk lists walk to their end marker?"""
+    if m < 0 or m + 0x18 > len(data):
+        return False
+    vl, pl = struct.unpack_from("<2I", data, m)
+    r = struct.unpack_from("<f", data, m + 20)[0]
+    if not vl and not pl or r != r or not 0 <= r < 1e6:
+        return False
+    for ptr, kind in ((vl, "v"), (pl, "p")):
+        if not ptr:
+            continue
+        p = ptr - base
+        if p < 0 or p & 1 or p >= len(data):
+            return False
+        for _ in range(65536):
+            if p + 2 > len(data):
+                return False
+            t = data[p]
+            if t == 0xFF:
+                break
+            if kind == "v":
+                if not 32 <= t <= 50 or p + 4 > len(data):
+                    return False
+                p += 4 + struct.unpack_from("<H", data, p + 2)[0] * 4
+            elif t not in CHUNK_POLY:
+                return False
+            elif t <= 5:
+                p += 2
+            elif t in (8, 9):
+                p += 4
+            else:
+                if p + 4 > len(data):
+                    return False
+                p += 4 + struct.unpack_from("<H", data, p + 2)[0] * 2
+        else:
+            return False
+    return True
+
+
+def basic_model_ok(data, m, base):
+    """Radius of the 0x28-byte basic model at file offset m (points, normals, point count, meshsets, materials, meshset
+    and material counts, centre, radius; pointers are memory addresses) when its arrays lie inside the file, else None."""
+    if m < 0 or m + 0x28 > len(data):
+        return None
+    pts, nor, nb, ms, mat, nms, nmat = struct.unpack_from("<IIiIIHH", data, m)
+    r = struct.unpack_from("<f", data, m + 36)[0]
+    if not (0 < nb < 65536 and 0 < nms < 512 and r == r and 0 <= r < 1e6) or not pts or not ms:
+        return None
+
+    def inside(ptr, size):
+        o = ptr - base
+        return o >= 0 and o & 3 == 0 and o + size <= len(data)
+
+    if not (inside(pts, 12 * nb) and inside(ms, 0x18 * nms) and (nor == 0 or inside(nor, 12 * nb)) and (mat == 0 or inside(mat, 20 * nmat))):
+        return None
+    return r
+
+
+def model_radius(data, m, base):
+    """The radius of the model at file offset m when it is a chunk model or a basic model, else None."""
+    if chunk_model_ok(data, m, base):
+        return struct.unpack_from("<f", data, m + 20)[0]
+    return basic_model_ok(data, m, base)
+
+
+def find_object_trees(data):
+    """[(offset of the root object, objects, radius)] and the address the file loads at, for every tree of Ninja objects
+    stored as the game's memory image: objects (eval flags, model, position, angles, scale, child, sibling: 0x34 bytes)
+    linked by memory addresses, each model a chunk model whose lists walk to their end or a basic model whose arrays lie
+    inside the file. The load address is found by
+    voting: the child and sibling addresses of the plausible objects must land on other plausible objects; of the five
+    best-voted addresses the one under which most models are valid wins (a chain of same-sized objects votes equally for
+    an address shifted by one object)."""
+    n = len(data) // 4
+    if n < 16:
+        return [], 0
+    w = struct.unpack("<%dI" % n, data[:n * 4])
+
+    def addr(v):
+        return v == 0 or v >> 24 in (0x8C, 0x8D, 0x0C, 0x0D)
+
+    def num(v, lo, hi):
+        return lo <= v <= hi
+
+    cand = []
+    for i in range(n - 12):
+        if w[i] > 0x3FF or not (addr(w[i + 1]) and addr(w[i + 11]) and addr(w[i + 12])):
+            continue
+        if not (num(w[i + 8], 0x3A800000, 0x447A0000) and num(w[i + 9], 0x3A800000, 0x447A0000) and num(w[i + 10], 0x3A800000, 0x447A0000)):
+            continue
+        if any(w[i + k] & 0x7F800000 == 0x7F800000 for k in (2, 3, 4)):
+            continue
+        if w[i + 1] or w[i + 11] or w[i + 12]:
+            cand.append(i * 4)
+    if len(cand) < 2:
+        return [], 0
+    at = set(cand)
+    votes = collections.Counter()
+    step = max(1, len(cand) // 200)
+    for o in cand[::step]:
+        for ptr in (w[o // 4 + 11], w[o // 4 + 12]):
+            if ptr:
+                for o2 in cand[::max(1, len(cand) // 2000)]:
+                    b = ptr - o2
+                    if b & 3 == 0:
+                        votes[b] += 1
+    ranked = [(b, c) for b, c in sorted(votes.items(), key=lambda kv: -kv[1]) if c >= 3 and b >> 24 in (0x8C, 0x8D, 0x0C, 0x0D)][:5]
+    if not ranked:
+        return [], 0
+
+    def models_under(b):                                   # objects whose model is valid if the file loads at b
+        return sum(1 for o in cand if w[o // 4 + 1] and model_radius(data, w[o // 4 + 1] - b, b) is not None)
+    base = max(ranked, key=lambda bc: models_under(bc[0]))[0]   # equal counts: the one with the most votes
+    good = {}
+    for o in cand:
+        m = w[o // 4 + 1]
+        if m == 0 or model_radius(data, m - base, base) is not None:
+            good[o] = (w[o // 4 + 1], w[o // 4 + 11], w[o // 4 + 12])
+    changed = True
+    while changed:                                         # a child or sibling must be an object that is good itself
+        changed = False
+        for o, (m, ch, sb) in list(good.items()):
+            if (ch and ch - base not in good) or (sb and sb - base not in good):
+                del good[o]
+                changed = True
+    referenced = set()
+    for o, (m, ch, sb) in good.items():
+        for ptr in (ch, sb):
+            if ptr:
+                referenced.add(ptr - base)
+    out = []
+    for o in sorted(good):
+        if o in referenced:
+            continue
+        nodes, todo, seen, radius, models = 0, [o], set(), 0.0, 0
+        while todo:
+            x = todo.pop()
+            if x in seen:
+                continue
+            seen.add(x)
+            m, ch, sb = good[x]
+            nodes += 1
+            if m:
+                models += 1
+                radius = max(radius, model_radius(data, m - base, base))
+            for ptr in (ch, sb):
+                if ptr:
+                    todo.append(ptr - base)
+        if models:
+            out.append((o, nodes, radius))
+    return out, base
+
+
+def file_data(disc, lba, size, path):
+    """A disc file's bytes; a `.PRS` file (Sega's compression) is decompressed, so offsets into it are offsets into the
+    decompressed data. A `.PRS` file that does not decompress is returned as it is."""
+    data = disc.read(lba, size)
+    if path.upper().endswith(".PRS"):
+        try:
+            return prs_decompress(data)
+        except ValueError:
+            pass
+    return data
+
+
+STRETCH = MAX_FILE              # a big file is scanned in stretches of this size
+OVERLAP = 4 << 20               # each stretch repeats the end of the one before it: a thing that straddles a cut is whole in the next
+
+
+def stretch_starts(size):
+    """Byte offsets of the stretches a file of `size` bytes is scanned in: one when it fits, else one every STRETCH - OVERLAP
+    bytes until a stretch reaches the end."""
+    starts, step = [0], STRETCH - OVERLAP
+    while starts[-1] + STRETCH < size:
+        starts.append(starts[-1] + step)
+    return starts
+
+
+def stretches(disc, lba, size, path):
+    """(start, data, whole) of each stretch of a disc file, whole being true when it is the file's one stretch. A `.PRS` file
+    (Sega's compression) is decompressed first, so offsets into it are offsets into the decompressed data. Whatever the
+    size, every byte is looked at: a thing found in the overlap of two stretches is found twice, at the same offset."""
+    if path.upper().endswith(".PRS"):
+        data = file_data(disc, lba, size, path)
+        starts = stretch_starts(len(data))
+        for start in starts:
+            yield start, data[start:start + STRETCH], len(starts) == 1
+        return
+    starts = stretch_starts(size)
+    for start in starts:
+        yield start, disc.read(lba + start // 2048, min(STRETCH, size - start)), len(starts) == 1
 
 
 def ninja_names(data, base, size):
@@ -407,20 +645,19 @@ def image_rows(disc, rules):
         if r[0] == "image" and len(r) >= 4:
             given[(r[1].upper(), int(r[2], 16))] = tidy(" ".join(r[3:]))
     rows = []
-    for lba, size, path in disc.files():
-        f = path.lstrip("/")
-        if f.upper().endswith(SKIP):
-            continue
-        if size <= MAX_FILE:
-            found = find_pictures(disc.read(lba, size))
-        else:
-            found = []
-            for o in range(0, size, MAX_FILE):
-                part = disc.read(lba + o // 2048, min(MAX_FILE + 16, size - o))
-                found += [x for x in find_pictures(part, o, False) if x[0] < o + MAX_FILE]
+
+    def add(f, found):
         for off, kind, w, h, dt, pf, nbytes, name in found:
             rows.append([f, "%x" % off, kind, str(w), str(h), "%x" % dt, str(pf), str(nbytes),
                          given.get((f.upper(), off)) or (tidy(name) if name else "")])
+    for lba, size, path in disc.files():
+        if path.split("/")[-1].upper().endswith(SKIP):
+            continue
+        at = {}
+        for start, data, whole in stretches(disc, lba, size, path):
+            for x in find_pictures(data, start, whole):
+                at.setdefault(x[0], x)
+        add(path.lstrip("/"), [at[k] for k in sorted(at)])
     seen = set((r[0].upper(), int(r[1], 16)) for r in rows)
     for key in given:
         if key not in seen:
@@ -1062,10 +1299,25 @@ def main():
     random.seed(1)
     for lba, size, path in disc.files():
         name = path.split("/")[-1]
-        if size > MAX_FILE or name.upper().endswith(SKIP):
+        if name.upper().endswith(SKIP):
             continue
-        data = disc.read(lba, size)
-        nj = find_ninja(data)
+        by_off, trees_at, nj_at = {}, {}, {}               # keyed by offset in the file: the overlap of two stretches finds a thing twice
+        for start, data, _ in stretches(disc, lba, size, path):
+            for x in find_models(data):
+                by_off.setdefault(start + x[0], (start + x[0],) + tuple(x[1:]))
+            for off, objs, radius in find_object_trees(data)[0]:
+                trees_at.setdefault(start + off, (start + off, objs, radius))
+            for off, nbytes, objs, radius, names in find_ninja(data):
+                nj_at.setdefault(start + off, (start + off, nbytes, objs, radius, names))
+        trees = [trees_at[k] for k in sorted(trees_at)]
+        nj = [nj_at[k] for k in sorted(nj_at)]
+        found = [by_off[k] for k in sorted(by_off)]
+        for off, objs, radius in trees:
+            models.append({"file": path.lstrip("/"), "offset": off, "records": objs, "bytes": objs * 0x34, "radius": radius,
+                           "addr": None, "group": "", "sub": "", "sublabel": "", "name": "", "table": "",
+                           "index": "", "used_by": "", "texset": ""})
+        if trees:
+            print("%-16s %5d object trees" % (name, len(trees)))
         for off, nbytes, objs, radius, names in nj:
             ninja_objs.setdefault(path.lstrip("/"), objs)
             models.append({"file": path.lstrip("/"), "offset": off, "records": objs, "bytes": nbytes, "radius": radius,
@@ -1074,7 +1326,6 @@ def main():
             ninja.setdefault(path.lstrip("/").upper(), names)
         if nj:
             print("%-16s %5d Ninja models" % (name, len(nj)))
-        found = find_models(data)
         if not found:
             continue
         votes = collections.Counter()

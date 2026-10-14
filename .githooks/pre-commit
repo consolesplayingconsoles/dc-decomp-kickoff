@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# dc-decomp-kickoff pre-commit: the skill stays backwards compatible.
+#   1. every Python file parses as Python 3.6 (the oldest the tools run on)
+#   2. the map tool's readers still find what they found before (tests/compat: synthetic inputs, no game data)
+# Enable once per clone:  git config core.hooksPath .githooks
+# To skip in a pinch:     git commit --no-verify
+set -eu
+cd "$(git rev-parse --show-toplevel)"
+python3 - <<'PY'
+import ast, glob, sys
+bad = 0
+for f in sorted(glob.glob("scripts/*.py") + glob.glob("tests/**/*.py", recursive=True)):
+    try:
+        ast.parse(open(f, encoding="utf-8").read(), filename=f, feature_version=(3, 6))
+    except SyntaxError as e:
+        print("[pre-commit] %s does not parse as Python 3.6: %s (line %s)" % (f, e.msg, e.lineno)); bad = 1
+sys.exit(bad)
+PY
+python3 tests/compat/check.py
