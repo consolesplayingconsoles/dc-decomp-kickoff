@@ -536,7 +536,12 @@ def find_md3(data):
     return out
 
 
-TAGGED = (b"Modl", b"Trak", b"Podd", b"Part", b"Scen", b"MAlt", b"Pupp")
+def is_tag(t):
+    """A body tag: four ASCII letters."""
+    return re.fullmatch(rb"[A-Za-z]{4}", t) is not None
+
+
+
 
 
 def tagged_faces(data, s2, end, ofs48, o52, nv):
@@ -636,7 +641,7 @@ def tagged_groups(data, s2, end):
 def find_tagged(data):
     """[(offset of the body, bytes, tag, mesh groups, vertices, triangles, radius)] of every model of a model block held at the
     start of data: a big-endian count, then count + 1 rising offsets that alternate between a pointer-flag section and a
-    body, each body starting with a tag (Modl, Trak, Podd, Part, Scen, MAlt, Pupp)."""
+    body, each body starting with a tag of four letters."""
     if len(data) < 24:
         return []
     n = struct.unpack_from(">I", data, 0)[0]
@@ -646,11 +651,11 @@ def find_tagged(data):
     if any(offs[i] > offs[i + 1] for i in range(n)) or offs[-1] > len(data) or offs[0] < 4 + 4 * (n + 1):
         return []
     pairs = [(offs[2 * i + 1], offs[2 * i + 2]) for i in range(n // 2) if 2 * i + 2 <= n]
-    if sum(1 for a, e in pairs if data[a:a + 4] in TAGGED) * 2 < len(pairs):
+    if sum(1 for a, e in pairs if is_tag(data[a:a + 4])) * 2 < len(pairs):
         return []
     out = []
     for a, e in pairs:
-        if data[a:a + 4] not in TAGGED or e - a < 8:
+        if not is_tag(data[a:a + 4]) or e - a < 8:
             continue
         groups = tagged_groups(data, a, e)
         if not groups:
