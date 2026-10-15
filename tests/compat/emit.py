@@ -291,6 +291,29 @@ def rat_fixture():
     return b"RAT\0" + b"1.0A" + struct.pack("<I", 4) + b"\0" * 20 + table + b"\x11" * 48
 
 
+def tr4_fixture():
+    """A level file of one mesh (4 vertices, a rectangle and a triangle) and no rooms: the tag, three page counts, then four zlib blocks."""
+    import zlib as z
+    verts = [(0, 0, 0), (100, 0, 0), (100, -200, 0), (0, -200, 0)]
+    mesh = struct.pack("<3hih", 0, 0, 0, 300, 4) + b"".join(struct.pack("<3h", *v) for v in verts) + struct.pack("<h", 0) \
+        + struct.pack("<h", 1) + struct.pack("<6H", 0, 1, 2, 3, 0, 0) + struct.pack("<h", 1) + struct.pack("<5H", 0, 1, 2, 0, 0)
+    mesh += b"\0" * (len(mesh) % 2)
+    level = struct.pack("<IH", 0, 0) + struct.pack("<I", 0) + struct.pack("<I", len(mesh) // 2) + mesh + struct.pack("<I", 2) + struct.pack("<2I", 0, 0)
+    def block(b):
+        c = z.compress(b)
+        return struct.pack("<II", len(b), len(c)) + c
+    return b"TR4\0" + struct.pack("<3H", 1, 1, 0) + block(b"\0" * (2 * 262144)) + block(b"\0" * 131072) + block(b"\0" * 16) + block(level)
+
+
+def prm_fixture():
+    """A mesh file of a triangle and a quad over 4 vertices: 60 byte polygons, then 24 byte vertices."""
+    def poly(typ, idx):
+        return struct.pack("<6H", typ, 0, *idx) + b"\xff" * 16 + struct.pack("<8f", *([0.5] * 8))
+    def vert(x, y, z):
+        return struct.pack("<6f", x, y, z, 0, 1, 0)
+    return struct.pack("<HH", 2, 4) + poly(0, (0, 1, 2, 0)) + poly(1, (0, 1, 2, 3)) + vert(0, 0, 0) + vert(3, 0, 0) + vert(3, 4, 0) + vert(0, 4, 0)
+
+
 def own_textures_fixture():
     """A file holding two Ninja models with their textures: NJTL (2 names) and NJCM, NJTL (1 name) and NJCM, then 3 PVR chunks
     (a GBIX header and a PVRT each); the names, joined, count the chunks."""
@@ -367,6 +390,10 @@ def results(mm):
                                        "sets": sorted([list(x) for x in got[1].items()]) if got else None}
     files["md3.bin"] = md = b"\x00" * 8 + md3_fixture()
     out["md3:md3.bin"] = [[o, nb, ns, nt, nv, round(r, 3)] for o, nb, ns, nt, nv, r in mm.find_md3(md)]
+    files["tr4.bin"] = tr4 = tr4_fixture()
+    out["tr4:tr4.bin"] = [[o, nb, t, ng, nv, nt, round(r, 3)] for o, nb, t, ng, nv, nt, r in mm.find_tr4(tr4)]
+    files["prm.bin"] = prm = prm_fixture()
+    out["prm:prm.bin"] = [[o, nb, t, ng, nv, nt, round(r, 3)] for o, nb, t, ng, nv, nt, r in mm.find_prm(prm)]
     files["tagged.bin"] = tg = tagged_fixture()
     out["tagged:tagged.bin"] = [[o, nb, t, ng, nv, nt, round(r, 3)] for o, nb, t, ng, nv, nt, r in mm.find_tagged(tg)]
     files["archive.zip"] = zp = zip_fixture()
@@ -388,8 +415,8 @@ def results(mm):
                            "ninja": [[o, nb, objs, round(rad, 3), names] for o, nb, objs, rad, names in nj_m]}
     mb = 1 << 20
     out["stretches"] = {str(n): mm.stretch_starts(n) for n in (0, mb, 16 * mb, 16 * mb + 1, 28 * mb, 28 * mb + 1, 100 * mb)}
-    for name, data in picture_fixtures().items():
-        files[name] = data
+    for name, data in list(picture_fixtures().items()) + [("tr4.bin", tr4)]:
+        files.setdefault(name, data)
         out["pictures:" + name] = [[o, k, w, h, dt, pf, nb, nm] for o, k, w, h, dt, pf, nb, nm in mm.find_pictures(data)]
     return out, files
 

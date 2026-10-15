@@ -638,6 +638,123 @@ def tagged_groups(data, s2, end):
     return rows
 
 
+def find_prm(data):
+    """[(0, bytes, "PRM", 1, vertices, triangles, radius)] when data is one whole PRM mesh file, else []: two 16-bit counts (polygons,
+    vertices), then 60-byte polygons (a type, a texture, four 16-bit vertex numbers, four colours, four texture coordinate pairs) and 24-byte
+    vertices (a position and a normal, floats), the file being exactly that long. Type bit 0 makes a polygon a quad. The first polygons
+    must name vertices that exist and the first vertices must be sane numbers."""
+    n = len(data)
+    if n < 4 + 60 + 24:
+        return []
+    npoly, nvert = struct.unpack_from("<HH", data, 0)
+    if not (npoly and nvert and 4 + 60 * npoly + 24 * nvert == n):
+        return []
+    tris = 0
+    for i in range(npoly):
+        o = 4 + 60 * i
+        typ, tex, a, b, c, d = struct.unpack_from("<6H", data, o)
+        quad = typ & 1
+        if typ > 0x3FFF or max(a, b, c, d if quad else 0) >= nvert:
+            return []
+        tris += 2 if quad else 1
+    radius = 0.0
+    for i in range(nvert):
+        x, y, z = struct.unpack_from("<3f", data, 4 + 60 * npoly + 24 * i)
+        if not (abs(x) < 1e7 and abs(y) < 1e7 and abs(z) < 1e7):
+            return []
+        radius = max(radius, (x * x + y * y + z * z) ** 0.5)
+    return [(0, n, "PRM", 1, nvert, tris, radius)]
+
+
+def tr4_level(data):
+    """The level bytes of a TR4 level file (`TR4\\0`, three 16-bit texture page counts, then four zlib blocks each led by an unpacked
+    and a packed size: textures of 32 and of 16 bits, miscellaneous textures, the level), or None when it is not one."""
+    if data[:4] != b"TR4\0" or len(data) < 40:
+        return None
+    p = 10
+    try:
+        for i in range(4):
+            usz, csz = struct.unpack_from("<II", data, p)
+            if csz > len(data) - p - 8 or usz > MAX_FILE:
+                return None
+            if i == 3:
+                out = zlib.decompress(data[p + 8:p + 8 + csz])
+                return out if len(out) == usz else None
+            p += 8 + csz
+    except (zlib.error, struct.error):
+        return None
+
+
+def tr4_meshes(lv):
+    """[(pointer, vertices, triangles, radius, rows)] of the distinct meshes of a TR4 level, by pointer, `rows` being (vertices, triangle
+    vertex numbers). The level holds the rooms, the floor data, then the mesh words and their pointer table; a mesh is a centre, a radius,
+    its vertices (three 16-bit coordinates), its normals or lights, its textured rectangles (four vertex numbers, a texture, effects) and
+    its textured triangles (three, a texture, effects)."""
+    n = len(lv)
+    try:
+        u16 = lambda o: struct.unpack_from("<H", lv, o)[0]
+        i16 = lambda o: struct.unpack_from("<h", lv, o)[0]
+        u32 = lambda o: struct.unpack_from("<I", lv, o)[0]
+        if u32(0) != 0:
+            return []
+        q, nrooms = 6, u16(4)
+        for _ in range(nrooms):
+            q += 16 + 4 + 2 * u32(q + 16)
+            q += 2 + 32 * u16(q)
+            q += 4 + 8 * u16(q) * u16(q + 2)
+            q += 4
+            q += 2 + 46 * u16(q)
+            q += 2 + 20 * u16(q)
+            q += 7
+        q += 4 + 2 * u32(q)
+        nwords = u32(q)
+        base = q + 4
+        q = base + 2 * nwords
+        nptr = u32(q)
+        q += 4
+        if not 0 < nptr < 100000 or q + 4 * nptr > n:
+            return []
+        ptrs = sorted(set(struct.unpack_from("<%dI" % nptr, lv, q)))
+        out = []
+        for ptr in ptrs:
+            o = base + ptr
+            nv = i16(o + 10)
+            if ptr >= 2 * nwords or not 0 < nv < 4096:
+                continue
+            verts = [struct.unpack_from("<3h", lv, o + 12 + 6 * i) for i in range(nv)]
+            r = o + 12 + 6 * nv
+            nn = i16(r)
+            r += 2 + (6 * nn if nn > 0 else -2 * nn)
+            tris, ok = [], True
+            nrect = i16(r)
+            r += 2
+            for i in range(max(nrect, 0)):
+                a, b, c, d = struct.unpack_from("<4H", lv, r + 12 * i)
+                ok = ok and max(a, b, c, d) < nv
+                tris += [a, b, c, a, c, d]
+            r += 12 * max(nrect, 0)
+            ntri = i16(r)
+            r += 2
+            for i in range(max(ntri, 0)):
+                a, b, c = struct.unpack_from("<3H", lv, r + 10 * i)
+                ok = ok and max(a, b, c) < nv
+                tris += [a, b, c]
+            if ok and tris:
+                radius = max((x * x + y * y + z * z) ** 0.5 for x, y, z in verts)
+                out.append((ptr, nv, len(tris) // 3, radius, (verts, tris)))
+        return out
+    except struct.error:
+        return []
+
+
+def find_tr4(data):
+    """[(index, bytes, "TR4", 1, vertices, triangles, radius)] for each mesh of a TR4 level file; the index counts the meshes."""
+    lv = tr4_level(data)
+    if lv is None:
+        return []
+    return [(i, 6 * nv + 10 * nt, "TR4", 1, nv, nt, radius) for i, (_, nv, nt, radius, _) in enumerate(tr4_meshes(lv))]
+
+
 def find_tagged(data):
     """[(offset of the body, bytes, tag, mesh groups, vertices, triangles, radius)] of every model of a model block held at the
     start of data: a big-endian count, then count + 1 rising offsets that alternate between a pointer-flag section and a
@@ -686,7 +803,7 @@ class ModelScan(object):
         for x in find_md3(data):
             self.md3.setdefault(start + x[0], (start + x[0],) + tuple(x[1:]))
         if start == 0:
-            for x in find_tagged(data):
+            for x in find_tagged(data) + find_prm(data) + find_tr4(data):
                 self.tagged.setdefault(x[0], x)
         for x in find_models(data):
             self.flat.setdefault(start + x[0], (start + x[0],) + tuple(x[1:]))
@@ -910,6 +1027,25 @@ def pvrt_at(data, p):
     return w, h, pf, dt, ln + 8
 
 
+def tr4_pages(data):
+    """[(offset, "tr4", 256, 256, page, block, bytes, "")] for each texture page of a TR4 level file: its zlib blocks of 32-bit pages
+    (blocks 0 and 2, four bytes a pixel) and of 16-bit pages (block 1, two bytes a pixel), 256 x 256 each; `offset` is where the page's
+    block starts in the file plus the page's number (so each page has an offset of its own), `page` its number in it, `block` 0, 1 or 2."""
+    if data[:4] != b"TR4\0" or len(data) < 40:
+        return []
+    out, p = [], 10
+    for blk in range(3):
+        if p + 10 > len(data):
+            break
+        usz, csz = struct.unpack_from("<II", data, p)
+        bpp = 2 if blk == 1 else 4
+        if csz > len(data) - p - 8 or data[p + 8] != 0x78 or usz % (256 * 256 * bpp):
+            break
+        out += [(p + k, "tr4", 256, 256, k, blk, 256 * 256 * bpp, "") for k in range(usz // (256 * 256 * bpp))]
+        p += 8 + csz
+    return out
+
+
 def find_pictures(data, base=0, whole=True):
     """[(offset, kind, width, height, type, format, bytes, name)] of every picture in data: a whole GIF, JPEG or PNG file,
     or PVRT chunks anywhere (named by a PVM archive's header when data starts with one). With whole false, data is a
@@ -928,6 +1064,8 @@ def find_pictures(data, base=0, whole=True):
                 if 0xC0 <= m <= 0xCF and m not in (0xC4, 0xC8, 0xCC):
                     return [(0, "jpg", data[p + 7] << 8 | data[p + 8], data[p + 5] << 8 | data[p + 6], 0, 0, len(data), "")]
                 p += 2 + ln
+    if whole and data[:4] == b"TR4\0":
+        return tr4_pages(data)
     names = pvm_names(data) if whole else []
     out, p = [], data.find(b"PVRT")
     while 0 <= p:
@@ -1111,7 +1249,7 @@ def find_models(data):
             j = nxt[j]
         if all(record_ok(w, r) for r in chain):
             radius = f32(w[i - 1])
-            if radius == radius and abs(radius) < 1e9:
+            if radius == radius and 1e-4 <= abs(radius) < 1e9:      # a model of no size (a radius of 0 or 1e-30) is stray data, found inside audio files
                 tex = max(struct.unpack("<i", struct.pack("<I", w[r + 8]))[0] for r in chain)
                 out.append(((i - 6) * 4, len(chain), sum(w[r + 19] for r in chain), radius, tex))
     return out
