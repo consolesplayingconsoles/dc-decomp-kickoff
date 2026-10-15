@@ -493,7 +493,7 @@ class ModelScan(object):
     stretch starts), so one address serves the whole file."""
 
     def __init__(self):
-        self.flat, self.trees, self.ninja, self.blocks = {}, {}, {}, {}
+        self.flat, self.trees, self.ninja, self.blocks, self.motions = {}, {}, {}, {}, {}
 
     def add(self, start, data):
         for at, name, dec, _ in pressed_blocks(data):
@@ -505,6 +505,8 @@ class ModelScan(object):
             self.trees.setdefault(start + off, (start + off, objs, radius, base - start))
         for off, nbytes, objs, radius, names in find_ninja(data):
             self.ninja.setdefault(start + off, (start + off, nbytes, objs, radius, names))
+        for x in find_motions(data):
+            self.motions.setdefault(start + x[0], (start + x[0],) + tuple(x[1:]))
 
     def result(self):
         """(flat models, trees, Ninja chunk models), each sorted by offset: flat (offset, records, strip bytes, radius,
@@ -615,23 +617,26 @@ def pvm_entries(data):
 
 def njm_read(data, nodes=None):
     """(frames, kinds, nodes, moving) of a Ninja motion (an NMDM chunk: frame count, the kinds of keys, then per object
-    one pointer and one count per kind; a key is a frame number and three values), or None when it is not one or carries
-    kinds other than position, angle and scale. `nodes` is the object count of the model it animates, when known (else
-    the entries are counted as far as their pointers and counts are plausible)."""
+    one pointer and one count per kind; a key is a frame number and three values: a quaternion's is a frame number and four),
+    or None when it is not one or carries kinds other than position, angle (or quaternion) and scale. The kinds come in this
+    order: position, rotation, scale. `nodes` is the object count of the model it animates, when known (else the entries
+    are counted as far as their pointers and counts are plausible)."""
     if len(data) < 24 or data[:4] != b"NMDM":
         return None
     size = struct.unpack_from("<I", data, 4)[0]
     mdata, frames, typ, _ = struct.unpack_from("<IIHH", data, 8)
-    if typ & ~7 or not typ or size + 8 > len(data) or mdata & 3:
+    if typ & ~0x2007 or not typ or typ & 2 and typ & 0x2000 or size + 8 > len(data) or mdata & 3:
         return None
-    kinds = [n for n, bit in (("position", 1), ("angle", 2), ("scale", 4)) if typ & bit]
+    slots = [(n, bit) for n, bit in (("position", 1), ("angle", 2), ("quaternion", 0x2000), ("scale", 4)) if typ & bit]
+    kinds = [n for n, _ in slots]
+    key = [20 if n == "quaternion" else 16 for n in kinds]
     t = len(kinds)
     count = 0
     while mdata + 8 * t * (count + 1) <= size and (nodes is None or count < nodes):
         o = 8 + mdata + 8 * t * count
         ps = struct.unpack_from("<%dI" % t, data, o)
         ns = struct.unpack_from("<%dI" % t, data, o + 4 * t)
-        if not all((q == 0 and n == 0) or (0 < q and q + 16 * n <= size and 0 < n <= frames + 1) for q, n in zip(ps, ns)):
+        if not all((q == 0 and n == 0) or (0 < q and q + k * n <= size and 0 < n <= frames + 1) for q, n, k in zip(ps, ns, key)):
             break
         count += 1
     if not count or (nodes is not None and count != nodes):
@@ -641,13 +646,29 @@ def njm_read(data, nodes=None):
         o = 8 + mdata + 8 * t * i
         ps = struct.unpack_from("<%dI" % t, data, o)
         ns = struct.unpack_from("<%dI" % t, data, o + 4 * t)
-        for q, n in zip(ps, ns):
-            fr = [struct.unpack_from("<I", data, 8 + q + 16 * j)[0] for j in range(n)]
+        for q, n, k in zip(ps, ns, key):
+            fr = [struct.unpack_from("<I", data, 8 + q + k * j)[0] for j in range(n)]
             if fr != sorted(fr) or (fr and fr[-1] > frames):
                 return None
         if any(n > 1 for n in ns):
             moving += 1
     return frames, kinds, count, moving
+
+
+def find_motions(data):
+    """[(offset, bytes, frames, kinds, nodes, moving)] of every Ninja motion (an NMDM chunk, see njm_read) in data, wherever it
+    sits: a motion is kept inside the model file it animates as often as it is a file of its own. The model it animates is
+    one of the same file with as many objects as the motion has nodes."""
+    out, p = [], data.find(b"NMDM")
+    while p >= 0:
+        if p % 4 == 0 and p + 24 <= len(data):
+            size = struct.unpack_from("<I", data, p + 4)[0]
+            if size + 8 <= len(data) - p:
+                r = njm_read(data[p:p + 8 + size])
+                if r:
+                    out.append((p, 8 + size, r[0], "+".join(r[1]), r[2], r[3]))
+        p = data.find(b"NMDM", p + 4)
+    return out
 
 
 def ninja_motion_rows(disc, objects):
@@ -748,11 +769,76 @@ def image_rows(disc, rules):
     return rows
 
 
-def ninja_texture_rows(disc, ninja):
+def own_textures(data, model_offsets):
+    """For a file that holds Ninja models together with their PVR textures (each model's `NJTL` name list, then the `PVRT`
+    chunks of all of them at the end): ([(list number, texture number, pixel offset, bytes, width, height, type, format)],
+    {model offset: list number}), or None when the names of all the lists, joined in file order, do not count the file's
+    PVRT chunks exactly. List numbers start at 1; a model takes the last list before it; texture n of list k is the chunk
+    after those of the lists before it."""
+    lists, p = [], 0
+    while True:
+        p = data.find(b"NJ", p)
+        if p < 0 or p + 8 > len(data):
+            break
+        if p % 4:
+            p += 1
+            continue
+        size = struct.unpack_from("<I", data, p + 4)[0]
+        if data[p + 2:p + 4] == b"TL" and p + 8 + size <= len(data):
+            names = ninja_names(data, p + 8, size)
+            if names:
+                lists.append((p, names))
+        p += 4
+    chunks = pvm_entries(data)
+    if not lists or len(chunks) != sum(len(n) for _, n in lists):
+        return None
+    rows, base, first = [], 0, {}
+    for k, (pos, names) in enumerate(lists, 1):
+        first[k] = pos
+        for n in range(len(names)):
+            e = chunks[base + n]
+            rows.append((k, n, e[1], e[2], e[3], e[4], e[5], e[6]))
+        base += len(names)
+    sets = {}
+    for o in model_offsets:
+        before = [k for k in first if first[k] < o]
+        if before:
+            sets[o] = max(before)
+    return rows, sets
+
+
+def own_texture_rows(disc, ninja_models):
+    """([texture rows with their set column], the set of model files they cover) for Ninja models whose file also holds their
+    textures (`own_textures`); each such model's texset is marked with its list number."""
+    files = dict((path.lstrip("/").upper(), (lba, size, path)) for lba, size, path in disc.files())
+    by_file = collections.defaultdict(list)
+    for m in ninja_models:
+        if m["file"].upper() in files:
+            by_file[m["file"].upper()].append(m)
+    rows, handled = [], set()
+    for f in sorted(by_file):
+        lba, size, path = files[f]
+        if size > MAX_FILE and not path.upper().endswith(".PRS"):
+            continue
+        got = own_textures(file_data(disc, lba, size, path), [m["offset"] for m in by_file[f]])
+        if not got:
+            continue
+        trows, sets = got
+        handled.add(f)
+        for m in by_file[f]:
+            if m["offset"] in sets:
+                m["texset"] = str(sets[m["offset"]])
+        rows += [[f, str(n), f, "%x" % off, str(nb), str(w), str(h), "%x" % dt, str(pf), str(k)] for k, n, off, nb, w, h, dt, pf in trows]
+    if handled:
+        print("textures: %d model files carry their own textures, %d rows" % (len(handled), len(rows)))
+    return rows, handled
+
+
+def ninja_texture_rows(disc, ninja, skip=()):
     """Rows for [textures] for Ninja models: texture n of a model file is the texture its NJTL names, found in the PVM
     named after the model file, else a PVR file of that name (beside it first), else any PVM texture of that name.
     A model with no NJTL takes the textures of the PVM named after its file in order (texture n = its n-th), else the
-    PVR named after its file as texture 0."""
+    PVR named after its file as texture 0. Files in `skip` (those whose models carry their own textures) are left out."""
     files = dict((path.lstrip("/").upper(), (lba, size)) for lba, size, path in disc.files())
     cache = {}
 
@@ -765,6 +851,8 @@ def ninja_texture_rows(disc, ninja):
     pvms = sorted(f for f in files if f.endswith(".PVM"))
     rows = []
     for mfile, names in sorted(ninja.items()):
+        if mfile in skip:
+            continue
         stem, d = mfile.rsplit(".", 1)[0], (mfile.rsplit("/", 1)[0] + "/" if "/" in mfile else "")
         own = stem + ".PVM"
         if not names:
@@ -1380,6 +1468,7 @@ def main():
     maxtex = {}                                       # model file -> its highest texture number
     ninja = {}                                        # Ninja model file (disc path) -> its texture names
     ninja_objs = {}                                   # Ninja model file -> the object count of its first model
+    ninja_models = []                                 # the model dicts of every Ninja model
     cand = [v for v in where if 0x0C000000 <= v < 0x0D000000 and v % 4 == 0]
     random.seed(1)
     def take(path, name, found, trees, nj, say):
@@ -1395,6 +1484,7 @@ def main():
             models.append({"file": path.lstrip("/"), "offset": off, "records": objs, "bytes": nbytes, "radius": radius,
                            "addr": None, "group": "", "sub": "", "sublabel": "", "name": "", "table": "",
                            "index": "", "used_by": "", "texset": ""})
+            ninja_models.append(models[-1])
             ninja.setdefault(path.lstrip("/").upper(), names)
         if nj and say:
             print("%-16s %5d Ninja models" % (name, len(nj)))
@@ -1560,7 +1650,9 @@ def main():
     sha = hashlib.sha1(exe).hexdigest()
     tex = [row + [""] for row in texture_rows(rules, disc, exe, base, maxtex)]
     tex += texture_set_rows(rules, disc, exe, base, ptr_at, by_addr)
-    tex += [row + [""] for row in ninja_texture_rows(disc, ninja)]
+    own, handled = own_texture_rows(disc, ninja_models)
+    tex += own
+    tex += [row + [""] for row in ninja_texture_rows(disc, ninja, handled)]
     sections = [("models", "file\toffset\tbytes\trecords\tradius\tgroup\tsub\tsublabel\tname\ttable\tindex\tused_by\ttexset", [
         "%s\t%x\t%d\t%d\t%.3f\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s" % (
             m["file"], m["offset"], m["bytes"], m["records"], m["radius"], m["group"], m["sub"], m["sublabel"], m["name"],

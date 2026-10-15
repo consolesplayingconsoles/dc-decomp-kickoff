@@ -156,6 +156,19 @@ def motion_fixture():
     return b"NMDM" + struct.pack("<I", len(data)) + bytes(data)
 
 
+def quat_motion_fixture():
+    """An NMDM motion with position and quaternion keys (a quaternion key is a frame and four floats) for one object, after a
+    Ninja model of one object in the same file: the motion is found inside the file and its node count is the model's."""
+    data = bytearray(108)
+    struct.pack_into("<IIHH", data, 0, 12, 6, 0x2005, 3)
+    struct.pack_into("<3I3I", data, 12, 36, 68, 0, 2, 2, 0)
+    struct.pack_into("<I3f", data, 36, 0, 0.0, 0.0, 0.0)
+    struct.pack_into("<I3f", data, 52, 6, 1.0, 2.0, 3.0)
+    struct.pack_into("<I4f", data, 68, 0, 1.0, 0.0, 0.0, 0.0)
+    struct.pack_into("<I4f", data, 88, 6, 0.7071, 0.0, 0.7071, 0.0)
+    return b"NMDM" + struct.pack("<I", len(data)) + bytes(data)
+
+
 def picture_fixtures():
     def pvrt(w, h, dt, pf):
         body = w * h * 2
@@ -200,6 +213,54 @@ def sound_fixtures():
     return {"snd_afs.bin": afs, "snd_adx.bin": adx(3, 1, 32000, 64000), "snd_other.bin": other, "snd_dtpk.bin": b"DTPK" + b"\x00" * 60}
 
 
+def own_textures_fixture():
+    """A file holding two Ninja models with their textures: NJTL (2 names) and NJCM, NJTL (1 name) and NJCM, then 3 PVR chunks
+    (a GBIX header and a PVRT each); the names, joined, count the chunks."""
+    def njtl(names):
+        tl = struct.pack("<II", 8, len(names))
+        tl += b"".join(struct.pack("<3I", 8 + 12 * len(names) + 8 * i, 0, 0) for i in range(len(names)))
+        return b"NJTL" + struct.pack("<I", len(tl) + 8 * len(names)) + tl + b"".join(n.ljust(8, b"\x00") for n in names)
+
+    def njcm():
+        cm = bytearray(0x4C)
+        struct.pack_into("<II3f3i3fII", cm, 0, 0, 0x34, 0.0, 0.0, 0.0, 0, 0, 0, 1.0, 1.0, 1.0, 0, 0)
+        struct.pack_into("<II3ff", cm, 0x34, 0, 0, 0.0, 0.0, 0.0, 3.5)
+        return b"NJCM" + struct.pack("<I", len(cm)) + bytes(cm)
+
+    def pvr(w, h):
+        body = w * h * 2
+        return b"GBIX" + struct.pack("<II", 8, 0) + b"PVRT" + struct.pack("<I", body + 8) + bytes([1, 1, 0, 0]) + struct.pack("<2H", w, h) + b"\x00" * body
+    return b"\x00" * 4 + njtl([b"texa", b"texb"]) + njcm() + njtl([b"texc"]) + njcm() + pvr(8, 8) + pvr(16, 8) + pvr(8, 16)
+
+
+def own_texture_fixture():
+    """A file holding two Ninja models and their textures: a name list (two names), a model, a name list (one name), a model,
+    then three PVR textures. Returns (bytes, the two models' offsets)."""
+    def njtl(names):
+        tail = b"".join(n + b"\x00" for n in names)
+        head = struct.pack("<II", 8, len(names))
+        offs, at = [], 8 + 12 * len(names)
+        for n in names:
+            offs.append(at)
+            at += len(n) + 1
+        body = (head + b"".join(struct.pack("<3I", o, 0, 0) for o in offs) + tail).ljust((8 + 12 * len(names) + len(tail) + 3) // 4 * 4, b"\x00")
+        return b"NJTL" + struct.pack("<I", len(body)) + body
+    def njcm():
+        cm = bytearray(0x4C)
+        struct.pack_into("<II3f3i3fII", cm, 0, 0, 0x34, 0.0, 0.0, 0.0, 0, 0, 0, 1.0, 1.0, 1.0, 0, 0)
+        struct.pack_into("<II3ff", cm, 0x34, 0, 0, 0.0, 0.0, 0.0, 6.5)
+        return b"NJCM" + struct.pack("<I", len(cm)) + bytes(cm)
+    def pvrt(w, h):
+        body = w * h * 2
+        return b"PVRT" + struct.pack("<I", body + 8) + bytes([1, 1, 0, 0]) + struct.pack("<2H", w, h) + b"\x00" * body
+    data = b"CGAM" + b"\x00" * 12
+    first = len(data) + len(njtl([b"ta", b"tb"]))
+    data += njtl([b"ta", b"tb"]) + njcm()
+    second = len(data) + len(njtl([b"tc"]))
+    data += njtl([b"tc"]) + njcm()
+    return data + pvrt(8, 8) + pvrt(16, 8) + pvrt(8, 16), [first, second]
+
+
 def results(mm):
     out, files = {}, {}
     for name, (stream, plain) in prs_fixtures().items():
@@ -220,8 +281,22 @@ def results(mm):
     for name, data in sound_fixtures().items():
         files[name] = data
         out["sounds:" + name] = [list(r) for r in mm.audio_file_rows(len(data), data[:4096], lambda o, n, d=data: d[o:o + n])]
+    files["own_tex.bin"] = ot = own_textures_fixture()
+    nj_ot = mm.find_ninja(ot)
+    got = mm.own_textures(ot, [m[0] for m in nj_ot])
+    out["own_textures:own_tex.bin"] = {"models": [[m[0], m[2]] for m in nj_ot],
+                                       "rows": [list(r) for r in got[0]] if got else None,
+                                       "sets": sorted([list(x) for x in got[1].items()]) if got else None}
     files["pressed.bin"] = pr = pressed_fixture()
     out["pressed:pressed.bin"] = [[at, name, len(dec), dec[:48].hex(), end] for at, name, dec, end in mm.pressed_blocks(pr)]
+    files["owntex.bin"], offs = own_texture_fixture()
+    got = mm.own_textures(files["owntex.bin"], offs)
+    out["owntextures:owntex.bin"] = [[list(r) for r in got[0]], sorted(got[1].items())] if got else None
+    files["motion_q.njm"] = mq = quat_motion_fixture()
+    r = mm.njm_read(mq, 1)
+    out["motion:motion_q.njm"] = [r[0], r[1], r[2], r[3]] if r else None
+    files["embedded.bin"] = emb = ninja_fixture().ljust(256, b"\x00") + mq
+    out["motions:embedded.bin"] = [list(m) for m in mm.find_motions(emb)]
     files["big.bin"] = big = big_fixture()
     flatm, trees_m, nj_m = mm.scan_buffer(big)
     out["scan:big.bin"] = {"flat": [[o, r, n, round(rad, 3), tex] for o, r, n, rad, tex in flatm],
