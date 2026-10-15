@@ -188,6 +188,11 @@ def record_ok(w, i):
 def prs_decompress(src):
     """Sega's PRS compression (a Lempel-Ziv variant: a control byte of 8 flags, then literals and short or long copies
     from earlier output) to the original bytes. Raises ValueError when the data is not valid PRS."""
+    return prs_stream(src)[0]
+
+
+def prs_stream(src):
+    """(the original bytes, the number of bytes of `src` the PRS stream took, end marker included)."""
     dst, pos, ctrl, bits = bytearray(), 0, 0, 0
 
     def flag():
@@ -207,7 +212,7 @@ def prs_decompress(src):
                 word = src[pos] | src[pos + 1] << 8
                 pos += 2
                 if word == 0:
-                    return bytes(dst)                      # the end marker
+                    return bytes(dst), pos                 # the end marker
                 size, off = word & 7, (word >> 3) - 0x2000
                 if size == 0:
                     size, pos = src[pos] + 1, pos + 1
@@ -408,6 +413,40 @@ def find_object_trees(data):
     return out, base
 
 
+PRESSED = b"PRESSED"
+
+
+def pressed_blocks(data):
+    """[(offset of the tag, name, decompressed bytes, offset past the block)] of every PRS stream tagged `PRESSED` plus a
+    kind (`PRESSEDPOLFORMAT`, `PRESSEDPVRFORMAT`: 16 bytes) in data. Two layouts: the tag, a 4-byte big-endian size, a 12-byte
+    name, the stream (the size must equal what the stream decompresses to); or the tag and the stream. A candidate that does
+    not decompress, or whose size does not match, is passed over."""
+    out, mv, p = [], memoryview(data), data.find(PRESSED)
+    while p >= 0:
+        block = None
+        if p + 32 <= len(data):
+            size = struct.unpack_from(">I", data, p + 16)[0]
+            try:
+                dec, used = prs_stream(mv[p + 32:])
+                if dec and len(dec) == size:
+                    block = (p, data[p + 20:p + 32].split(b"\x00")[0].decode("ascii", "replace"), dec, p + 32 + used)
+            except ValueError:
+                pass
+        if block is None and p + 16 < len(data):
+            try:
+                dec, used = prs_stream(mv[p + 16:])
+                if dec:
+                    block = (p, "", dec, p + 16 + used)
+            except ValueError:
+                pass
+        if block:
+            out.append(block)
+            p = data.find(PRESSED, block[3])
+        else:
+            p = data.find(PRESSED, p + len(PRESSED))
+    return out
+
+
 def file_data(disc, lba, size, path):
     """A disc file's bytes; a `.PRS` file (Sega's compression) is decompressed, so offsets into it are offsets into the
     decompressed data. A `.PRS` file that does not decompress is returned as it is."""
@@ -446,6 +485,46 @@ def stretches(disc, lba, size, path):
     starts = stretch_starts(size)
     for start in starts:
         yield start, disc.read(lba + start // 2048, min(STRETCH, size - start)), len(starts) == 1
+
+
+class ModelScan(object):
+    """The models found in the stretches of one file, by offset in the file: a thing in the overlap of two stretches is
+    found twice and kept once. A tree's address is that of the file's first byte (its stretch's address minus where the
+    stretch starts), so one address serves the whole file."""
+
+    def __init__(self):
+        self.flat, self.trees, self.ninja, self.blocks = {}, {}, {}, {}
+
+    def add(self, start, data):
+        for at, name, dec, _ in pressed_blocks(data):
+            self.blocks.setdefault(start + at, (name, dec))
+        for x in find_models(data):
+            self.flat.setdefault(start + x[0], (start + x[0],) + tuple(x[1:]))
+        trees, base = find_object_trees(data)
+        for off, objs, radius in trees:
+            self.trees.setdefault(start + off, (start + off, objs, radius, base - start))
+        for off, nbytes, objs, radius, names in find_ninja(data):
+            self.ninja.setdefault(start + off, (start + off, nbytes, objs, radius, names))
+
+    def result(self):
+        """(flat models, trees, Ninja chunk models), each sorted by offset: flat (offset, records, strip bytes, radius,
+        highest texture number), trees (offset, objects, radius, address of the file's first byte), Ninja (offset, bytes,
+        objects, radius, texture names)."""
+        return ([self.flat[k] for k in sorted(self.flat)], [self.trees[k] for k in sorted(self.trees)],
+                [self.ninja[k] for k in sorted(self.ninja)])
+
+
+def scan_buffer(data):
+    """ModelScan.result() of a whole file held in memory, scanned in stretches as a disc file is."""
+    scan = ModelScan()
+    for start in stretch_starts(len(data)):
+        scan.add(start, data[start:start + STRETCH])
+    return scan.result()
+
+
+def block_path(path, at):
+    """The name of the stream tagged at offset `at` of a file: it is scanned as a file of its own."""
+    return "%s@%x" % (path.lstrip("/"), at)
 
 
 def ninja_names(data, base, size):
@@ -653,11 +732,15 @@ def image_rows(disc, rules):
     for lba, size, path in disc.files():
         if path.split("/")[-1].upper().endswith(SKIP):
             continue
-        at = {}
+        at, blocks = {}, {}
         for start, data, whole in stretches(disc, lba, size, path):
             for x in find_pictures(data, start, whole):
                 at.setdefault(x[0], x)
+            for off, _, dec, _ in pressed_blocks(data):
+                blocks.setdefault(start + off, dec)
         add(path.lstrip("/"), [at[k] for k in sorted(at)])
+        for off in sorted(blocks):                         # the pictures inside each `PRESSED` stream
+            add(block_path(path, off), find_pictures(blocks[off], 0, True))
     seen = set((r[0].upper(), int(r[1], 16)) for r in rows)
     for key in given:
         if key not in seen:
@@ -1214,6 +1297,30 @@ def adx_info(b):
     return ("AHX" if enc >= 0x10 else "ADX"), ch, rate, samples
 
 
+def audio_file_rows(size, head, read):
+    """[(index, offset, bytes, format, channels, rate, samples)] (the last three None where unknown) of the sounds in one file of `size` bytes, `head` being its first
+    bytes and read(offset, n) any n bytes of it: every ADX / AHX stream of an AFS archive (an archive with none holds
+    something else and has no rows), a file that is one ADX / AHX stream, or a DTPK sound bank (listed, not opened)."""
+    if head[:4] == b"AFS\0":
+        n = struct.unpack("<I", head[4:8])[0]
+        if not 0 < n < 100000:
+            return []
+        table, rows = read(0, 8 + 8 * n), []
+        for i in range(n):
+            off, sz = struct.unpack_from("<II", table, 8 + 8 * i)
+            if not sz or off + 16 > size:
+                continue
+            info = adx_info(read(off, 16))
+            rows.append((i, off, sz) + (info if info else ("unknown", None, None, None)))
+        return rows if any(r[3] in ("ADX", "AHX") for r in rows) else []
+    info = adx_info(head)
+    if info:
+        return [(0, 0, size) + info]
+    if head[:4] == b"DTPK":
+        return [(0, 0, size, "DTPK sound bank", None, None, None)]
+    return []
+
+
 def audio_rows(disc, rules):
     """Rows for the [audio] section: every ADX / AHX stream in an AFS archive or a file of its own, and every DTPK
     sound bank (listed, not opened)."""
@@ -1222,37 +1329,15 @@ def audio_rows(disc, rules):
         if r[0] == "sound" and len(r) >= 4:
             names[(r[1].upper(), int(r[2]))] = tidy(" ".join(r[3:]))
     rows = []
-
-    def row(fn, idx, off, size, fmt, ch="", rate="", samples=""):
-        secs = "%.1f" % (samples / rate) if rate and samples else ""
-        rows.append([fn, str(idx), "%x" % off, str(size), fmt, str(ch), str(rate), str(samples), secs,
-                     names.get((fn, idx), "")])
     for lba, size, path in disc.files():
         fn = path.split("/")[-1].upper()
-        head = disc.read(lba, min(size, 4096))
-        if head[:4] == b"AFS\0":
-            n = struct.unpack("<I", head[4:8])[0]
-            if not 0 < n < 100000:
-                continue
-            table = disc.read(lba, 8 + 8 * n)
-            mark = len(rows)
-            for i in range(n):
-                off, sz = struct.unpack_from("<II", table, 8 + 8 * i)
-                if not sz or off + 16 > size:
-                    continue
-                h = disc.read(lba + off // 2048, 4096)[off % 2048:off % 2048 + 16]
-                info = adx_info(h)
-                if info:
-                    row(fn, i, off, sz, info[0], info[1], info[2], info[3])
-                else:
-                    row(fn, i, off, sz, "unknown")
-            if not any(r[4] in ("ADX", "AHX") for r in rows[mark:]):
-                del rows[mark:]                       # an archive of something else (a city, a model set)
-        elif adx_info(head):
-            info = adx_info(head)
-            row(fn, 0, 0, size, info[0], info[1], info[2], info[3])
-        elif head[:4] == b"DTPK":
-            row(fn, 0, 0, size, "DTPK sound bank")
+
+        def read(off, n, lba=lba):
+            return disc.read(lba + off // 2048, (off % 2048) + n)[off % 2048:off % 2048 + n]
+        for idx, off, sz, fmt, ch, rate, samples in audio_file_rows(size, disc.read(lba, min(size, 4096)), read):
+            secs = "%.1f" % (samples / rate) if rate and samples else ""
+            rows.append([fn, str(idx), "%x" % off, str(sz), fmt] + ["" if x is None else str(x) for x in (ch, rate, samples)]
+                        + [secs, names.get((fn, idx), "")])
     return rows
 
 
@@ -1297,26 +1382,13 @@ def main():
     ninja_objs = {}                                   # Ninja model file -> the object count of its first model
     cand = [v for v in where if 0x0C000000 <= v < 0x0D000000 and v % 4 == 0]
     random.seed(1)
-    for lba, size, path in disc.files():
-        name = path.split("/")[-1]
-        if name.upper().endswith(SKIP):
-            continue
-        by_off, trees_at, nj_at = {}, {}, {}               # keyed by offset in the file: the overlap of two stretches finds a thing twice
-        for start, data, _ in stretches(disc, lba, size, path):
-            for x in find_models(data):
-                by_off.setdefault(start + x[0], (start + x[0],) + tuple(x[1:]))
-            for off, objs, radius in find_object_trees(data)[0]:
-                trees_at.setdefault(start + off, (start + off, objs, radius))
-            for off, nbytes, objs, radius, names in find_ninja(data):
-                nj_at.setdefault(start + off, (start + off, nbytes, objs, radius, names))
-        trees = [trees_at[k] for k in sorted(trees_at)]
-        nj = [nj_at[k] for k in sorted(nj_at)]
-        found = [by_off[k] for k in sorted(by_off)]
-        for off, objs, radius in trees:
+    def take(path, name, found, trees, nj, say):
+        """Rows for the models found in one file (or one stream of a file: path is then its `file@offset` name)."""
+        for off, objs, radius, _ in trees:
             models.append({"file": path.lstrip("/"), "offset": off, "records": objs, "bytes": objs * 0x34, "radius": radius,
                            "addr": None, "group": "", "sub": "", "sublabel": "", "name": "", "table": "",
                            "index": "", "used_by": "", "texset": ""})
-        if trees:
+        if trees and say:
             print("%-16s %5d object trees" % (name, len(trees)))
         for off, nbytes, objs, radius, names in nj:
             ninja_objs.setdefault(path.lstrip("/"), objs)
@@ -1324,10 +1396,10 @@ def main():
                            "addr": None, "group": "", "sub": "", "sublabel": "", "name": "", "table": "",
                            "index": "", "used_by": "", "texset": ""})
             ninja.setdefault(path.lstrip("/").upper(), names)
-        if nj:
+        if nj and say:
             print("%-16s %5d Ninja models" % (name, len(nj)))
         if not found:
-            continue
+            return
         votes = collections.Counter()
         for off, _, _, _, _ in random.sample(found, min(15, len(found))):
             for v in cand:
@@ -1335,12 +1407,26 @@ def main():
                     votes[v - off] += 1
         top = votes.most_common(1)
         load = top[0][0] if top and top[0][1] >= max(3, min(15, len(found)) // 2) else None
-        print("%-16s %5d models  loaded at %s" % (name, len(found), "%08X" % load if load else "?"))
+        if say:
+            print("%-16s %5d models  loaded at %s" % (name, len(found), "%08X" % load if load else "?"))
         maxtex[name.upper()] = max(f[4] for f in found)
         for off, recs, nbytes, radius, _ in found:
             models.append({"file": name, "offset": off, "records": recs, "bytes": nbytes, "radius": radius,
                            "addr": load + off if load else None, "group": "", "sub": "", "sublabel": "", "name": "", "table": "",
                            "index": "", "used_by": "", "texset": ""})
+    for lba, size, path in disc.files():
+        name = path.split("/")[-1]
+        if name.upper().endswith(SKIP):
+            continue
+        scan = ModelScan()
+        for start, data, _ in stretches(disc, lba, size, path):
+            scan.add(start, data)
+        take(path, name, *scan.result(), say=True)
+        for at in sorted(scan.blocks):                     # each `PRESSED` stream is scanned as a file of its own
+            vname = block_path(path, at)
+            take(vname, vname, *scan_buffer(scan.blocks[at][1]), say=False)
+        if scan.blocks:
+            print("%-16s %5d compressed streams" % (name, len(scan.blocks)))
     by_addr = {m["addr"]: m for m in models if m["addr"]}
 
     # 2. tables: runs of words that are model pointers (or null), found from each model's references

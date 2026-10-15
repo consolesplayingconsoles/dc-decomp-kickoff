@@ -5,7 +5,7 @@
     emit.py --write <dir>    also writes each input as a file in <dir> (a viewer's readers can then be run on the same bytes)
 
 The inputs are built here from nothing: no game data, so they can be committed and run anywhere. They exercise the
-formats the readers know (Sega PRS compression, object trees stored as a memory image, Ninja chunk models and motions,
+formats the readers know (Sega PRS compression, PRS streams tagged PRESSED, object trees stored as a memory image, Ninja chunk models and motions,
 PowerVR/GIF/JPEG/PNG pictures). `check.py` compares this output with `golden.json`; a viewer compares its own readers'
 output on the same files."""
 import importlib.util
@@ -81,9 +81,8 @@ def prs_fixtures():
     return {"prs_literals.bin": (a, bytes(lit.plain)), "prs_copies.bin": (b, bytes(mix.plain))}
 
 
-def tree_fixture():
+def tree_fixture(base=0x8C100000):
     """Five objects in a chain (child, sibling, child, sibling) at a load address, one chunk model, one basic model."""
-    base = 0x8C100000
     buf = bytearray(0x400)
 
     def obj(o, model, child, sibling):
@@ -104,6 +103,34 @@ def tree_fixture():
     struct.pack_into("<HHIIIII", buf, 0x280, 0, 1, base + 0x2A0, 0, 0, 0, 0)
     struct.pack_into("<3h", buf, 0x2A0, 0, 1, 2)
     struct.pack_into("<IIfI I", buf, 0x2C0, 0xFF80C040, 0, 1.0, 0, 0)
+    return bytes(buf)
+
+
+def flat_fixture():
+    """One NAOMI-library flat model: a 24-byte part header (two counts, a sphere), then one record: a 0x50-byte header and
+    one strip of 3 full vertices (position, normal, u, v)."""
+    buf = bytearray((6 + 20 + 2 + 3 * 8) * 4)
+    struct.pack_into("<2I3ff", buf, 0, 1, 1, 0.0, 0.0, 0.0, 5.0)                      # the part header: counts, sphere radius 5
+    rec = 6 * 4
+    struct.pack_into("<2I", buf, rec, 0x8000002C, 0x83000000)                          # control word, ISP word
+    struct.pack_into("<i", buf, rec + 8 * 4, 7)                                        # the texture number
+    struct.pack_into("<I", buf, rec + 19 * 4, (2 + 3 * 8) * 4)                         # the length of the strip data
+    struct.pack_into("<2I", buf, rec + 20 * 4, 0x73, 3)                                # a strip: flags, three vertices
+    for i in range(3):
+        struct.pack_into("<8f", buf, rec + 22 * 4 + i * 32, float(i), 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0)
+    return bytes(buf)
+
+
+def big_fixture():
+    """A file of 20 MB (two stretches) holding a flat model, a Ninja chunk model and trees with different load addresses at
+    known offsets: one in the first stretch only, one in the overlap of the two (found in both, kept once), one in the second
+    stretch only. The trees' addresses are given by the file's first byte, so each stretch must report the same file."""
+    mb = 1 << 20
+    buf = bytearray(20 * mb)
+    place = {2 * mb: flat_fixture(), 5 * mb: ninja_fixture(), 3 * mb: tree_fixture(0x8C300000 + 3 * mb),
+             13 * mb: tree_fixture(0x8C300000 + 13 * mb), 17 * mb + 0x400: tree_fixture(0x8C300000 + 17 * mb + 0x400)}
+    for off, data in place.items():
+        buf[off:off + len(data)] = data
     return bytes(buf)
 
 
@@ -142,6 +169,37 @@ def picture_fixtures():
     return {"pic_pvm.bin": pvm, "pic_gif.bin": gif, "pic_png.bin": png, "pic_jpg.bin": jpg}
 
 
+def pressed_fixture():
+    """Three tagged PRS streams: one with a size and a name (the size right), one with the tag and the stream only, and a tag
+    at the end whose stream does not decompress (passed over); a tag whose size is wrong is passed over too, its stream
+    being read as the second layout."""
+    def stream(plain):
+        e = Prs()
+        e.literal(plain)
+        return e.end()
+    a, b, c = flat_fixture(), ninja_fixture(), b"wrong size"
+    return (b"junk" + b"PRESSEDPOLFORMAT" + struct.pack(">I", len(a)) + b"model_a".ljust(12, b"\x00") + stream(a)
+            + b"\x00\x00" + b"PRESSEDPVRFORMAT" + stream(b)
+            + b"PRESSEDPOLFORMAT" + struct.pack(">I", 99) + b"bad".ljust(12, b"\x00") + stream(c)
+            + b"PRESSEDPVRFORMAT" + b"\xff" * 8)
+
+
+def sound_fixtures():
+    """An AFS archive (an ADX stream, something else, an AHX stream), a file that is one ADX stream, an archive of other things
+    (no rows), and a DTPK sound bank."""
+    def adx(enc, ch, rate, samples):
+        return b"\x80\x00\x00\x20" + bytes([enc, 18, 4, ch]) + struct.pack(">II", rate, samples) + b"\x00" * 16
+    entries = [adx(3, 2, 44100, 441000), b"not audio at all!!", adx(0x10, 1, 22050, 22050)]
+    table, off = b"AFS\x00" + struct.pack("<I", 3), 0x800
+    body = b""
+    for e in entries:
+        table += struct.pack("<II", off + len(body), len(e))
+        body += e.ljust((len(e) + 15) // 16 * 16, b"\x00")
+    afs = table.ljust(off, b"\x00") + body
+    other = b"AFS\x00" + struct.pack("<I", 1) + struct.pack("<II", 0x10, 20) + b"not audio at all!!!!"
+    return {"snd_afs.bin": afs, "snd_adx.bin": adx(3, 1, 32000, 64000), "snd_other.bin": other, "snd_dtpk.bin": b"DTPK" + b"\x00" * 60}
+
+
 def results(mm):
     out, files = {}, {}
     for name, (stream, plain) in prs_fixtures().items():
@@ -149,6 +207,8 @@ def results(mm):
         got = mm.prs_decompress(stream)
         assert got == plain, name + ": the PRS reader does not give back what the test encoder put in"
         out["prs:" + name] = {"bytes": len(got), "hex": got[:48].hex()}
+    files["flat.bin"] = flat = flat_fixture()
+    out["flat:flat.bin"] = [[o, r, n, round(rad, 3), tex] for o, r, n, rad, tex in mm.find_models(flat)]
     files["tree.bin"] = tree = tree_fixture()
     trees, base = mm.find_object_trees(tree)
     out["trees:tree.bin"] = {"base": base, "trees": [[o, n, round(r, 3)] for o, n, r in trees]}
@@ -157,6 +217,16 @@ def results(mm):
     files["motion.njm"] = mo = motion_fixture()
     r = mm.njm_read(mo, 2)
     out["motion:motion.njm"] = [r[0], r[1], r[2], r[3]] if r else None
+    for name, data in sound_fixtures().items():
+        files[name] = data
+        out["sounds:" + name] = [list(r) for r in mm.audio_file_rows(len(data), data[:4096], lambda o, n, d=data: d[o:o + n])]
+    files["pressed.bin"] = pr = pressed_fixture()
+    out["pressed:pressed.bin"] = [[at, name, len(dec), dec[:48].hex(), end] for at, name, dec, end in mm.pressed_blocks(pr)]
+    files["big.bin"] = big = big_fixture()
+    flatm, trees_m, nj_m = mm.scan_buffer(big)
+    out["scan:big.bin"] = {"flat": [[o, r, n, round(rad, 3), tex] for o, r, n, rad, tex in flatm],
+                           "trees": [[o, n, round(rad, 3), fb] for o, n, rad, fb in trees_m],
+                           "ninja": [[o, nb, objs, round(rad, 3), names] for o, nb, objs, rad, names in nj_m]}
     mb = 1 << 20
     out["stretches"] = {str(n): mm.stretch_starts(n) for n in (0, mb, 16 * mb, 16 * mb + 1, 28 * mb, 28 * mb + 1, 100 * mb)}
     for name, data in picture_fixtures().items():
