@@ -114,6 +114,9 @@ models.txt (curated rules, one per line, `#` comments, `_` is a space in labels)
   structs <addr> <stride> <count> <namestr off> <group> <off:label,...>  records with model pointers
 """
 import bisect
+import io
+import zipfile
+import zlib
 import collections
 import hashlib
 import math
@@ -487,17 +490,199 @@ def stretches(disc, lba, size, path):
         yield start, disc.read(lba + start // 2048, min(STRETCH, size - start)), len(starts) == 1
 
 
+def zip_members(data):
+    """[(offset of the member's local header, name, bytes)] of every member of a ZIP archive that data holds whole (stored
+    or deflated), read through the central directory at its end; [] when data is not one."""
+    if data[:4] != b"PK\x03\x04" or len(data) < 22:
+        return []
+    try:
+        z = zipfile.ZipFile(io.BytesIO(bytes(data)))
+        out = []
+        for info in z.infolist():
+            if info.filename.endswith("/") or info.file_size > MAX_FILE:
+                continue
+            out.append((info.header_offset, info.filename, z.read(info)))
+        return out
+    except (zipfile.BadZipFile, zlib.error, NotImplementedError, struct.error, EOFError):
+        return []
+
+
+def find_md3(data):
+    """[(offset, bytes, surfaces, triangles, vertices, radius)] of every Quake 3 model (MD3: `IDP3`, version 15) in data: the
+    header and every surface must lie inside it, each triangle's vertices inside its surface; the radius is the first
+    frame's."""
+    out, p = [], data.find(b"IDP3")
+    while p >= 0:
+        nxt = p + 4
+        if p % 4 == 0 and p + 108 <= len(data) and struct.unpack_from("<I", data, p + 4)[0] == 15:
+            flags, nframes, ntags, nsurf, nskins, ofsf, ofst, ofss, ofse = struct.unpack_from("<9I", data, p + 72)
+            ok = 0 < nframes <= 4096 and 0 < nsurf <= 64 and ntags <= 64 and 108 <= ofss < ofse <= len(data) - p and ofsf + 56 * nframes <= ofse
+            tris = verts = 0
+            s = p + ofss
+            for _ in range(nsurf if ok else 0):
+                if s + 108 > len(data) or data[s:s + 4] != b"IDP3":
+                    ok = False
+                    break
+                sf, snf, nsh, nv, nt, otri, osh, ost, oxyz, oend = struct.unpack_from("<10I", data, s + 68)
+                if not (0 < nv <= 65535 and 0 < nt <= 65535 and snf == nframes and 108 <= otri and oend >= 108 and s + oend <= p + ofse
+                        and otri + 12 * nt <= oend and ost + 8 * nv <= oend and oxyz + 8 * nv * nframes <= oend):
+                    ok = False
+                    break
+                tris, verts, s = tris + nt, verts + nv, s + oend
+            if ok:
+                out.append((p, ofse, nsurf, tris, verts, struct.unpack_from("<f", data, p + ofsf + 36)[0]))
+                nxt = p + ofse
+        p = data.find(b"IDP3", nxt)
+    return out
+
+
+TAGGED = (b"Modl", b"Trak", b"Podd", b"Part", b"Scen", b"MAlt", b"Pupp")
+
+
+def tagged_faces(data, s2, end, ofs48, o52, nv):
+    """The triangles of a mesh group from its display list at body offset ofs48 (8-byte commands up to 0xDF): [(a, b, c)] with
+    vertex numbers in the group's vertex array, or None when there is no list or it does not read. Commands: 0x01 loads n
+    vertices (n at bits 12..19 of the first word, the end slot in bits 1..11, an address in the second) into slots; 0x05
+    is a triangle, 0x06 two triangles, 0x07 a quad as two (three vertex numbers doubled in each word); anything else is
+    skipped. A slot is the vertex of the same number until a load changes it."""
+    if not ofs48 or ofs48 + 8 > end - s2:
+        return None
+    slots, out, p = list(range(nv)), [], s2 + ofs48
+    for _ in range(4096):
+        if p + 8 > end:
+            return None
+        w0, w1 = struct.unpack_from(">II", data, p)
+        cmd = w0 >> 24
+        if cmd == 0xDF:
+            return out
+        if cmd == 0x01:
+            n, vend = (w0 >> 12) & 0xFF, (w0 & 0xFFF) >> 1
+            first = (w1 - o52) // 16 if w1 >= o52 and (w1 - o52) % 16 == 0 else None
+            if first is not None and vend >= n:
+                for k in range(n):
+                    if vend - n + k < len(slots) and first + k < nv:
+                        slots[vend - n + k] = first + k
+        elif cmd in (0x05, 0x06, 0x07):
+            tris = [((w0 >> 16) & 0xFF, (w0 >> 8) & 0xFF, w0 & 0xFF)]
+            if cmd in (0x06, 0x07):
+                tris.append(((w1 >> 16) & 0xFF, (w1 >> 8) & 0xFF, w1 & 0xFF))
+            for t in tris:
+                a, b, c = (x // 2 for x in t)
+                if max(a, b, c) >= len(slots):
+                    return None
+                out.append((slots[a], slots[b], slots[c]))
+        p += 8
+    return None
+
+
+def tagged_groups(data, s2, end):
+    """The mesh groups of one tagged model whose body is data[s2:end] (pointers count from s2): [(offset of the group's record,
+    vertex count, triangle count, type mode)]. The body starts with a 4-byte tag and a list of node pointers ended by
+    0xFFFFFFFF; a node is 28 bytes (flags, child count at +20, child list at +24); a node whose flags have 0x4000 lists nodes,
+    one of type 0x3064 lists mesh groups. A group is 0x40 bytes: vertex count at +58, type mode at +34 (3 triangles, 4
+    quads, else strips), the number of vertex runs at +32 and their list at +36 (each run's size, +2 per 32 for a strip over
+    32), the display list of its triangles at +48 (`tagged_faces`; groups without one use the type mode), the 16-byte
+    vertices at +52."""
+    out, seen = [], set()
+    u32 = lambda o: struct.unpack_from(">I", data, o)[0]
+
+    def node(ptr):
+        if ptr == 0 or ptr in seen or s2 + ptr + 28 > end:
+            return
+        seen.add(ptr)
+        o = s2 + ptr
+        flags, nch, och = u32(o), u32(o + 20), u32(o + 24)
+        if nch > 4096 or s2 + och + 4 * nch > end:
+            return
+        if flags & 0x4000:
+            for i in range(nch):
+                node(u32(s2 + och + 4 * i))
+        elif flags & 0xFFFF == 0x3064:
+            for i in range(nch):
+                g = u32(s2 + och + 4 * i)
+                if s2 + g + 0x40 <= end:
+                    out.append(g)
+    q = s2 + 4
+    while q + 4 <= end and u32(q) != 0xFFFFFFFF and len(seen) < 100000:
+        node(u32(q))
+        q += 4
+    rows = []
+    for g in out:
+        o = s2 + g
+        nruns, mode = struct.unpack_from(">HH", data, o + 32)
+        oruns, o52, nv = u32(o + 36), u32(o + 52), struct.unpack_from(">H", data, o + 58)[0]
+        if not nv or o52 + 16 * nv > end - s2:
+            continue
+        runs = []
+        if oruns:
+            if s2 + oruns + 4 * nruns > end:
+                continue
+            for k in range(nruns):
+                v = u32(s2 + oruns + 4 * k)
+                runs.append(v + 2 * (v // 32) if mode not in (3, 4) and v > 32 else v)
+            if sum(runs) < nv:
+                runs[-1] += nv - sum(runs)
+        else:
+            step = mode if mode in (3, 4) else 1
+            runs = [nv // nruns] * nruns if nruns >= 1 and nv % nruns == 0 and (nv // nruns) % step == 0 else [nv]
+        if sum(runs) != nv:
+            continue
+        faces = tagged_faces(data, s2, end, u32(o + 48), o52, nv)
+        tris = len(faces) if faces is not None else sum(r // 3 if mode == 3 else 2 * (r // 4) if mode == 4 else max(0, r - 2) for r in runs)
+        rows.append((g, nv, tris, mode))
+    return rows
+
+
+def find_tagged(data):
+    """[(offset of the body, bytes, tag, mesh groups, vertices, triangles, radius)] of every model of a model block held at the
+    start of data: a big-endian count, then count + 1 rising offsets that alternate between a pointer-flag section and a
+    body, each body starting with a tag (Modl, Trak, Podd, Part, Scen, MAlt, Pupp)."""
+    if len(data) < 24:
+        return []
+    n = struct.unpack_from(">I", data, 0)[0]
+    if not 2 <= n <= 4096 or 4 + 4 * (n + 1) > len(data):
+        return []
+    offs = struct.unpack_from(">%dI" % (n + 1), data, 4)
+    if any(offs[i] > offs[i + 1] for i in range(n)) or offs[-1] > len(data) or offs[0] < 4 + 4 * (n + 1):
+        return []
+    pairs = [(offs[2 * i + 1], offs[2 * i + 2]) for i in range(n // 2) if 2 * i + 2 <= n]
+    if sum(1 for a, e in pairs if data[a:a + 4] in TAGGED) * 2 < len(pairs):
+        return []
+    out = []
+    for a, e in pairs:
+        if data[a:a + 4] not in TAGGED or e - a < 8:
+            continue
+        groups = tagged_groups(data, a, e)
+        if not groups:
+            continue
+        radius = 0.0
+        for g, nv, tris, mode in groups:
+            lo = struct.unpack_from(">3f", data, a + g + 8)
+            hi = struct.unpack_from(">3f", data, a + g + 20)
+            radius = max([radius] + [abs(x) for x in lo + hi if x == x and abs(x) < 1e9])
+        out.append((a, e - a, data[a:a + 4].decode("ascii"), len(groups), sum(g[1] for g in groups), sum(g[2] for g in groups), radius))
+    return out
+
+
 class ModelScan(object):
     """The models found in the stretches of one file, by offset in the file: a thing in the overlap of two stretches is
     found twice and kept once. A tree's address is that of the file's first byte (its stretch's address minus where the
     stretch starts), so one address serves the whole file."""
 
     def __init__(self):
-        self.flat, self.trees, self.ninja, self.blocks, self.motions = {}, {}, {}, {}, {}
+        self.flat, self.trees, self.ninja, self.blocks, self.motions, self.md3, self.tagged = {}, {}, {}, {}, {}, {}, {}
 
     def add(self, start, data):
         for at, name, dec, _ in pressed_blocks(data):
             self.blocks.setdefault(start + at, (name, dec))
+        if start == 0:                                     # the members of a ZIP archive are streams of their own too
+            for at, name, dec in zip_members(data):
+                self.blocks.setdefault(at, (name, dec))
+        for x in find_md3(data):
+            self.md3.setdefault(start + x[0], (start + x[0],) + tuple(x[1:]))
+        if start == 0:
+            for x in find_tagged(data):
+                self.tagged.setdefault(x[0], x)
         for x in find_models(data):
             self.flat.setdefault(start + x[0], (start + x[0],) + tuple(x[1:]))
         trees, base = find_object_trees(data)
@@ -508,6 +693,14 @@ class ModelScan(object):
         for x in find_motions(data):
             self.motions.setdefault(start + x[0], (start + x[0],) + tuple(x[1:]))
 
+    def tagged_result(self):
+        """The models of a model block, sorted by offset: (offset, bytes, tag, groups, vertices, triangles, radius)."""
+        return [self.tagged[k] for k in sorted(self.tagged)]
+
+    def md3_result(self):
+        """The Quake 3 models (MD3), sorted by offset: (offset, bytes, surfaces, triangles, vertices, radius)."""
+        return [self.md3[k] for k in sorted(self.md3)]
+
     def result(self):
         """(flat models, trees, Ninja chunk models), each sorted by offset: flat (offset, records, strip bytes, radius,
         highest texture number), trees (offset, objects, radius, address of the file's first byte), Ninja (offset, bytes,
@@ -516,12 +709,17 @@ class ModelScan(object):
                 [self.ninja[k] for k in sorted(self.ninja)])
 
 
-def scan_buffer(data):
-    """ModelScan.result() of a whole file held in memory, scanned in stretches as a disc file is."""
+def scan_models(data):
+    """The ModelScan of a whole file held in memory, scanned in stretches as a disc file is."""
     scan = ModelScan()
     for start in stretch_starts(len(data)):
         scan.add(start, data[start:start + STRETCH])
-    return scan.result()
+    return scan
+
+
+def scan_buffer(data):
+    """ModelScan.result() of a whole file held in memory, scanned in stretches as a disc file is."""
+    return scan_models(data).result()
 
 
 def block_path(path, at):
@@ -759,6 +957,9 @@ def image_rows(disc, rules):
                 at.setdefault(x[0], x)
             for off, _, dec, _ in pressed_blocks(data):
                 blocks.setdefault(start + off, dec)
+            if start == 0:
+                for off, _, dec in zip_members(data):
+                    blocks.setdefault(off, dec)
         add(path.lstrip("/"), [at[k] for k in sorted(at)])
         for off in sorted(blocks):                         # the pictures inside each `PRESSED` stream
             add(block_path(path, off), find_pictures(blocks[off], 0, True))
@@ -1410,10 +1611,35 @@ def str_info(b):
     return "STR", None, rate, None
 
 
+def rat_entries(size, head, read):
+    """[(index, name, type, tag, bytes, offset)] of a RAT archive of `size` bytes (`RAT\\0`, a version, an entry count, then 32 byte
+    entries from byte 32: an 8 byte name, a 4 byte type, a 4 byte tag, the size, two dates, the offset), up to the first entry
+    that is not one: a type of 3 or 4 capitals and a name and a body that lie inside the file; [] when it is not one."""
+    if head[:4] != b"RAT\0" or len(head) < 12:
+        return []
+    n = struct.unpack_from("<I", head, 8)[0]
+    if not 0 < n < 100000 or 32 + 32 * n > size:
+        return []
+    table, out = read(0, 32 + 32 * n), []
+    for i in range(n):
+        o = 32 + 32 * i
+        name, typ, tag = (table[o + a:o + b].split(b"\0")[0] for a, b in ((0, 8), (8, 12), (12, 16)))
+        sz, off = struct.unpack_from("<I", table, o + 16)[0], struct.unpack_from("<I", table, o + 28)[0]
+        if not (name and 3 <= len(typ) <= 4 and typ.isalpha() and typ.isupper()) or off + sz > size:
+            break
+        out.append((i, name.decode("latin1"), typ.decode("ascii"), tag.decode("latin1"), sz, off))
+    return out
+
+
+def rat_sounds(size, head, read):
+    """The sound effects of a RAT archive: its entries of type SDFX, listed, not decoded."""
+    return [(i, off, sz, "RAT sound (" + tag + ")", None, None, None) for i, _, typ, tag, sz, off in rat_entries(size, head, read) if typ == "SDFX"]
+
+
 def audio_file_rows(size, head, read):
     """[(index, offset, bytes, format, channels, rate, samples)] (the last three None where unknown) of the sounds in one file of `size` bytes, `head` being its first
     bytes and read(offset, n) any n bytes of it: every ADX / AHX stream of an AFS archive (an archive with none holds
-    something else and has no rows), a file that is one ADX / AHX stream, a RIFF WAVE file, a sample stream file (STR), or a DTPK or Sega SMLT / SMPB sound bank (listed, not opened)."""
+    something else and has no rows), a file that is one ADX / AHX stream, a RIFF WAVE file, a sample stream file (STR), the sound effects of a RAT archive (listed), or a DTPK or Sega SMLT / SMPB sound bank (listed, not opened)."""
     if head[:4] == b"AFS\0":
         n = struct.unpack("<I", head[4:8])[0]
         if not 0 < n < 100000:
@@ -1426,6 +1652,8 @@ def audio_file_rows(size, head, read):
             info = adx_info(read(off, 16))
             rows.append((i, off, sz) + (info if info else ("unknown", None, None, None)))
         return rows if any(r[3] in ("ADX", "AHX") for r in rows) else []
+    if head[:4] == b"RAT\0":
+        return rat_sounds(size, head, read)
     info = adx_info(head)
     if info:
         return [(0, 0, size) + info]
@@ -1504,8 +1732,20 @@ def main():
     ninja_models = []                                 # the model dicts of every Ninja model
     cand = [v for v in where if 0x0C000000 <= v < 0x0D000000 and v % 4 == 0]
     random.seed(1)
-    def take(path, name, found, trees, nj, say):
+    def take(path, name, found, trees, nj, say, md3=(), tagged=()):
         """Rows for the models found in one file (or one stream of a file: path is then its `file@offset` name)."""
+        for off, nbytes, nsurf, ntris, nverts, radius in md3:
+            models.append({"file": path.lstrip("/"), "offset": off, "records": nsurf, "bytes": nbytes, "radius": radius,
+                           "addr": None, "group": "", "sub": "", "sublabel": "", "name": "", "table": "",
+                           "index": "", "used_by": "", "texset": ""})
+        if md3 and say:
+            print("%-16s %5d Quake 3 models" % (name, len(md3)))
+        for off, nbytes, tag, ngroups, nverts, ntris, radius in tagged:
+            models.append({"file": path.lstrip("/"), "offset": off, "records": ngroups, "bytes": nbytes, "radius": radius,
+                           "addr": None, "group": "", "sub": "", "sublabel": "", "name": "", "table": "",
+                           "index": "", "used_by": "", "texset": ""})
+        if tagged and say:
+            print("%-16s %5d tagged models" % (name, len(tagged)))
         for off, objs, radius, _ in trees:
             models.append({"file": path.lstrip("/"), "offset": off, "records": objs, "bytes": objs * 0x34, "radius": radius,
                            "addr": None, "group": "", "sub": "", "sublabel": "", "name": "", "table": "",
@@ -1544,12 +1784,13 @@ def main():
         scan = ModelScan()
         for start, data, _ in stretches(disc, lba, size, path):
             scan.add(start, data)
-        take(path, name, *scan.result(), say=True)
-        for at in sorted(scan.blocks):                     # each `PRESSED` stream is scanned as a file of its own
+        take(path, name, *scan.result(), say=True, md3=scan.md3_result(), tagged=scan.tagged_result())
+        for at in sorted(scan.blocks):                     # each `PRESSED` stream, each ZIP member is scanned as a file of its own
             vname = block_path(path, at)
-            take(vname, vname, *scan_buffer(scan.blocks[at][1]), say=False)
+            sub = scan_models(scan.blocks[at][1])
+            take(vname, vname, *sub.result(), say=False, md3=sub.md3_result(), tagged=sub.tagged_result())
         if scan.blocks:
-            print("%-16s %5d compressed streams" % (name, len(scan.blocks)))
+            print("%-16s %5d streams inside" % (name, len(scan.blocks)))
     by_addr = {m["addr"]: m for m in models if m["addr"]}
 
     # 2. tables: runs of words that are model pointers (or null), found from each model's references

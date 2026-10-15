@@ -169,6 +169,66 @@ def quat_motion_fixture():
     return b"NMDM" + struct.pack("<I", len(data)) + bytes(data)
 
 
+def md3_fixture():
+    """One Quake 3 model: a header (version 15, one frame, no tags, one surface), then its surface of 3 vertices and one
+    triangle, one shader, in one frame."""
+    surf_hdr = 108
+    tri_ofs, sh_ofs, st_ofs, xyz_ofs = surf_hdr, surf_hdr + 12, surf_hdr + 12 + 68, surf_hdr + 12 + 68 + 24
+    surf_end = xyz_ofs + 3 * 8
+    surf = bytearray(b"IDP3" + b"surf".ljust(64, b"\x00") + struct.pack("<10I", 0, 1, 1, 3, 1, tri_ofs, sh_ofs, st_ofs, xyz_ofs, surf_end))
+    surf += struct.pack("<3I", 0, 1, 2) + b"models/a/b".ljust(64, b"\x00") + struct.pack("<I", 0)
+    surf += struct.pack("<6f", 0.0, 0.0, 1.0, 0.0, 0.0, 1.0)
+    for x, y, z in ((0, 0, 0), (64, 0, 0), (0, 64, 0)):
+        surf += struct.pack("<3hH", x, y, z, 0)
+    frame = struct.pack("<3f3f3ff", 0, 0, 0, 1, 1, 0, 0, 0, 0, 1.5) + b"f0".ljust(16, b"\x00")
+    ofs_f, ofs_s = 108, 108 + len(frame)
+    head = b"IDP3" + struct.pack("<I", 15) + b"models/a/b.md3".ljust(64, b"\x00") + struct.pack("<9I", 0, 1, 0, 1, 0, ofs_f, ofs_s, ofs_s, ofs_s + len(surf))
+    return head + frame + bytes(surf)
+
+
+def tagged_fixture():
+    """A model block of one model: a big-endian count of 3, four offsets (a pointer-flag section, the body, its end, the file's
+    end), then the body: the tag `Part`, a list with one node pointer, the node (flags 0x3064, two children), the child list, two
+    mesh groups (a strip of 4 vertices in one run; 5 vertices in 2 runs that are not given: one run, whose triangles come
+    from a display list instead) and their vertices."""
+    body = bytearray(0x1A0)
+    body[0:4] = b"Part"
+    struct.pack_into(">II", body, 4, 0x10, 0xFFFFFFFF)
+    struct.pack_into(">I", body, 0x10, 0x3064)
+    struct.pack_into(">II", body, 0x10 + 20, 2, 0x30)
+    struct.pack_into(">II", body, 0x30, 0x40, 0x80)
+    for at, runs_at, verts_at, nruns, nv in ((0x40, 0xC0, 0xD0, 1, 4), (0x80, 0, 0x110, 2, 5)):
+        struct.pack_into(">3f3f", body, at + 8, -2.0, -1.0, 0.0, 2.0, 1.0, 3.0)
+        struct.pack_into(">HHI", body, at + 32, nruns, 5, runs_at)
+        struct.pack_into(">I", body, at + 52, verts_at)
+        struct.pack_into(">HH", body, at + 56, 0, nv)
+        for i in range(nv):
+            struct.pack_into(">3hH2h4B", body, verts_at + 16 * i, (-2, 2)[i % 2], (-1, 1)[(i // 2) % 2], i % 4, 0, i * 100, 0, 255, 255, 255, 255)
+    struct.pack_into(">I", body, 0xC0, 4)
+    struct.pack_into(">I", body, 0x80 + 48, 0x160)                                       # the second group's display list:
+    struct.pack_into(">II", body, 0x160, 0x0100500A, 0x110)                              # load 5 vertices,
+    struct.pack_into(">II", body, 0x168, 0x06000204, 0x00000408)                         # triangles (0 1 2) (0 2 4),
+    struct.pack_into(">II", body, 0x170, 0x06040608, 0x00000608)                         # (2 3 4) (0 3 4),
+    struct.pack_into(">II", body, 0x178, 0xDF000000, 0)                                  # end
+    head = struct.pack(">5I", 3, 20, 28, 28 + len(body), 28 + len(body))
+    return head + b"\x00" * 8 + bytes(body)
+
+
+def zip_fixture():
+    """A ZIP archive with a stored text file, then a deflated MD3 model."""
+    import io
+    import zipfile
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        a = zipfile.ZipInfo("readme.txt", (2000, 1, 1, 0, 0, 0))
+        a.compress_type = zipfile.ZIP_STORED
+        z.writestr(a, b"stored member")
+        b = zipfile.ZipInfo("models/a/b.md3", (2000, 1, 1, 0, 0, 0))
+        b.compress_type = zipfile.ZIP_DEFLATED
+        z.writestr(b, md3_fixture())
+    return buf.getvalue()
+
+
 def picture_fixtures():
     def pvrt(w, h, dt, pf):
         body = w * h * 2
@@ -217,7 +277,18 @@ def sound_fixtures():
     return {"snd_afs.bin": afs, "snd_adx.bin": adx(3, 1, 32000, 64000), "snd_other.bin": other, "snd_dtpk.bin": b"DTPK" + b"\x00" * 60,
             "snd_wav.bin": wav(1, 2, 22050, 16, 400), "snd_wav4.bin": wav(0, 1, 44100, 4, 100),
             "snd_str.bin": struct.pack("<6I", 1, 22050, 4, 0x2000, 1000, 2) + b"\x00" * 40,
-            "snd_smlt.bin": b"SMLT" + b"\x01\x01\x00\x00" + b"\x00" * 56, "snd_smpb.bin": b"SMPB" + b"\x01\x00\x00\x00" + b"\x00" * 56}
+            "snd_smlt.bin": b"SMLT" + b"\x01\x01\x00\x00" + b"\x00" * 56, "snd_smpb.bin": b"SMPB" + b"\x01\x00\x00\x00" + b"\x00" * 56, "snd_rat.bin": rat_fixture()}
+
+
+def rat_fixture():
+    """A RAT archive of three entries: a sprite (SPRT), a sound effect (SDFX, tag SD) and one more (SDFX, tag ALH); the last
+    entry of the directory is not an entry (a lowercase type), so the directory ends there."""
+    body_at = 32 + 32 * 4
+    def entry(name, typ, tag, size, off):
+        return name.ljust(8, b"\0") + typ.ljust(4, b"\0") + tag.ljust(4, b"\0") + struct.pack("<4I", size, 0, 0, off)
+    table = entry(b"FONT", b"SPRT", b"mac", 8, body_at) + entry(b"D_01GN00", b"SDFX", b"SD", 16, body_at + 8) \
+        + entry(b"SC_1DG00", b"SDFX", b"ALH", 24, body_at + 24) + entry(b"junk", b"abcd", b"", 4, body_at)
+    return b"RAT\0" + b"1.0A" + struct.pack("<I", 4) + b"\0" * 20 + table + b"\x11" * 48
 
 
 def own_textures_fixture():
@@ -294,6 +365,12 @@ def results(mm):
     out["own_textures:own_tex.bin"] = {"models": [[m[0], m[2]] for m in nj_ot],
                                        "rows": [list(r) for r in got[0]] if got else None,
                                        "sets": sorted([list(x) for x in got[1].items()]) if got else None}
+    files["md3.bin"] = md = b"\x00" * 8 + md3_fixture()
+    out["md3:md3.bin"] = [[o, nb, ns, nt, nv, round(r, 3)] for o, nb, ns, nt, nv, r in mm.find_md3(md)]
+    files["tagged.bin"] = tg = tagged_fixture()
+    out["tagged:tagged.bin"] = [[o, nb, t, ng, nv, nt, round(r, 3)] for o, nb, t, ng, nv, nt, r in mm.find_tagged(tg)]
+    files["archive.zip"] = zp = zip_fixture()
+    out["zip:archive.zip"] = [[o, n, len(d), d[:16].hex()] for o, n, d in mm.zip_members(zp)]
     files["pressed.bin"] = pr = pressed_fixture()
     out["pressed:pressed.bin"] = [[at, name, len(dec), dec[:48].hex(), end] for at, name, dec, end in mm.pressed_blocks(pr)]
     files["owntex.bin"], offs = own_texture_fixture()
