@@ -1385,10 +1385,35 @@ def adx_info(b):
     return ("AHX" if enc >= 0x10 else "ADX"), ch, rate, samples
 
 
+def wav_info(b):
+    """("WAV", channels, rate, samples) of a RIFF WAVE file whose header is at the start of b (the fmt chunk first, any format
+    tag: the tag and bits per sample are not checked, a viewer decides what it can play), or None."""
+    if len(b) < 44 or b[:4] != b"RIFF" or b[8:12] != b"WAVE" or b[12:16] != b"fmt ":
+        return None
+    ch, rate = struct.unpack_from("<HI", b, 22)
+    bits = struct.unpack_from("<H", b, 34)[0]
+    at = b.find(b"data", 36, 64)          # not at the fmt chunk's declared end: some files carry two stray bytes before it
+    if not 1 <= ch <= 8 or not 4000 <= rate <= 192000 or at < 0 or at + 8 > len(b):
+        return None
+    data = struct.unpack_from("<I", b, at + 4)[0]
+    return "WAV", ch, rate, data * 8 // (bits * ch) if bits else 0
+
+
+def str_info(b):
+    """("STR", None, rate, None) of a sample stream file whose header is a version of 1, the sample rate and a 4 (the next
+    word, 0x2000 in the files seen, is the block size), or None. Listed, not decoded."""
+    if len(b) < 16:
+        return None
+    version, rate, four = struct.unpack_from("<3I", b, 0)
+    if version != 1 or four != 4 or not 4000 <= rate <= 192000:
+        return None
+    return "STR", None, rate, None
+
+
 def audio_file_rows(size, head, read):
     """[(index, offset, bytes, format, channels, rate, samples)] (the last three None where unknown) of the sounds in one file of `size` bytes, `head` being its first
     bytes and read(offset, n) any n bytes of it: every ADX / AHX stream of an AFS archive (an archive with none holds
-    something else and has no rows), a file that is one ADX / AHX stream, or a DTPK sound bank (listed, not opened)."""
+    something else and has no rows), a file that is one ADX / AHX stream, a RIFF WAVE file, a sample stream file (STR), or a DTPK or Sega SMLT / SMPB sound bank (listed, not opened)."""
     if head[:4] == b"AFS\0":
         n = struct.unpack("<I", head[4:8])[0]
         if not 0 < n < 100000:
@@ -1404,8 +1429,16 @@ def audio_file_rows(size, head, read):
     info = adx_info(head)
     if info:
         return [(0, 0, size) + info]
+    wav = wav_info(head)
+    if wav:
+        return [(0, 0, size) + wav]
     if head[:4] == b"DTPK":
         return [(0, 0, size, "DTPK sound bank", None, None, None)]
+    stream = str_info(head)
+    if stream:
+        return [(0, 0, size) + stream]
+    if head[:4] in (b"SMLT", b"SMPB"):            # Sega's sound driver files: a multi bank (SMLT) or a program bank (SMPB), listed, not opened
+        return [(0, 0, size, head[:4].decode("ascii") + " sound bank", None, None, None)]
     return []
 
 

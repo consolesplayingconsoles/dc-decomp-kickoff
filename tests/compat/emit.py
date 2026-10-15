@@ -210,7 +210,14 @@ def sound_fixtures():
         body += e.ljust((len(e) + 15) // 16 * 16, b"\x00")
     afs = table.ljust(off, b"\x00") + body
     other = b"AFS\x00" + struct.pack("<I", 1) + struct.pack("<II", 0x10, 20) + b"not audio at all!!!!"
-    return {"snd_afs.bin": afs, "snd_adx.bin": adx(3, 1, 32000, 64000), "snd_other.bin": other, "snd_dtpk.bin": b"DTPK" + b"\x00" * 60}
+    def wav(tag, ch, rate, bits, nbytes):
+        fmt = struct.pack("<HHIIHHH", tag, ch, rate, rate * ch * bits // 8, ch * bits // 8, bits, 0)
+        stray = b"\x00\x00" if tag == 0 else b""            # a fmt chunk that ends two bytes after its declared size, as some files have
+        return b"RIFF" + struct.pack("<I", 4 + 8 + len(fmt) + 8 + nbytes) + b"WAVE" + b"fmt " + struct.pack("<I", len(fmt)) + fmt + stray + b"data" + struct.pack("<I", nbytes) + b"\x80" * nbytes
+    return {"snd_afs.bin": afs, "snd_adx.bin": adx(3, 1, 32000, 64000), "snd_other.bin": other, "snd_dtpk.bin": b"DTPK" + b"\x00" * 60,
+            "snd_wav.bin": wav(1, 2, 22050, 16, 400), "snd_wav4.bin": wav(0, 1, 44100, 4, 100),
+            "snd_str.bin": struct.pack("<6I", 1, 22050, 4, 0x2000, 1000, 2) + b"\x00" * 40,
+            "snd_smlt.bin": b"SMLT" + b"\x01\x01\x00\x00" + b"\x00" * 56, "snd_smpb.bin": b"SMPB" + b"\x01\x00\x00\x00" + b"\x00" * 56}
 
 
 def own_textures_fixture():

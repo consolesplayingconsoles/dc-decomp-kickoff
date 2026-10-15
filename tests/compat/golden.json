@@ -326,6 +326,61 @@
    ]
   ],
   "sounds:snd_other.bin": [],
+  "sounds:snd_smlt.bin": [
+   [
+    0,
+    0,
+    64,
+    "SMLT sound bank",
+    null,
+    null,
+    null
+   ]
+  ],
+  "sounds:snd_smpb.bin": [
+   [
+    0,
+    0,
+    64,
+    "SMPB sound bank",
+    null,
+    null,
+    null
+   ]
+  ],
+  "sounds:snd_str.bin": [
+   [
+    0,
+    0,
+    64,
+    "STR",
+    null,
+    22050,
+    null
+   ]
+  ],
+  "sounds:snd_wav.bin": [
+   [
+    0,
+    0,
+    446,
+    "WAV",
+    2,
+    22050,
+    100
+   ]
+  ],
+  "sounds:snd_wav4.bin": [
+   [
+    0,
+    0,
+    148,
+    "WAV",
+    1,
+    44100,
+    200
+   ]
+  ],
   "stretches": {
    "0": [
     0
