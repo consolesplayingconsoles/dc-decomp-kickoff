@@ -1868,10 +1868,37 @@ def rat_sounds(size, head, read):
     return [(i, off, sz, "RAT sound (" + tag + ")", None, None, None) for i, _, typ, tag, sz, off in rat_entries(size, head, read) if typ == "SDFX"]
 
 
+DTPK_RATE = 22050                                 # a DTPK pack records no rate (a program's pitch sets it): its samples' rows carry this one
+
+
+def dtpk_sounds(entry, base, size, read):
+    """The samples of a DTPK sound pack (the AM2 sound driver's) at `base` of a file, `size` bytes long, as audio rows. The sample table is at the offset
+    in the pack's word at +0x3C: a count (the last index), then 16-byte entries {format << 24 | data offset (from the pack's start), loop start, loop end,
+    0, data size}; format 0 is PCM16, 1 PCM8, 3 the sound chip's 4-bit ADPCM. A row's index is the entry's number * 10000 + the sample's."""
+    head = read(base, 0x40)
+    if len(head) < 0x40:
+        return []
+    t = struct.unpack_from("<I", head, 0x3C)[0]
+    if t + 8 > size:
+        return []
+    count = struct.unpack("<I", read(base + t, 4))[0] + 1
+    if not 0 < count < 10000 or t + 4 + 16 * count > size:
+        return []
+    table, rows = read(base + t + 4, 16 * count), []
+    for k in range(count):
+        w, _, _, nbytes = struct.unpack_from("<IIII", table, 16 * k)
+        fmt, at = w >> 24, w & 0xFFFFFF
+        if not nbytes or at + nbytes > size:
+            continue
+        name, samples = {3: ("DTPK ADPCM", nbytes * 2), 0: ("DTPK PCM16", nbytes >> 1), 1: ("DTPK PCM8", nbytes)}.get(fmt, ("DTPK format %d" % fmt, None))
+        rows.append((entry * 10000 + k, base + at, nbytes, name, 1, DTPK_RATE, samples))
+    return rows
+
+
 def audio_file_rows(size, head, read):
     """[(index, offset, bytes, format, channels, rate, samples)] (the last three None where unknown) of the sounds in one file of `size` bytes, `head` being its first
     bytes and read(offset, n) any n bytes of it: every ADX / AHX stream of an AFS archive (an archive with none holds
-    something else and has no rows), a file that is one ADX / AHX stream, a RIFF WAVE file, a sample stream file (STR), the sound effects of a RAT archive (listed), or a DTPK or Sega SMLT / SMPB sound bank (listed, not opened)."""
+    something else and has no rows; a DTPK sound pack in it gives a row per sample), a file that is one ADX / AHX stream, a RIFF WAVE file, a sample stream file (STR), the sound effects of a RAT archive (listed), or a DTPK or Sega SMLT / SMPB sound bank (listed, not opened)."""
     if head[:4] == b"AFS\0":
         n = struct.unpack("<I", head[4:8])[0]
         if not 0 < n < 100000:
@@ -1881,9 +1908,13 @@ def audio_file_rows(size, head, read):
             off, sz = struct.unpack_from("<II", table, 8 + 8 * i)
             if not sz or off + 16 > size:
                 continue
-            info = adx_info(read(off, 16))
+            first = read(off, 16)
+            if first[:4] == b"DTPK":                    # a sound pack inside the archive: its samples
+                rows.extend(dtpk_sounds(i, off, sz, read))
+                continue
+            info = adx_info(first)
             rows.append((i, off, sz) + (info if info else ("unknown", None, None, None)))
-        return rows if any(r[3] in ("ADX", "AHX") for r in rows) else []
+        return rows if any(r[3] in ("ADX", "AHX") or r[3].startswith("DTPK ") for r in rows) else []
     if head[:4] == b"RAT\0":
         return rat_sounds(size, head, read)
     info = adx_info(head)

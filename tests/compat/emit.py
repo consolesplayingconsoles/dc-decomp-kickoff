@@ -273,7 +273,7 @@ def pressed_fixture():
 
 def sound_fixtures():
     """An AFS archive (an ADX stream, something else, an AHX stream), a file that is one ADX stream, an archive of other things
-    (no rows), and a DTPK sound bank."""
+    (no rows), a DTPK sound bank, and an archive holding an ADX stream and a DTPK pack (a row per sample)."""
     def adx(enc, ch, rate, samples):
         return b"\x80\x00\x00\x20" + bytes([enc, 18, 4, ch]) + struct.pack(">II", rate, samples) + b"\x00" * 16
     entries = [adx(3, 2, 44100, 441000), b"not audio at all!!", adx(0x10, 1, 22050, 22050)]
@@ -288,7 +288,22 @@ def sound_fixtures():
         fmt = struct.pack("<HHIIHHH", tag, ch, rate, rate * ch * bits // 8, ch * bits // 8, bits, 0)
         stray = b"\x00\x00" if tag == 0 else b""            # a fmt chunk that ends two bytes after its declared size, as some files have
         return b"RIFF" + struct.pack("<I", 4 + 8 + len(fmt) + 8 + nbytes) + b"WAVE" + b"fmt " + struct.pack("<I", len(fmt)) + fmt + stray + b"data" + struct.pack("<I", nbytes) + b"\x80" * nbytes
-    return {"snd_afs.bin": afs, "snd_adx.bin": adx(3, 1, 32000, 64000), "snd_other.bin": other, "snd_dtpk.bin": b"DTPK" + b"\x00" * 60,
+    def dtpk(samples):
+        """A DTPK pack: a 0x40-byte header (the sample table's offset at +0x3C), the table, the data. samples: [(format, size)]."""
+        t = 0x40
+        data_at = t + 4 + 16 * len(samples)
+        table, data = struct.pack("<I", len(samples) - 1), b""
+        for fmt, n in samples:
+            table += struct.pack("<IIII", fmt << 24 | data_at + len(data), 0, 0, n)
+            data += b"\x55" * n
+        return (b"DTPK" + b"\x00" * 0x38 + struct.pack("<I", t)).ljust(t, b"\x00") + table + data
+    entries2 = [adx(3, 1, 22050, 22050), dtpk([(3, 64), (0, 32), (1, 16), (7, 8), (3, 0)])]
+    table2, body2 = b"AFS\x00" + struct.pack("<I", 2), b""
+    for e in entries2:
+        table2 += struct.pack("<II", 0x800 + len(body2), len(e))
+        body2 += e.ljust((len(e) + 15) // 16 * 16, b"\x00")
+    afs_dtpk = table2.ljust(0x800, b"\x00") + body2
+    return {"snd_afs.bin": afs, "snd_afs_dtpk.bin": afs_dtpk, "snd_adx.bin": adx(3, 1, 32000, 64000), "snd_other.bin": other, "snd_dtpk.bin": b"DTPK" + b"\x00" * 60,
             "snd_wav.bin": wav(1, 2, 22050, 16, 400), "snd_wav4.bin": wav(0, 1, 44100, 4, 100),
             "snd_str.bin": struct.pack("<6I", 1, 22050, 4, 0x2000, 1000, 2) + b"\x00" * 40,
             "snd_smlt.bin": b"SMLT" + b"\x01\x01\x00\x00" + b"\x00" * 56, "snd_smpb.bin": b"SMPB" + b"\x01\x00\x00\x00" + b"\x00" * 56, "snd_rat.bin": rat_fixture()}

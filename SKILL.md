@@ -338,8 +338,9 @@ procedure below.
      whose models are in another format lists none here, and the step says so. Texture lists matter: the
      texture's real size, type and format come from the game's own list, not the model records.
    - **Audio** (the `[audio]` section of the same file): every CRI ADX / AHX stream the disc holds, inside AFS archives or
-     on its own, found by its header, with channels, sample rate, samples and seconds; DTPK sound banks are listed as banks
-     and not opened. An AFS archive counts only when at least one entry is audio (a city or model archive is skipped). The
+     on its own, found by its header, with channels, sample rate, samples and seconds; a DTPK sound pack inside an AFS archive is
+     opened and gives one row per sample (index = entry * 10000 + sample; the rate is nominal, the pack records none),
+     a loose DTPK sound bank is listed as a bank. An AFS archive counts only when at least one entry is audio (a city or model archive is skipped). The
      archives carry no entry names, so a sound is `FILE:index`, named by a `sound <file> <entry> <name>` rule in `models.txt`.
    - `setup.sh` rebuilds the text map from `functions.txt`, so a cloned repo's `files.tsv` lists
      function-level users only; the kick-off's own run (from the full Ghidra report) has more.
