@@ -14,8 +14,8 @@ A version is a tag (`v0.6`) or a dev version: a commit after the last tag, writt
 git describe --tags --exact-match 2>/dev/null || echo "$(git describe --tags --abbrev=0)+$(git rev-parse --short HEAD)"
 ```
 
-A zip install has no git: its `VERSION` file holds the same string (`zip.sh` writes it). An upgrade
-needs the skill's history, so with a zip install clone the skill's repo first (Getting the tools).
+A copy of the folder without git carries the repo's `VERSION` file, the last release (it cannot tell a dev build apart). An upgrade
+needs the skill's history, so without git clone the skill's repo first (Getting the tools).
 
 The repo records its version in `KICKOFF` (one line). Every upgrade, and every hand sync of tools or
 template files from the skill, rewrites it in the same change: it is what the next upgrade reads to

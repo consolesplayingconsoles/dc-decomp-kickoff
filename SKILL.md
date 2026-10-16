@@ -15,14 +15,18 @@ in an SH-4 interpreter on test cases and compares calls, writes and result); byt
 ## Getting the tools (do this first)
 
 This skill needs its own files (`scripts/`, `template/`, `references/`); the README's install
-(the zip from `zip.sh`, or a clone) brings them. If `scripts/split_asm.py` is not next to this file,
+(a clone) brings them. If `scripts/split_asm.py` is not next to this file,
 only `SKILL.md` was installed: fetch the tools yourself, without asking (they are this skill's own
-public code, not third-party material), into a tools folder (default `~/dc-tools`), and tell the
-user in one line that you did and that the README's zip install avoids it:
+public code, not third-party material), into a tools folder (default `~/dc-tools`). The tools folder always has to be
+the latest version: clone it when it is absent, and when it exists update it (`git -C ~/dc-tools/dc-decomp-kickoff
+pull --ff-only`; if that fails, delete the folder and clone again).
 
 ```
 git clone https://github.com/consolesplayingconsoles/dc-decomp-kickoff ~/dc-tools/dc-decomp-kickoff
 ```
+
+Then say one short line, "Tools ready: <version>" (the content of its `VERSION` file, or `git describe --tags --always`),
+with no advice on how the user could avoid it: they cannot.
 
 Then use that copy for every `scripts/...`, `template/...` and `references/...` path below. Do not
 rewrite the tools from this text unless the clone is impossible: they encode fixes that are easy to
@@ -35,26 +39,29 @@ Ghidra and the Hitachi tools run in containers, so nothing else is installed. On
 impossible and the machine is **Linux x86_64**: `DC_LOCAL=1` (opt-in, never a default) runs the
 Hitachi tools through `wibo` on PATH and Ghidra from `GHIDRA_INSTALL_DIR` (Ghidra 12.x + JDK 21).
 `DC_LOCAL` does not work on macOS or Windows (`wibo` is a Linux program): there, install Docker.
-**In a cloud workspace** (a Claude conversation's own Linux machine) images often cannot be pulled:
-use `DC_LOCAL=1` for every script (`sdk_unpack.sh` included; it also needs
-`unshield`), installing wibo (pinned and checksummed as in `scripts/tools-image/Dockerfile`) and
-Ghidra + JDK 21 as `scripts/ghidra/Dockerfile` does. The user's disc and SDK images arrive as
-uploads or a connected folder; the repo is built there, so offer to hand it back to them at the end.
+**In a cloud workspace** (a Claude conversation's own Linux machine) images often cannot be pulled,
+and there is no Docker: use `DC_LOCAL=1` for every script. Install what it needs with
+`bash scripts/setup_tools.sh --check` (reports what is missing, installs nothing), then
+`bash scripts/setup_tools.sh` (wibo, unshield, JDK 21, Ghidra: pinned and checksummed, one step per line),
+then `source` the `env.sh` the script prints (`~/dc-tools/env.sh` by default) in every shell that runs a script. The user's disc and SDK are in a folder of
+that machine (ask for the folder); the repo is built there, so offer to hand it back to them at the end.
 
 **Before starting, check the machine:**
 - `python3 --version` works and is 3.6 or newer (on macOS, `python3` can be Apple's stub that
   opens an install dialog: then use another Python, e.g. from python.org or Homebrew).
-- `docker info` works. Docker Desktop and colima share **only your home folder** with containers
+- `docker info` works (no Docker on Linux x86_64: `bash scripts/setup_tools.sh --check`, then install, as above). Docker Desktop and colima share **only your home folder** with containers
   by default: keep the work folder, the repo and the SDK under your home folder, or mounts arrive
   empty (a build that "can't find" files it plainly has is this).
-- About 4 GB free (Docker images ~1.5 GB, the SDK clone, the disc copy for the game image).
+- About 4 GB free (Docker images ~1.5 GB, the SDK, the disc copy for the game image).
 
-**The SDK folder can have any layout** (`bin/ shc/ shinobi/` as the disc images lay it out, or the
-Kochise repository's `.../R10.1_000518/Utl/Dev/Hitachi` + `Lib`): scripts find `asmsh.exe`,
-`lbr.exe`, `lnk.exe` and the `.lib` files by name. Point `SDK_PATH` at the SDK's top folder. In the
-Kochise repository that is `SDK/EXES/INSTALL KATANA SDK/INPUT/R10.1_000518` (quote it: it has
-spaces); a sparse checkout of that folder is enough (`git clone --filter=blob:none --sparse`, then
-`git sparse-checkout set "SDK/EXES/INSTALL KATANA SDK/INPUT/R10.1_000518"`).
+**The user brings the SDK and the game image, each as a folder they pick.**
+Ask for the game image's folder and, later (step 2), for the SDK's: a path to a directory on the machine
+the work runs on, never a download or an upload. Never fetch an SDK yourself, and never offer to. Never
+search, list or browse the user's folders to find either one: ask and wait.
+
+**The SDK folder can have any layout** (`bin/ shc/ shinobi/` as the disc images lay it out, or a
+tree with `.../Utl/Dev/Hitachi` and `Lib`): scripts find `asmsh.exe`, `lbr.exe`, `lnk.exe` and the
+`.lib` files by name. Point `SDK_PATH` at the SDK's top folder (quote it when it has spaces).
 
 **A second SDK, optional: 1.55J (1999), for more names.** List it
 to the user by its disc names and ask them to provide the images themselves; never download it:
@@ -77,18 +84,43 @@ minute or two): tell the user what is running and roughly how long before starti
 changed) is in `references/evidence.md`; the steps below state rules, not games. Everything the
 skill uses is in its own folder.
 
+## Run it one step at a time
+
+Never present the whole plan, the whole list of requirements or several questions in one message. Do one
+step, say what it is and roughly how long it takes, run it, show its result, then go to the next. One
+question per message, asked when its step comes: new decomp or upgrade, then the game image's folder, then
+(only when a tool is missing) the install, step by step, then the SDK's folder once `sdk_scan.py` has named
+the release, then each optional extra as its step reaches it. A missing tool is installed or reported at
+the moment it is needed, one tool at a time, never as a list handed to the user.
+
+Say what a step is and why it exists, in one line. When a step repeats an earlier one (the second Ghidra pass, a rebuild), say
+that it is planned and what it adds. When it finishes, give the number it produced (coverage before and after, counts,
+sizes), not just "done".
+
+Never go from one long step straight into the next. When a step finishes (an install, the Ghidra analysis, a build), say
+in a line what finished and how long it took, then what comes next and about how long that takes, and only then start it.
+While a long step runs, run it detached with its own log, its input closed (`</dev/null`) and a time limit that fits it (a few times the step's usual duration, in
+minutes: these steps are long), and give a line of state when the user asks: a message from the user interrupts a command that is still running, and then nothing
+comes back. If a command comes back interrupted or rejected, say so plainly, and look at the log before saying why and
+before running anything again.
+
+Every question with a closed set of answers is a real multiple-choice question (the client's question tool,
+`AskUserQuestion` in Claude Code), the recommended answer first: new or upgrade, which release
+when several fit, each optional extra (provide it, or skip), continue or stop at a decision point. Ask for a folder by its path. A client with no question tool gets the options as a numbered
+list and is asked for the number.
+
 ## Third-party sources
 
-The procedure needs two kinds of material (a Katana SDK and the game's disc); the rest is optional. The repositories below are identified solely as
-examples of the type of material required. The authors of this skill have no affiliation with, and
+The procedure needs two kinds of material (a Katana SDK and the game's disc), both brought by the user as the folder that holds them; the rest is optional. The sources below are identified solely as
+examples of where optional material has been seen, as search terms for the user: this skill never fetches an SDK. The authors of this skill have no affiliation with, and
 make no representation regarding, those repositories, their contents, or their licensing. Nothing
 is retrieved without the user's express confirmation. The user is solely responsible for
 determining whether they are entitled to obtain and use any such material, and may substitute any
 equivalent material lawfully in their possession.
 
-| need | example source | used for |
+| need | where it has been seen (search terms; the user brings SDKs) | used for |
 |---|---|---|
-| Katana SDK (libraries + Hitachi `asmsh`, `shc`, `lnk`, `lbr`, `elf2bin`) | `github.com/Kochise/dreamcast-docs` (`SDK/`) | SDK signatures, the matching build |
+| Katana SDK (libraries + Hitachi `asmsh`, `shc`, `lnk`, `lbr`, `elf2bin`) | any Katana SDK release, installed or as a disc image (the one this skill's tests build with: R10.1) | SDK signatures, the matching build |
 | other Katana SDK releases, optional (disc images: 0.20 Pre 7 to R11b, 1.55J Vol.1 + Vol.2, Network 1.04; Katana 0.40 Release.4 for 1998 games; R1.42J and 2.00J come as InstallShield 3 installers, `is3_extract.py`; R2 and 0.20 Pre 7 carry GNU `ar` libraries this skill does not hash yet) | archive.org item `official-katana-sdks` (`OFFICIAL KATANA SDKs.zip`, one image per release); 1.55J is also catalogued by Redump (discs 87866, 87867); 0.40 and the Shinobi/Kamui library sources from sega-dreamcast-info.com's SDK archive page (https://www.sega-dreamcast-info.com/en/dreamcast-develppement-sdk-library-archive) | the release the game was built with (step 2), more SDK names |
 | the Shinobi and Kamui library sources, optional | sega-dreamcast-info.com ("The source code of the Dreamcast Shinobi/Kamui development library") | exact C and names for the SDK part of every game: reference source for the C loop, their bundled `.LIB` files are one more signature table, and the Shinobi dump's `.LST` listings name statics (`sdk_masked.py --listings`) |
 | the Sega NAOMI SDK, optional (for games built on the NAOMI library: arcade ports with `nl*` functions) | archive.org item `NaomiSDK` ("Sega Naomi SDK 001002": `archive/naomi/libwin.zip`, `libsgi.tgz`, `smpwin1-7.zip`, `doc.tgz`) | the `nl*` / `nla*` / `nlsnd*` library (math, matrices, textures, sprites, print): one more signature table (`sdk_sigs.sh`, with a Katana SDK's `lbr.exe`/`lnk.exe` beside the libraries), its sample programs (`t.map` + `t.mot`) as another, and the API pages as each function's contract |
@@ -96,7 +128,7 @@ equivalent material lawfully in their possession.
 | a later port, a prototype, other decomps, optional | the user's own copies (ports and prototypes), GitHub, hiddenpalace.org, tcrf.net, segaretro.org | step 2b |
 | an older SDK, optional | archive.org item `dcsdk-9e` (SDK R9 Europe, Nov 1999, disc 1: SHC 5.1 Release 08) | a period compiler for games built in 1999-2000; so far it gave the same bytes as R10.1's (Release 11) |
 
-Ask before cloning each one. Never commit the SDK, the game's files, or anything that carries their bytes or
+Ask before fetching anything from them (never an SDK). Never commit the SDK, the game's files, or anything that carries their bytes or
 text (assembly, hash tables, the text map) to the new repo: its `.gitignore` already excludes them. What only
 describes them (addresses, offsets, sizes, names: `functions.txt`, `globals.txt`, `models.txt`, `model-map/`) is
 committed: the repo shares as much as is safe.
@@ -104,7 +136,8 @@ committed: the repo shares as much as is safe.
 ## New decomp or upgrade (ask first)
 
 Before anything else, ask the user one question: start a new decomp, or upgrade one this skill
-started? For an upgrade, ask for the repo's folder, then follow `references/upgrade.md` (it asks for
+started? Ask it as a real multiple-choice question (the client's question tool, `AskUserQuestion` in Claude Code) with two options, "New decomp" (recommended, first) and "Upgrade an existing decomp"; plain text only when
+there is no such tool. For an upgrade, ask for the repo's folder, then follow `references/upgrade.md` (it asks for
 the target version: the latest tag recommended, `main` offered as the dev version, never recommended) and skip the
 procedure below.
 
@@ -113,7 +146,7 @@ procedure below.
 0. **Name the conversation after the game.** As soon as IP.BIN gives the title (step 1), rename
    the session if your client lets you (e.g. "Dreamcast decomp kick-off: <title>"), so a user
    running several games can tell the conversations apart.
-1. **Disc to executable** (`scripts/gdi_read.py`, CHD via `chdman extractcd`). Check the
+1. **Disc to executable.** Ask the user for the path of the folder that holds the game image (a `.gdi` with its track files: only `.gdi` is supported). Never ask them to attach or upload files, and never explain how to set up the client. (`scripts/gdi_read.py`). Check the
    boot file in IP.BIN; `0WINCEOS.BIN` means Windows CE: stop, this skill does not apply.
    **Check it is the game before splitting.** Look for the game's own text (menus, item or place
    names) in the executable. A big `.BIN` next to the boot file can be a bundled application
@@ -126,8 +159,9 @@ procedure below.
    (`references/sdk-releases.md` lists every release with the file names it has been seen under, as
    search terms for the user)
    ranks the publicly preserved Katana releases by how many of the game's library builds they
-   contain. A full match: ask the user for that release, and for its library sources if they have them (the Shinobi and
-   Kamui dumps, or those of another release). Say that not all games have a later port or a prototype, but where they do,
+   contain. A full match: ask the user for the path of the folder where they keep that release, and only that. The
+   library sources, a later port and a prototype are optional extras: ask each one later as its own question (step 2b).
+   Say that not all games have a later port or a prototype, but where they do,
    providing them is encouraged, as they can be the strongest source of information available. Say that skipping the
    optional steps can result in a weaker kickoff output. None: say the game was built with a
    release not in the list, and to pick a close one; suggest the one or two the script names. If
@@ -143,7 +177,7 @@ procedure below.
 2b. **Extra material: ask the user, one short form.** Open with: "These are optional; the
    kick-off works without them, but each one gives the decomp a stronger starting point." Then
    ask these as separate questions (a form where the client has one, a numbered list otherwise),
-   each answered with a local path, a link, or "no". Most likely first:
+   each answered with a folder or file, a link, or "no". Most likely first:
    1. **Cheat codes for this game** (a saved code list in CodeBreaker/Xploder format, or a saved
       gamehacking.org page). Every code is an address with a meaning: named variables. Widescreen
       codes count too (the community's CodeBreaker/hex widescreen hacks, one or two codes per
@@ -169,7 +203,8 @@ procedure below.
    symbols check first; 6 -> a symbol scan before anything else, then the strings diff. 2, 3 and
    5 become references in the repo's docs, and names only when the source is itself a matching
    decomp (`ExportSigs.java`).
-   Never fetch any of it yourself: the user supplies what they have.
+   Never go looking for any of it: use what the user gives (a path, or a link they provide, which you may read). Never fetch
+   games, SDKs or any extra that contains IP (a later port, a prototype, other regions): the user supplies those as paths.
 3. **Ghidra** (Docker; no Linux machine needed, the image builds on first use), with the
    executable in `<work>`:
    ```
@@ -223,7 +258,7 @@ procedure below.
    - copy `template/` (`build.sh`, `setup.sh`, `disc.sh`, `textures.sh`, `models.txt`, `README.md`, `AGENTS.md`, `KICKOFF`),
      and `template/gitignore` as **`.gitignore`** (shipped without the dot: some installs drop
      dotfiles);
-   - copy into `tools/`: `scripts/gdi_read.py`, `split_asm.py`, `text_map.py`, `file_tables.py`,
+   - copy into `tools/`: `scripts/gdi_read.py`, `split_asm.py`, `text_map.py`, `text_dump.py`,
      `textures.py`, `model_map.py`, `find_extras.py`, `disc_patch.py`, `apply_bin.py`, `docker_check.sh`, `units.py`, `fill.py`,
      `progress.py`, `missed_funcs.py`, `shdis.py`, `live.py`, `sh4sim.py`, `equiv.py`, `checksizes.py`, `classify.py`, `poollist.py`, `port_equiv.py` with `sdk_masked.py` (which it imports), `sdk_source.py`, the `tools-image/` folder and `scripts/hooks/` as `tools/hooks/` (so a cloned repo builds its own
      tools image, nothing pulled from anyone else);
@@ -237,7 +272,7 @@ procedure below.
      `@NAMED_SDK@`, `@SKILL_VERSION@` (the skill version the repo came from: `v0.5` for a tagged release,
      `v0.5+1a2b3c4` for a dev version, the commit `1a2b3c4` after tag `v0.5`; in a git checkout it is
      `git describe --tags --exact-match` if that succeeds, otherwise the last tag + `+` + the short commit;
-     without git, the content of this skill's `VERSION` file, which `zip.sh` writes the same way; also in
+     without git, the content of this skill's `VERSION` file (the last release); also in
      `KICKOFF`, the version an upgrade starts from: `references/upgrade.md`), and `@PROGRESS@` (after the first `MATCH`: the
      output of `python3 tools/progress.py` in a ``` fence). No `@...@` may remain in those files
      (`grep -n '@[A-Z_]*@' README.md setup.sh disc.sh KICKOFF`; `tools/` has its own `@N@` tokens, ignore).
@@ -274,17 +309,12 @@ procedure below.
    and lists the twins; `--apply`, then `split_asm.py` and `bash build.sh` (`MATCH`).
    `python3 tools/progress.py` gives the starting state.
 7. **Asset maps**: all of them, with no question to answer. **Text map** (for translators, English included: any language can be a source as well as a
-   target): `scripts/text_map.py <1ST_READ.BIN> <base> <report> <repo>/text-map <disc.gdi> [tier]`.
-   - `exe_strings.tsv`: every executable string, the functions using it, and every pointer to it
-     (what lets a translation move text somewhere bigger instead of fitting the old bytes).
-   - `files.tsv`: text density per disc file and the code that opens it (where its offsets live).
-   - `font.tsv`: BIOS ROM-font callers and font-looking files.
+   target): `scripts/text_map.py <1ST_READ.BIN> <base> <repo>/text-map <disc.gdi> [tier]`.
+   - `exe_strings.tsv`: every executable string: address, offset, encoding, length and text.
+   - `files.tsv`: text density per disc file.
+   - **Text files:** the skill detects nothing here. A decomp lists its text files in `models.txt` (`text <disc path>`, one per line, the path as in `files.tsv`) and `setup.sh` runs `scripts/text_dump.py`, which copies exactly those files, as they are, into `text-dump/` (git-ignored: it holds the game's text). Shuriken's Text tab shows that folder, a page of lines at a time.
    - `images.tsv`: every disc file that holds images (PVR textures found in it, or an image file extension). It
      makes no guess about text in images: that is for a person to see, on the contact sheet below.
-   - `file_tables.tsv` (`scripts/file_tables.py`): for each disc file made of repeating records, the
-     table in the executable that locates them (bytes or sectors, with or without sizes). **This is
-     what lets a container grow:** repack its records, rewrite that table (proof in `references/evidence.md`). No false hits
-     so far, but games often keep positions elsewhere: a missing row does not prove there is no table.
    - **Cheat codes** (when step 2b got a list): `scripts/cheat_leads.py <list.txt> <title>
      <1ST_READ.BIN> <base>` prints one line per code: address, size, write or compare, the
      cheat's name. Those are globals candidates with their meaning (health, timer, cash...). Most
@@ -373,8 +403,8 @@ procedure below.
 | `scripts/iso_extract.py` | copy every file out of a disc image or zip (Joliet or ISO9660, no mounting) |
 | `references/sdk-banners.tsv` | library banners (module, version, build date) of every preserved Katana release |
 | `references/sdk-releases.md` | every Katana release: date, the file names it circulates under (search terms), what it gave; prototypes and dev kit dumps as material |
-| `scripts/text_map.py` | strings with pointers, text per disc file, font path, the list of images |
-| `scripts/file_tables.py` | tables in the executable that locate records inside disc files |
+| `scripts/text_map.py` | the executable's strings, text per disc file, the list of images |
+| `scripts/text_dump.py` | copies the disc files `models.txt` lists as `text <path>` into `text-dump/` |
 | `scripts/textures.py` | every standard texture to PNG + a contact sheet (`index.html`) |
 | `scripts/disc_patch.py` | copy a GDI with files replaced in place, error correction recomputed |
 | `template/disc.sh` | in the repo: build a playable disc image of the user's version |

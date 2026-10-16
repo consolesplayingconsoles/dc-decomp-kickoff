@@ -81,8 +81,9 @@ def prs_fixtures():
     return {"prs_literals.bin": (a, bytes(lit.plain)), "prs_copies.bin": (b, bytes(mix.plain))}
 
 
-def tree_fixture(base=0x8C100000):
-    """Five objects in a chain (child, sibling, child, sibling) at a load address, one chunk model, one basic model."""
+def tree_fixture(base=0x8C100000, leaf=False):
+    """Five objects in a chain (child, sibling, child, sibling) at a load address, one chunk model, one basic model; with
+    `leaf` the last object is empty (no model, child or sibling: a bone end)."""
     buf = bytearray(0x400)
 
     def obj(o, model, child, sibling):
@@ -92,7 +93,7 @@ def tree_fixture(base=0x8C100000):
     obj(0x034, 0, 0, base + 0x068)
     obj(0x068, basic, base + 0x09C, 0)
     obj(0x09C, 0, 0, base + 0x0D0)
-    obj(0x0D0, chunk, 0, 0)
+    obj(0x0D0, 0 if leaf else chunk, 0, 0)
     struct.pack_into("<II3ff", buf, 0x120, base + 0x140, base + 0x180, 0.0, 0.0, 0.0, 2.5)   # chunk model
     buf[0x140:0x144] = bytes([32, 0, 2, 0])                                                   # vertex chunk: 2 words
     buf[0x14C] = 0xFF
@@ -154,6 +155,19 @@ def motion_fixture():
     struct.pack_into("<I3f", data, 60, 10, 1.0, 2.0, 3.0)
     struct.pack_into("<I3i", data, 76, 0, 0, 0x4000, 0)
     return b"NMDM" + struct.pack("<I", len(data)) + bytes(data)
+
+
+def motion_bank_fixture(base=0x0CC00000):
+    """A motion bank (motions stored as the game's memory image): the keys first, then the key table, then the motion; two
+    objects, the first with two position keys, the second with one angle key."""
+    data = bytearray(92)
+    struct.pack_into("<I3f", data, 0, 0, 0.0, 0.0, 0.0)
+    struct.pack_into("<I3f", data, 16, 10, 1.0, 2.0, 3.0)
+    struct.pack_into("<I3i", data, 32, 0, 0, 0x4000, 0)
+    struct.pack_into("<2I2I", data, 48, base, 0, 2, 0)
+    struct.pack_into("<2I2I", data, 64, 0, base + 32, 0, 1)
+    struct.pack_into("<IIHH", data, 80, base + 48, 10, 3, 2)
+    return bytes(data)
 
 
 def quat_motion_fixture():
@@ -408,6 +422,11 @@ def results(mm):
     out["motion:motion_q.njm"] = [r[0], r[1], r[2], r[3]] if r else None
     files["embedded.bin"] = emb = ninja_fixture().ljust(256, b"\x00") + mq
     out["motions:embedded.bin"] = [list(m) for m in mm.find_motions(emb)]
+    files["tree_leaf.bin"] = tl = tree_fixture(leaf=True)
+    tl_trees, tl_base = mm.find_object_trees(tl)
+    out["trees:tree_leaf.bin"] = {"base": tl_base, "trees": [[o, n, round(r, 3)] for o, n, r in tl_trees]}
+    files["motion_bank.bin"] = mb = motion_bank_fixture()
+    out["motionimages:motion_bank.bin"] = [list(m) for m in mm.find_motion_images(mb)]
     files["big.bin"] = big = big_fixture()
     flatm, trees_m, nj_m = mm.scan_buffer(big)
     out["scan:big.bin"] = {"flat": [[o, r, n, round(rad, 3), tex] for o, r, n, rad, tex in flatm],

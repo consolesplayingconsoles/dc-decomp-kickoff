@@ -83,11 +83,18 @@ models.txt (curated rules, one per line, `#` comments, `_` is a space in labels)
   textures <model file> <texture file>          pairs a model file with a texture file of another name (e.g. an archive of
                                                 a city with that city's textures); the list in the executable that fits the
                                                 texture file's size is found by itself
+  textures <model file> <texture file> index    texture n of the model file is the n-th texture of the texture file, a PVM archive
+                                                (`.PRS` files read decompressed): for a model file that keeps its texture lists
+                                                inside its own data and has no table in the executable
   textures <model file> <texture file> <texture base hex> <table addr hex>
                                                 a list of 16-byte entries (height << 16 | width, data type << 8 | pixel
                                                 format, data address, x) in the
                                                 executable, indexed by the texture number in the model file's records;
                                                 written to the [textures] section (number -> offset in the texture file)
+  motions <model file> <motion file>            the motions in <motion file> (NMDM chunks or a motion bank, see
+                                                find_motion_images) animate the object trees and Ninja models of <model
+                                                file> that have as many objects as they have nodes: for a model file and a
+                                                motion file of different names (read by the viewer)
   motionskel <rig> <header offset hex> <motion file> <format>
                                                 the rig's motions: in <motion file>, format e16 (a motion: key count,
                                                 root and rotation key offsets, keys per frame, root tracks, 3 root
@@ -332,7 +339,8 @@ def find_object_trees(data):
     """[(offset of the root object, objects, radius)] and the address the file loads at, for every tree of Ninja objects
     stored as the game's memory image: objects (eval flags, model, position, angles, scale, child, sibling: 0x34 bytes)
     linked by memory addresses, each model a chunk model whose lists walk to their end or a basic model whose arrays lie
-    inside the file. The load address is found by
+    inside the file. An empty object (no model, child or sibling: a bone end) is kept only as another object's child or
+    sibling. The load address is found by
     voting: the child and sibling addresses of the plausible objects must land on other plausible objects; of the five
     best-voted addresses the one under which most models are valid wins (a chain of same-sized objects votes equally for
     an address shifted by one object)."""
@@ -347,7 +355,7 @@ def find_object_trees(data):
     def num(v, lo, hi):
         return lo <= v <= hi
 
-    cand = []
+    cand, empty = [], []
     for i in range(n - 12):
         if w[i] > 0x3FF or not (addr(w[i + 1]) and addr(w[i + 11]) and addr(w[i + 12])):
             continue
@@ -357,6 +365,8 @@ def find_object_trees(data):
             continue
         if w[i + 1] or w[i + 11] or w[i + 12]:
             cand.append(i * 4)
+        else:
+            empty.append(i * 4)
     if len(cand) < 2:
         return [], 0
     at = set(cand)
@@ -381,6 +391,8 @@ def find_object_trees(data):
         m = w[o // 4 + 1]
         if m == 0 or model_radius(data, m - base, base) is not None:
             good[o] = (w[o // 4 + 1], w[o // 4 + 11], w[o // 4 + 12])
+    for o in empty:                                        # a tree of its own only with a model, so an unreferenced one is dropped
+        good[o] = (0, 0, 0)
     changed = True
     while changed:                                         # a child or sibling must be an object that is good itself
         changed = False
@@ -991,6 +1003,66 @@ def find_motions(data):
     return out
 
 
+MOTION_KINDS = (("position", 1), ("angle", 2), ("quaternion", 0x2000), ("scale", 4))
+
+
+def find_motion_images(data):
+    """[(offset, frames, kinds, nodes, moving, load address)] of every Ninja motion stored as the game's memory image (a
+    motion bank): the motion (pointer to its key table, frame count, kinds, a 16-bit word whose low 4 bits count the kinds)
+    and its key table as in an NMDM chunk (see njm_read), every pointer a memory address. The file loads at the address of
+    its lowest pointer (its first bytes are keys). A table has no length of its own: it ends at the next motion or table,
+    the end of the file, or the first entry whose pointers and counts are not plausible; a motion pairs with a tree of as
+    many objects."""
+    n = len(data) // 4
+    if n < 8:
+        return []
+    w = struct.unpack("<%dI" % n, data[:n * 4])
+    ptrs = [x for x in w if x >> 24 in (0x8C, 0x8D, 0x0C, 0x0D)]
+    if not ptrs:
+        return []
+    base, size = min(ptrs), len(data)
+    heads = []
+    for i in range(n - 2):
+        md, frames, typ = w[i], w[i + 1], w[i + 2]
+        t, inp = typ & 0xFFFF, typ >> 16
+        if not (base <= md < base + size) or md & 3 or not 0 < frames < 0x10000:
+            continue
+        if not t or t & ~0x2007 or t & 2 and t & 0x2000:
+            continue
+        kinds = [k for k, bit in MOTION_KINDS if t & bit]
+        if inp & 0xF != len(kinds):
+            continue
+        heads.append((i * 4, md - base, frames, kinds))
+    starts = sorted(set(h[0] for h in heads) | set(h[1] for h in heads) | {size})
+    out = []
+    for at, md, frames, kinds in heads:
+        t = len(kinds)
+        key = [20 if k == "quaternion" else 16 for k in kinds]
+        end = starts[bisect.bisect_right(starts, md)]
+        entries = []
+        while md + 8 * t * (len(entries) + 1) <= end:
+            o = md + 8 * t * len(entries)
+            ps = struct.unpack_from("<%dI" % t, data, o)
+            ns = struct.unpack_from("<%dI" % t, data, o + 4 * t)
+            if not all((q == 0 and c == 0) or (0 < c <= frames + 1 and base <= q and q - base + k * c <= size)
+                       for q, c, k in zip(ps, ns, key)):
+                break
+            entries.append((ps, ns))
+        if not entries:
+            continue
+        ok, moving = True, 0
+        for ps, ns in entries:
+            for q, c, k in zip(ps, ns, key):
+                fr = [struct.unpack_from("<I", data, q - base + k * j)[0] for j in range(c)]
+                if fr != sorted(fr) or (fr and fr[-1] > frames):
+                    ok = False
+            if any(c > 1 for c in ns):
+                moving += 1
+        if ok and moving:
+            out.append((at, frames, "+".join(kinds), len(entries), moving, base))
+    return out
+
+
 def ninja_motion_rows(disc, objects):
     """Rows for [motions]: every `.NJM` of the disc that reads as a Ninja motion, with the Ninja model file of the same
     name (`objects`: model file -> its object count) when there is one."""
@@ -1459,6 +1531,18 @@ def depth(tree, b):
     return n
 
 
+def index_texture_rows(disc, mfile, tfile):
+    """Rows for a `textures <model file> <texture file> index` rule: texture n of the model file is the n-th texture of the
+    PVM archive `tfile`. Both are disc paths as [models] writes them (a `.PRS` file is read decompressed)."""
+    files = dict((path.lstrip("/").upper(), (lba, size, path)) for lba, size, path in disc.files())
+    if tfile.lstrip("/").upper() not in files:
+        print("textures: no disc file %s" % tfile)
+        return []
+    lba, size, path = files[tfile.lstrip("/").upper()]
+    return [[mfile.lstrip("/"), str(n), tfile.lstrip("/"), "%x" % e[1], str(e[2]), str(e[3]), str(e[4]), "%x" % e[5], str(e[6])]
+            for n, e in enumerate(pvm_entries(file_data(disc, lba, size, path)))]
+
+
 def texture_rows(rules, disc, exe, base, maxtex):
     """Rows for the [textures] section: the `textures` rules, then every other model file that has a texture file of
     the same name (POLYGON_x / TEXTURE_x, POLx / TEXx) and exactly one list in the executable that fits it."""
@@ -1469,6 +1553,11 @@ def texture_rows(rules, disc, exe, base, maxtex):
             continue
         if len(r) == 3:
             continue                                  # a pair: handled with the automatic ones below
+        if len(r) == 4 and r[3].lower() == "index":
+            got = index_texture_rows(disc, r[1], r[2])
+            rows += got
+            print("textures %s: %d entries by index for %s" % (r[2], len(got), r[1]))
+            continue
         mfile, tfile, tbase, table = r[1].upper(), r[2].upper(), A(int(r[3], 16)), A(int(r[4], 16))
         tlen = files.get(tfile)
         if tlen is None:

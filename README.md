@@ -25,6 +25,14 @@ You get a repo that:
 | 8 | Progress | Reports one status the same way for every project: done (equivalent C), matching C, named and documented, so projects compare. |
 | 9 | Git-ignored game code and data | Keeps the game's code and data out of git: what carries its bytes or text is generated from your disc, or from your SDK's sources, and git-ignored; what only describes it (addresses, sizes, names, the model map) is committed. |
 
+**Note:** given the volume of data the skill needs, and since Claude will not download games, SDKs or any extra that contains IP.
+Sharing the heavy files with Claude becomes tricky: you either need a paid account, 
+or a workaround to share files with the sandboxed Claude. 
+Even on a paid account, execution time and file size limits apply. Claude Code is preferred. Claude chat will work but is less automatic. 
+It will ask you to run certain commands yourself.
+
+Future versions of dc-decomp-kickoff could include a workaround when found, please share ideas if you have any.
+
 ## What it reads
 
 | Map | Reads today | Otherwise |
@@ -45,7 +53,6 @@ Found a game outside these? Open an issue with what you've worked out about its 
 | [`scripts/`](scripts/) | The tools it runs and copies into each repo's `tools/`: disc reader, splitter, text and model mappers, SH-4 simulator, the Equivalent check and its helpers. |
 | [`template/`](template/) | What each new repo starts from: `build.sh`, `setup.sh`, `disc.sh`, `textures.sh`, `models.txt`, `README.md`, `AGENTS.md`, `KICKOFF`, `gitignore`. |
 | [`references/`](references/) | Evidence from every game it has run on, SDK notes, the Equivalent pipeline, the memory map. |
-| [`zip.sh`](zip.sh), [`dist/`](dist/) | Builds the zip you upload to claude.ai. |
 | [`VERSION`](VERSION), [`LICENSE`](LICENSE) | The skill's version (each repo records the one it is at in `KICKOFF`; [upgrading](references/upgrade.md) brings it to a newer one), and the licence. |
 
 ## Worked examples
@@ -71,17 +78,8 @@ The evidence behind the examples above, and the method the repos follow.
 ## Install
 
 The skill is a folder: [`SKILL.md`](SKILL.md) plus the [`scripts/`](scripts/), [`template/`](template/) and [`references/`](references/) it runs.
-Install the whole folder, not [`SKILL.md`](SKILL.md) alone.
+Install the whole folder when possible. Where only [`SKILL.md`](SKILL.md) can be added, the skill fetches the rest itself.
 
-* **Claude (claude.ai or the desktop app):** build the zip, then upload it as a skill (Settings,
-  Capabilities, Skills):
-  ```
-  git clone https://github.com/consolesplayingconsoles/dc-decomp-kickoff
-  bash dc-decomp-kickoff/zip.sh
-  ```
-  It writes `dc-decomp-kickoff/dist/dc-decomp-kickoff.zip`. Then run `/dc-decomp-kickoff` to start a
-  decomp of your game. The work runs in Claude's own workspace, so you upload your disc and SDK images there
-  when it asks.
 * **Claude Code:** clone it into your skills folder, then run `/dc-decomp-kickoff` to start a decomp of your game:
   ```
   git clone https://github.com/consolesplayingconsoles/dc-decomp-kickoff ~/.claude/skills/dc-decomp-kickoff
@@ -90,14 +88,15 @@ Install the whole folder, not [`SKILL.md`](SKILL.md) alone.
 
 If only [`SKILL.md`](SKILL.md) got installed, the skill fetches its own tools from this repo before starting.
 
-**What you provide:** the game disc (`.gdi` or `.chd`) and a Katana SDK. The skill reads the disc and reports which SDK
+**What you provide:** the game disc as a `.gdi` with its track files (only `.gdi`) and a Katana SDK. The skill reads the disc and reports which SDK
 release it was built with; that release's library sources, or those of another release, are accepted as well. Not all
 games have a later port or a prototype, but where they do, providing them is encouraged, as they can be the strongest
-source of information available. Skipping the optional steps can result in a weaker kickoff output. Docker and Python 3
-are required wherever it runs (Claude's workspace has them).
+source of information available. Skipping the optional steps can result in a weaker kickoff output. Python 3 is required
+wherever it runs, and Docker on any OS. Without Docker (Linux x86_64 only), `scripts/setup_tools.sh` installs the tools
+the skill needs, one step at a time.
 
 **Optional, and worth having:** each of these gives the decomp a stronger starting point. The skill asks for them
-one by one (a path, a link, or "no"), and never fetches any of it by itself.
+one by one (a path, a link, or "no"), and only uses what you give it: it never fetches games, SDKs or any other material that contains IP.
 
 | # | Material | What it gives you |
 |---|---|---|

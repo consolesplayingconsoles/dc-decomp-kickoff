@@ -147,7 +147,7 @@ as an issue) to add a game.
     (`nlFogTableSet`, `nlSpriteLoadTextureOnce_Sub`)
 
 ### Boku Doraemon (Japan), T-41802M V1.003
-- Run: 2026-10-05 (v0.4) and 2026-10-06 (v0.5, on macOS and in a claude.ai cloud workspace: same
+- Run: 2026-10-05 (v0.4) and 2026-10-06 (v0.5, on macOS and in Claude: same
   names)
 - Executable: 978,148 bytes, linked at 0x8C010000; SDK by banners: no release has all 48 library
   builds (newest Shinobi 1.75, Oct 2000), closest R11b (26/48) then R10.1 (23/48); SDKs used:

@@ -21,8 +21,7 @@ Other releases are different builds: `setup.sh` refuses them rather than produce
 
 ## Building
 
-You need: your own copy of the disc as a `.gdi` (a `.chd` converts with
-`chdman extractcd -i game.chd -o game.gdi`), Python 3, Docker, and a Katana SDK (its Hitachi
+You need: your own copy of the disc as a `.gdi` with its track files, Python 3, Docker, and a Katana SDK (its Hitachi
 assembler and linker do the build; any folder layout works).
 
 ```
@@ -58,9 +57,8 @@ Docker, `DC_LOCAL=1` runs the tools through `wibo` instead.
 | `AGENTS.md` | The per-function decompilation loop: Equivalent first, Matching as the bonus |
 | `tools/` | Disc reader, splitter, text mapper, model mapper, C-unit layout, progress report, missed-function finder, SH-4 disassembler and simulator, the Equivalent check (`equiv.py`) with its helpers (`checksizes.py`, `classify.py`, `poollist.py`, `port_equiv.py`), the SDK-source check (`sdk_source.py`), live checks against the running game (optional) |
 
-`text-map/` (generated) lists the executable's strings with every pointer to them, how much text each disc file holds
-with the code that opens it, how text is drawn, and every image file (`images.tsv`). Counts and lists for you to read,
-not a verdict.
+`text-map/` (generated) lists the executable's strings, how much text each disc file holds, and every image file
+(`images.tsv`). Counts and lists for you to read, not a verdict.
 
 ## Model map
 

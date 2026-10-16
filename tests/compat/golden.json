@@ -39,6 +39,16 @@
    1,
    1
   ],
+  "motionimages:motion_bank.bin": [
+   [
+    80,
+    10,
+    "position+angle",
+    2,
+    1,
+    213909504
+   ]
+  ],
   "motions:embedded.bin": [
    [
     256,
@@ -511,6 +521,16 @@
    ]
   ],
   "trees:tree.bin": {
+   "base": 2349858816,
+   "trees": [
+    [
+     0,
+     5,
+     4.0
+    ]
+   ]
+  },
+  "trees:tree_leaf.bin": {
    "base": 2349858816,
    "trees": [
     [
