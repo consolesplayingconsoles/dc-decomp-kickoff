@@ -1,6 +1,6 @@
 # @TITLE@ decomp (kick-off)
 
-![decomp progress](badge.svg)
+![decomp progress](badge.svg?p=0.0)
 
 **Explore this decomp project with [Shuriken Explorer](https://consolesplayingconsoles.github.io/dc-shuriken-explorer/) and see the game's models, skeletons, animations, textures, images, sounds, text and side-by-side C and assembly code directly in your browser.**
 
