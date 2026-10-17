@@ -336,6 +336,11 @@ def run(name,passthru=False):
                 return -1
             if mn=='rts':
                 if i+1<len(ins): exec1(ins[i+1][0],ins[i+1][1])
+                if len(c.blocks)>1:
+                    v=c.R.get('r0')
+                    e='None' if v is None or 'r0' in c.dirty or (isinstance(v,tuple) and v[0]=='addr') else ex(v)
+                    c.blocks[-1].append('@@RET:%s@@'%e)
+                    return -2
                 return -1
             if mn.startswith('cmp') or mn.startswith('tst') or mn.startswith('fcmp'):
                 set_T(mn,parse_ops(ops)); i+=1; continue
@@ -364,13 +369,18 @@ def run(name,passthru=False):
                     blk1=[]; c.blocks.append(blk1)
                     r=run_range(body_start,lastbra)
                     if r==-1: raise Skip('rts in block')
-                    exec1(ins[lastbra+1][0],ins[lastbra+1][1])
+                    ret1=(r==-2)
+                    if not ret1: exec1(ins[lastbra+1][0],ins[lastbra+1][1])
                     st1=regs_state(); c.blocks.pop()
                     c.R,c.FR,c.fpul=dict(pre[0]),dict(pre[1]),pre[2]; c.T=T0
                     blk2=[]; c.blocks.append(blk2)
                     r=run_range(j,k)
                     if r==-1: raise Skip('rts in else')
+                    ret2=(r==-2)
                     st2=regs_state(); c.blocks.pop()
+                    if ret1 and ret2: raise Skip('both return')
+                    if ret1: st1=st2
+                    if ret2: st2=st1
                     for regs,idx in ((0,0),):
                         pass
                     def merge(p,a,b):
@@ -398,6 +408,7 @@ def run(name,passthru=False):
                 r=run_range(body_start,j)
                 st=regs_state(); c.blocks.pop()
                 if r==-1: raise Skip('rts in block')
+                if r==-2: st=pre
                 c.R,c.FR,c.fpul=dict(pre[0]),dict(pre[1]),pre[2]
                 def phi1(post,preM,target,isf):
                     for r_ in sorted(set(post)|set(preM)):

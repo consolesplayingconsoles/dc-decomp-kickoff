@@ -32,6 +32,14 @@ def build(name,ret,passthru=False):
         v=c.FR.get('fr0')
         if v is None or 'fr0' in c.dirty: raise Skip('no fr0')
         rt='float'; text+='\nreturn %s;'%G.fx(v)
+    def retfix(m):
+        e=m.group(1)
+        if ret=='void' or e=='None': return 'return;' if ret=='void' else 'return 0;'
+        return 'return %s;'%e
+    if '@@RET:' in text:
+        if ret=='fr0': raise Skip('float early return')
+        text=re.sub(r'@@RET:(.*?)@@',retfix,text)
+        if ret=='r0' and 'return ;' in text: raise Skip('bad ret')
     # prune dead assignments of pure values (phi leftovers)
     def prune(text,decls):
         changed=True
@@ -41,7 +49,7 @@ def build(name,ret,passthru=False):
                 nm=dcl.split()[1].rstrip(';')
                 occ=len(re.findall(r'\b%s\b'%nm,text))
                 lhs=re.findall(r'^\s*%s = ([^\n]*);$'%nm,text,flags=re.M)
-                if occ==len(lhs) and all(('*(' not in r and '(' not in re.sub(r'\((int|unsigned int|float|unsigned char|unsigned short|short|signed char)\)|\(\(|\)\)|[()]','',r) ) for r in lhs):
+                if occ==len(lhs) and all(('*(' not in r and not re.search(r'[A-Za-z_]\w*\s*\(',r)) for r in lhs):
                     text=re.sub(r'^\s*%s = [^\n]*;\n?'%nm,'',text,flags=re.M); decls.remove(dcl); changed=True
             t2=re.sub(r'if \([^\n]*\) \{\s*\}','',text)
             t2=re.sub(r' else \{\s*\}','',t2)
