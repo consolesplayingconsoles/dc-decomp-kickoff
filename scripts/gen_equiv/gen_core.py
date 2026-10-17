@@ -175,6 +175,13 @@ def run(name,passthru=False):
         if mn in('and','or','xor') and a[0].startswith('#'):
             v=c.gi(a[1]); c.R[a[1]]=iop(mn,v,int(a[0][1:])&0xff); return
         if mn in ('not','neg'): c.R[a[1]]=iop(mn,c.gi(a[0])); return
+        if mn in ('mul.l','muls.w','mulu.w'):
+            x=c.gi(a[0]); y=c.gi(a[1])
+            cast={'mul.l':'int','muls.w':'short','mulu.w':'unsigned short'}[mn]
+            c.macl=('e','((%s)%s * (%s)%s)'%(cast,ex(y),cast,ex(x))) if mn!='mul.l' else ('e','(%s * %s)'%(ex(y),ex(x))); return
+        if mn=='sts' and a[0]=='macl':
+            if getattr(c,'macl',None) is None: raise Skip('macl')
+            c.R[a[1]]=c.macl; return
         if mn=='shll': v=c.gi(a[0]); c.R[a[0]]=(v<<1)&M if isint(v) else ('e','(%s << 1)'%ex(v)); return
         if mn in('shll2','shll8','shll16'):
             n={'shll2':2,'shll8':8,'shll16':16}[mn]; v=c.gi(a[0]); c.R[a[0]]=(v<<n)&M if isint(v) else ('e','(%s << %d)'%(ex(v),n)); return
