@@ -302,3 +302,29 @@ as an issue) to add a game.
   `extRandom` left a pointer in r0 -> calls and writes into the file's own names are mapped back
   to the game's addresses; only the prototype's return register is compared. Docker cannot mount
   macOS's /private/tmp: run the check inside the repo (its `build/equiv/`)
+
+### Equivalent C past 40%: where the cheap gains end (Crazy Taxi, Virtua Tennis; 2026-10-17)
+- Run: CT 33.6% -> 40.7% and VT 12.7% -> 26.7% in one day, from four sources in order of yield:
+  hand-written SDK C (CT, ~500 functions), `gen_equiv` on straight-line code (CT ~500, VT 367 in
+  one run), `port_equiv.py` CT -> VT (+87 functions, 65 renames), then the dry tail below
+- The dead zone: once the straight-line functions are generated and the shared SDK is ported, what
+  is left is not small. CT after the last run: 81 candidates the generator cannot read; VT: 215.
+  Skip reasons, VT / CT: backward branch (loops) 207 / 81, unconditional forward `bra` 129 / 90,
+  address-of-local 168 / 76, stack-argument push 81 / 47, dirty register 53 / 43, indirect call
+  35 / 33, `stc` 28 / 21. The generator's extra support for `mul.l`/`muls.w`/`mulu.w` bought 1 CT
+  function and 6 VT ones: those instructions sit behind loops and jumps, not on their own
+- Dead ends, so other games skip them:
+  - Porting the other way (VT -> CT) after CT -> VT: 17 matches, 2 renames that broke callers, 1
+    DIFFERS; net negative, reverted. Once the shared library is ported one way there is nothing left
+  - `_divls`/`_modls`/`_divlu`/`_modlu` as C `/` and `%`: the helpers take operands in r0/r1 and the
+    build's `-division=cpu` turns a constant divide into shifts, so the C does not make the call
+    `equiv.py` compares; not Equivalent (see `src/sound.c` in CT)
+  - Float early returns (`nlCot`, `nlSec`): the generator's void variant drops the returned value
+  - `sdk-doc` (Katana SDK Sources/Documentation/KATANAStudy samples): PC-side window/animation
+    helpers and ELFs of the Apr-May 1998 release (GDC 0.51, GDFS 0.49); no overlap with 1999-2000
+    games, stripped, MSVC maps. Nothing to hash
+- Next levers, not built: loops (emit loop-carried variables for do-while/counted loops), forward
+  `bra` over else-blocks, name resolution of "N identical candidates" by callers and callees, the
+  exact SHC flags for a byte-matching library build
+- What changed: the skill's `gen_equiv` is the tool for the straight-line tail; expect a quarter to a
+  third of a game's functions from it and `port_equiv.py`, then hand work or loop support

@@ -435,6 +435,7 @@ procedure below.
 | `scripts/seed_funcs.py` | function starts in stretches no function covers, seeds for `ghidra/SeedFuncs.java` |
 | `scripts/shdis.py` | in the repo: SH-4 disassembly with FPU, pool values and names (stdlib) |
 | `scripts/live.py` | in the repo, optional: read, watch and write the running game by address or name, screenshots, pad input (RetroArch + Flycast core over its network ports, stdlib) |
+| `scripts/gdbsnap.py` | in the repo, optional: RAM snapshots of the running game over Flycast's GDB server (a build with `ENABLE_GDB_SERVER`), timelines, and what changed between two snapshots with the nearest global names; stage 5 of `references/roadmap.md` (stdlib) |
 | `scripts/map_names.py` | code symbols of a linked library's map, runtime routines included |
 | `scripts/elf_debug_names.py` | function names and addresses from an SHC ELF's DWARF 1 debug section (prototype or dev kit ELFs) |
 | `scripts/ghidra/ExportFeatures.java` | per-function strings, constants, calls and globals, for port matching |
