@@ -109,3 +109,16 @@ n=0; while ! mkdir build/.eqlock 2>/dev/null; do n=$((n+1)); [ $n -gt 600 ] && e
 trap 'rmdir build/.eqlock' EXIT
 "$@"
 ```
+
+## Generated Equivalent C (scripts/gen_equiv)
+
+`python3 tools/gen_equiv [max size]` writes Equivalent C for the functions that need no thinking and keeps only the ones
+`equiv.py` calls Equivalent: straight-line code, constant and argument stores, getters, forward `if`/`else`, calls to
+named functions, single-precision floats. It writes `src/gen_<letter>.c` and `tests/gen_<letter>/` (22 cases each:
+values from a fixed set plus the constants the code compares against, calls answered with varied results).
+In Crazy Taxi it covered about 290 functions in an afternoon.
+
+Limits: no loops, no jump into the middle of a function, no stack arguments, no multiply, no address of a local;
+prototypes are guessed (ints and floats from the registers set before the call); the cases are random values, so a branch
+they never reach can pass by luck. The C is plain (temps `t0`, hex stores): report it apart from hand-written C, and
+read a generated function before building on it.
