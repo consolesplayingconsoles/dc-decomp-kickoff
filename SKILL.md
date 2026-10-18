@@ -282,6 +282,10 @@ procedure below.
      from the game's own code, whose rights are the publisher's: claiming ownership or granting
      others rights would overreach, and default copyright says nothing more than it should.
    - `chmod +x build.sh setup.sh tools/hooks/pre-commit` (tell the user; it is one command).
+   - the pre-commit hook (`tools/hooks/pre-commit`, from `scripts/hooks/`) does two things on every commit: it keeps the README's
+     Progress block current, and it refuses the commit unless `build.sh` prints `MATCH` and every staged `src/*.c` has no DIFFERS in
+     `tools/equiv.py` (about 10 s; `SKIP_BUILD_CHECK=1` skips it). Enable it with `git config core.hooksPath tools/hooks`. Commit in
+     batches, not change by change: the check runs every time.
    - write `.env` in the repo with `SDK_PATH="<absolute SDK folder>"` (gitignored, machine-local),
      so the user can rebuild with a plain `bash build.sh` later.
    Then put the original executable in as `1ST_READ.BIN` and run `bash build.sh`. It must print `MATCH`. First run assembles every file (minutes); later runs only
