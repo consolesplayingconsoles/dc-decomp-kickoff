@@ -5,10 +5,10 @@ Skip=gen_core.Skip
 def variants(name,passthru):
     c=gen_core.run(name,passthru)
     if c.tail: return ['r0','void']
-    v=c.R.get('r0'); fv=c.FR.get('fr0')
+    lit=lambda x:re.match(r'^(-?\d+|0x[0-9A-F]+|-?[\d.e+-]+f)$',x)
     out=[]
-    if fv is not None and isinstance(fv,tuple) and fv[0]=='e' and 'fr0' not in c.dirty: out.append('fr0')
-    if v is not None and not isinstance(v,int) and not (isinstance(v,tuple) and v[0]=='addr') and 'r0' not in c.dirty: out.append('r0')
+    if c.rets and all(f!='None' for r,f in c.rets) and not all(lit(f) for r,f in c.rets): out.append('fr0')
+    if c.rets and all(r!='None' for r,f in c.rets) and not all(lit(r) for r,f in c.rets): out.append('r0')
     out.append('void')
     return out
 def run_file(stem,items):

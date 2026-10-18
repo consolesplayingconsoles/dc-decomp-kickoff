@@ -9,7 +9,7 @@ will differ, but the order holds. The evidence behind each stage is in `evidence
 | 1. Kickoff | 0 to 10% | the kickoff itself: banners, SDK tables, names, `build.sh` MATCH | the library is named and the build matches |
 | 2. Library C | 10 to 35% | hand-written C for SDK functions, `sdk_source.py`, `equiv.py` | the small library functions are done |
 | 3. Sibling ports | +5 to +15% | `port_equiv.py` from a decomp on the same SDK | a second port finds nothing new |
-| 4. Generated C | +10 to +20% | `scripts/gen_equiv` on straight-line functions | a rerun passes only a handful |
+| 4. Generated C | +10 to +20% | `scripts/gen_equiv` on straight-line, branching and looping functions | a rerun passes only a handful |
 | 5. Live data | the long tail | `gdbsnap.py` with a GDB build of Flycast, RAM dumps as `equiv.py` cases | not reached yet |
 
 ## Stages 1 to 4: static
@@ -19,9 +19,8 @@ will differ, but the order holds. The evidence behind each stage is in `evidence
 - Port one way only. Once the shared library has gone from the richer decomp to the other, porting back
   finds little and its renames can break the destination's callers (see `evidence.md`). Run `build.sh` and
   the full `equiv.py` sweep after every port.
-- Stage 4 stops on structure, not on instructions: loops (backward branches), forward `bra` over an else
-  block, address-of-local, stack arguments. Adding instructions to the generator buys little; adding a
-  structure (loops first) is the next lever.
+- Stage 4 stops on what the generator cannot write: address-of-local, stack arguments, jump tables and indirect
+  calls. Branches (`if`/`else`, early returns) and loops are read; see `equivalent-pipeline.md`.
 
 ## Stage 5: live data
 

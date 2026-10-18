@@ -1,11 +1,11 @@
 """Writes Equivalent C for the functions that need no thinking, and checks each against the original.
 
-    python3 tools/gen_equiv <max function size, default 200>      (run in the repo, like equiv.py)
+    python3 tools/gen_equiv [--known] [max function size, default 200]      (run in the repo, like equiv.py)
 
 For every function classify.py calls convertible and no C covers yet, it symbolically executes the SH-4 code: constants,
 loads and stores, integer and single-precision float arithmetic, forward if / else blocks, and calls to named functions
-(arguments are the registers r4-r7 / fr4-fr11 set before the call). Anything else (loops, a jump into the middle of a
-function, stack arguments, multiply, address of a local) is skipped. The C goes to src/gen_<letter>.c, the cases to
+(arguments are the registers r4-r7 / fr4-fr11 set before the call). Anything else (a jump table, an indirect call, stack
+arguments, address of a local) is skipped. The C goes to src/gen_<letter>.c, the cases to
 tests/gen_<letter>/ (22 cases: values from a fixed set plus the constants the code compares against, calls answered with
 varied results), and a function stays only if tools/equiv.py calls it Equivalent: first as a void function, then returning
 r0 / fr0, then passing the caller's registers through to the first call.
@@ -16,7 +16,9 @@ tools/classify.py, tools/equiv.py, 1ST_READ.BIN."""
 import sys,json,os,shutil,glob,re,subprocess,collections
 sys.path.insert(0,os.path.dirname(os.path.abspath(__file__)))
 import gen_pipe,gen_drv,gen_core
-maxsize=int(sys.argv[1]) if len(sys.argv)>1 else 200
+known='--known' in sys.argv
+args=[a for a in sys.argv[1:] if a!='--known']
+maxsize=int(args[0]) if args else 200
 eq=set(open('tests/equivalent.txt').read().split())
 defined=set()
 for f in glob.glob('src/*.c'):
@@ -26,15 +28,25 @@ ver=set()
 for l in open('sdk-verified.txt'):
     if not l.startswith('#'): ver.update(l.split())
 cand=[]; cnt=collections.Counter()
-for l in subprocess.run(['python3','tools/classify.py'],capture_output=True,text=True).stdout.splitlines():
+sizes=[]
+for l in open('functions.txt'):
+    q=l.split()
+    if len(q)>=4 and q[0]=='F' and int(q[2])<=maxsize and (q[3] in eq if known else q[3] not in eq): sizes.append(q[3])
+# classify.py without names stops at 128 bytes: name the functions to look at
+for l in (subprocess.run(['python3','tools/classify.py']+sizes,capture_output=True,text=True).stdout.splitlines() if sizes else []):
     p=l.split()
-    if len(p)>=4 and p[-1]=='ok' and p[2] not in eq and p[2] not in ver and not p[2].startswith('_') and int(p[1])<=maxsize and p[2] not in defined:
+    if len(p)>=4 and p[-1]=='ok' and (p[2] in eq if known else p[2] not in eq and p[2] not in defined) and p[2] not in ver and not p[2].startswith('_') and int(p[1])<=maxsize:
         try: gen_core.run(p[2]); cand.append(p[2])
         except gen_core.Skip as e: cnt[re.sub(r'[0-9a-f]{4,}','',str(e).split()[0] if str(e) else '?')]+=1
         except Exception as e: cnt['EXC '+type(e).__name__]+=1
 print(len(cand),cnt.most_common(10),flush=True)
-existing=[os.path.basename(f)[4:-2] for f in glob.glob('src/gen_?.c')]
-letters=[x for x in 'abcdefghijklmnopqrstuvwxyz' if x not in existing]
+if known:
+    # the check of the generator itself: it writes C for functions already proven Equivalent (by hand or by an earlier run)
+    # and tests it. The evidence equiv.py writes for them is put back afterwards.
+    saved={f:open(f).read() for f in ('tests/equivalent.txt','docs/equivalent.md') if os.path.exists(f)}
+existing=[os.path.basename(f)[4:-2] for f in glob.glob('src/gen_*.c')]
+abc='abcdefghijklmnopqrstuvwxyz'
+letters=[x for x in list(abc)+[a+b for a in abc for b in abc] if x not in existing]   # gen_a .. gen_z, then gen_aa ..
 remaining=list(cand); final=[]
 rounds=[(0,False),(1,False),(0,True),(1,True),(2,False)]
 done=set()
@@ -51,15 +63,20 @@ for ri,(vi,pt) in enumerate(rounds):
             items.append((n,s,t,c.protos))
         except Exception as e: pass
     if not items: continue
-    stem='gen_x%d'%ri
+    stem='gen_tmp%d'%ri
     passed,failed,deferred,dropped,err=gen_pipe.run_file_robust(stem,items)
     print(ri,vi,pt,'items',len(items),'passed',len(passed),'failed',len(failed),'dropped',len(dropped),err[:100],flush=True)
     keep=[it for it in items if it[0] in passed]
     done|=set(passed)
     final.append((stem,keep,vi,pt))
     remaining=[n for n in remaining if n not in passed]
-    for f in glob.glob('src/gen_x*.c'): os.remove(f)
-    for d in glob.glob('tests/gen_x*'): shutil.rmtree(d)
+    for f in glob.glob('src/gen_tmp*.c'): os.remove(f)
+    for d in glob.glob('tests/gen_tmp*'): shutil.rmtree(d)
+if known:
+    for f,t in saved.items(): open(f,'w').write(t)
+    print('known-equivalent functions written again and passing:',len(done))
+    print('names:',' '.join(sorted(done)))
+    sys.exit(0)
 k=0
 for stem,keep,vi,pt in final:
     if not keep: continue

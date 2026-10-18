@@ -113,12 +113,26 @@ trap 'rmdir build/.eqlock' EXIT
 ## Generated Equivalent C (scripts/gen_equiv)
 
 `python3 tools/gen_equiv [max size]` writes Equivalent C for the functions that need no thinking and keeps only the ones
-`equiv.py` calls Equivalent: straight-line code, constant and argument stores, getters, forward `if`/`else`, calls to
-named functions, single-precision floats. It writes `src/gen_<letter>.c` and `tests/gen_<letter>/` (22 cases each:
-values from a fixed set plus the constants the code compares against, calls answered with varied results).
-In Crazy Taxi it covered about 290 functions in an afternoon.
+`equiv.py` calls Equivalent: straight-line code, constant and argument stores, getters, forward `if`/`else`/early
+returns, loops, calls to named functions, single-precision floats. It writes `src/gen_<letter>.c` and
+`tests/gen_<letter>/` (22 cases each: values from a fixed set plus the constants the code compares against, calls
+answered with varied results).
 
-Limits: no loops, no jump into the middle of a function, no stack arguments, no multiply, no address of a local;
-prototypes are guessed (ints and floats from the registers set before the call); the cases are random values, so a branch
-they never reach can pass by luck. The C is plain (temps `t0`, hex stores): report it apart from hand-written C, and
-read a generated function before building on it.
+How it reads control flow (`gen_cfg.py` builds the graph, `gen_core.py` writes the C): the code is followed by
+execution, not top to bottom, so literal pools in the middle of a function are never read. Each conditional branch
+becomes an `if` / `else` between its two arms and their nearest common successor (the immediate post-dominator); an arm
+that returns, breaks or continues is written as `if (c) { ...; return; }` with the rest after it. A register the arms
+leave different becomes a variable assigned in each arm. A backward branch makes a loop (natural loop of the graph): a
+register that is read in the next pass and changed by the loop becomes a C variable updated where the instruction runs
+(the others stay expressions), and the loop is written as `while`, `do { } while` or `for (;;)` with `break` /
+`continue`. The registers that need a variable are found by a trial pass with markers on the candidates.
+Skipped, with a reason: a loop with several exits that do not lead on to one another, a loop that changes a stack
+local, a jump table, an indirect call, branches that share a join in a way the arms cannot nest.
+
+`python3 tools/gen_equiv --known` is the check of the generator itself: it writes C for functions already proven
+Equivalent and tests it, restoring `tests/equivalent.txt` and `docs/equivalent.md` afterwards.
+
+Limits: no jump table, no indirect call, no stack arguments, no address of a local; prototypes are guessed (ints and
+floats from the registers set before the call); the cases are random values (in a loop function small ones, and only
+those the original finishes on), so a branch they never reach can pass by luck. The C is plain (temps `t0`, hex
+stores): report it apart from hand-written C, and read a generated function before building on it.

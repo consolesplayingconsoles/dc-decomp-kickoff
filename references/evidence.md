@@ -328,3 +328,31 @@ as an issue) to add a game.
   exact SHC flags for a byte-matching library build
 - What changed: the skill's `gen_equiv` is the tool for the straight-line tail; expect a quarter to a
   third of a game's functions from it and `port_equiv.py`, then hand work or loop support
+
+### gen_equiv reads branches and loops (Crazy Taxi, 2026-10-18)
+- Run: `python3 tools/gen_equiv 200` on a copy of the CT repo (working tree with the corrected function sizes), functions of up to
+  200 bytes not yet covered. Before: the generator wrote C for 2 of them (the straight-line leftovers). After: **113 functions
+  Equivalent** on `equiv.py` (44 with loops, 55 with `if`/`else`/early returns, 14 straight-line that earlier skips had hidden);
+  38 of the 113 are 129-200 bytes (`classify.py` without names stops at 128, so the old run never looked at them)
+- Why they were blocked: the generator ran the code top to bottom, so a forward `bra` that was not the else-jump of an `if`
+  ("bra inner", 44 of the skips), any backward branch ("backward" 27, "bra back" 8) and a `return` inside a block ("rts in
+  block" 12) stopped it, and a literal pool in the middle of a function was read as code. It now follows execution through a
+  control-flow graph (`gen_cfg.py`): each branch becomes an `if`/`else` up to its nearest common successor, a loop becomes
+  `while` / `do-while` / `for (;;)` with the registers that carry a value from pass to pass as C variables (found by a trial
+  pass with a marker on each candidate: only the ones the next pass reads need a variable)
+- What the tests needed: a loop runs as often as its bound says, so the cases for a loop function use small values, and
+  every case is first run on the original: a case where it does not finish, or reads an unaligned pointer, is dropped (at
+  least 12 must stay). Memory behind a pointer argument is filled, since the addresses a loop or a loaded pointer reaches
+  cannot be worked out from the arguments
+- Known-equivalent check (`gen_equiv --known`, 128 bytes or less): C is written again for functions already proven by hand
+  or by an earlier run, and tested. Old generator 539 of 631 candidates, new one 758 of 844 (+225, no change in the straight-line
+  output). Six the old one passed were first missing in the new run: `kmiWriteRegister` (a bug of this change, a large
+  constant printed as a subtraction: fixed) and `FUN_0c02f14c` (passes on its own; dropped with a neighbour's compile error);
+  `nlLog`, `FUN_0c07e880` and `nlsndCheckPackFreeError` (the size in functions.txt cuts the function off; the old reader
+  stopped at the first `rts` and ignored the rest: the new one says "runs off the code"); `syCfgGetLanguage` (the old C
+  stopped after an early return in a block and still passed 22 cases, which never took the other path: luck; the new reader
+  refuses it, address of a local). So the old "Equivalent" of those four is not worth much: rerun `equiv.py` on them once the
+  sizes are corrected
+- Still skipped (CT, 200 bytes): address-of-local, indirect call (56), jump table, stack arguments, calls to the compiler's
+  `_divls`/`_modls`/`_quick_odd_mvn` helpers (49: the generator cannot say what they take), a loop that changes a stack local,
+  an address that the argument values alone do not give (array index with `<<`/casts)
