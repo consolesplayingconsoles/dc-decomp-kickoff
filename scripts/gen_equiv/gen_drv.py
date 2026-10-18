@@ -171,5 +171,7 @@ def tests(name,c,src):
 def protos_text(protos):
     out=[]
     for n,sig in sorted(protos.items()):
-        out.append('int %s(%s);'%(n,', '.join(sig) if sig else 'void'))
+        ret='int'
+        if sig and sig[-1]=='->float': ret='float'; sig=sig[:-1]
+        out.append('%s %s(%s);'%(ret,n,', '.join(sig) if sig else 'void'))
     return '\n'.join(out)

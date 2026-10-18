@@ -30,6 +30,14 @@ class Ctx:
         return s.R[r]
     def gf(s,r):
         if s.FR.get(r)==DIRTY: raise Skip('dirty '+r)
+        if r not in s.FR and r=='fr0' and getattr(s,'lastcall',None):
+            # fr0 right after a call is the callee's float result: that call returns a float (its line and prototype say so)
+            lst,idx,t,fname=s.lastcall; s.lastcall=None
+            if not lst[idx].startswith('int %s = '%t): raise Skip('read fr0')
+            lst[idx]='float '+lst[idx][4:]
+            s.protos[fname]=tuple(x for x in s.protos[fname] if x!='->float')+('->float',)
+            if s.R.get('r0')==('e',t): del s.R['r0']
+            s.FR['fr0']=('e',t); return s.FR['fr0']
         if r not in s.FR:
             n=int(r[2:])
             if 4<=n<=11: s.FR[r]=('s','f%d'%n); s.fuse.add(n)
@@ -122,13 +130,15 @@ def run(name,passthru=False):
         ops=rawops; com=''
         if ';' in rawops: ops,com=rawops.split(';',1); ops=ops.strip(); com=com.strip()
         a=[x.strip() for x in re.split(r',(?![^(]*\))',ops)] if ops else []
+        for _i,_x in enumerate(a):
+            if _x=='@(r0,r15)' and isinstance(c.R.get('r0'),int): a[_i]='@(%d,r15)'%c.R['r0']   # a stack slot by a constant in r0
         if mn=='nop': return
         if mn=='rts': return 'rts'
         base=mn.split('.')[0]
         # stack frame handling. c.D is how far r15 is below its value at entry; a slot is named by its distance from the
         # entry value (negative inside the frame, from 0 up the arguments the caller left)
-        if mn=='sts.l' and a[0]=='pr' and a[1]=='@-r15': c.D+=4; c.maxD=max(c.maxD,c.D); return
-        if mn=='lds.l' and a[0]=='@r15+' and a[1]=='pr': c.D-=4; return
+        if mn=='sts.l' and a[0] in ('pr','macl','mach') and a[1]=='@-r15': c.D+=4; c.maxD=max(c.maxD,c.D); return
+        if mn=='lds.l' and a[0]=='@r15+' and a[1] in ('pr','macl','mach'): c.D-=4; return
         if mn in('mov.l',) and a[0].startswith('r') and a[1]=='@-r15':
             n=int(a[0][1:])
             c.D+=4; c.maxD=max(c.maxD,c.D)
@@ -335,18 +345,22 @@ def run(name,passthru=False):
             c.pend=[]
         for n in fa: args.append(fx(c.gf('fr%d'%n))); types.append('float')
         sig=tuple(types)
-        if fname in c.protos and c.protos[fname]!=sig: raise Skip('proto conflict')
-        c.protos[fname]=sig
+        isf=fname in c.protos and c.protos[fname][-1:]==('->float',)
+        if fname in c.protos and tuple(x for x in c.protos[fname] if x!='->float')!=sig: raise Skip('proto conflict %s %s -> %s'%(fname,tuple(x for x in c.protos[fname] if x!='->float'),sig))
+        if not isf: c.protos[fname]=sig
         call='%s(%s)'%(fname,', '.join(args))
         if tail:
             c.tail=call; c.blocks[-1].append('@@TAIL:%s@@'%call); return
         t='t%d'%c.ntemp; c.ntemp+=1
-        c.blocks[-1].append('int %s = %s;'%(t,call))
+        c.blocks[-1].append('%s %s = %s;'%('float' if isf else 'int',t,call))
+        c.lastcall=(c.blocks[-1],len(c.blocks[-1])-1,t,fname)
         c.ncalls+=1
         for n in range(1,8):
             c.R.pop('r%d'%n,None)
         for n in range(0,12): c.FR.pop('fr%d'%n,None)
-        c.R['r0']=('e',t); c.fpul=None
+        if isf: c.R.pop('r0',None); c.FR['fr0']=('e',t); c.lastcall=None
+        else: c.R['r0']=('e',t)
+        c.fpul=None
 
     # ---- conditions: every T comes with its negation, so `if` and `while` read the way the source would ----
     c.neg={}
