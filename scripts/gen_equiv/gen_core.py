@@ -294,6 +294,11 @@ def run(name,passthru=False):
             x=c.gf(a[1]); y=c.gf(a[0]); op={'fadd':'+','fsub':'-','fmul':'*','fdiv':'/'}[mn]
             c.FR[a[1]]=('e','(%s %s %s)'%(fx(x),op,fx(y))); return
         if mn=='fneg': c.FR[a[0]]=('e','(-%s)'%fx(c.gf(a[0]))); return
+        if mn=='fmac' and len(a)==3 and a[0]=='fr0':       # frn += fr0 * frm
+            acc=c.gf(a[2]); x=c.gf(a[0]); y=c.gf(a[1])
+            c.FR[a[2]]=('e','(%s + %s * %s)'%(fx(acc),fx(x),fx(y))); return
+        if mn=='fabs':
+            v=fx(c.gf(a[0])); c.FR[a[0]]=('e','(%s < 0.0f ? -%s : %s)'%(v,v,v)); return
         if mn=='lds' and a[1]=='fpul': c.fpul=c.gi(a[0]); return
         if mn=='float' and a[0]=='fpul': c.FR[a[1]]=('e','(float)%s'%ex(c.fpul)); return
         if mn=='ftrc': c.fpul=('e','(int)%s'%fx(c.gf(a[0]))); return
