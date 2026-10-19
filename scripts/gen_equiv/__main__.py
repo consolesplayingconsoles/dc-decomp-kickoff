@@ -13,9 +13,21 @@ r0 / fr0, then passing the caller's registers through to the first call.
 The result is generated code, plain (temps t0, t1, hex stores, int prototypes) and checked on random values: a branch the
 cases never reach can pass by luck. Report it apart from hand-written C. Needs: functions.txt, tools/shdis.py,
 tools/classify.py, tools/equiv.py, 1ST_READ.BIN."""
-import sys,json,os,shutil,glob,re,subprocess,collections
+import sys,json,os,shutil,glob,re,subprocess,collections,signal
 sys.path.insert(0,os.path.dirname(os.path.abspath(__file__)))
 import gen_pipe,gen_drv,gen_core
+class Timeout(Exception): pass
+def _alarm(sig,frm): raise Timeout()
+signal.signal(signal.SIGALRM,_alarm)
+def _term(sig,frm): raise SystemExit('stopped')
+signal.signal(signal.SIGTERM,_term)
+# equiv.py records every function it passes in tests/equivalent.txt and docs/equivalent.md, also for the scratch files of a round:
+# both are put back after each round, and if the run is stopped, so nothing is left there that has no C behind it
+KEEP={f:open(f).read() for f in ('tests/equivalent.txt','docs/equivalent.md') if os.path.exists(f)}
+def restore_evidence():
+    for f,t in KEEP.items(): open(f,'w').write(t)
+READ_LIMIT=300       # seconds: a function whose reading does not finish in that time is skipped (some shapes loop for ever)
+BUILD_LIMIT=60       # and the same for writing its C and cases in a round
 known='--known' in sys.argv
 args=[a for a in sys.argv[1:] if a!='--known']
 maxsize=int(args[0]) if args else 200
@@ -36,9 +48,12 @@ for l in open('functions.txt'):
 for l in (subprocess.run(['python3','tools/classify.py']+sizes,capture_output=True,text=True).stdout.splitlines() if sizes else []):
     p=l.split()
     if len(p)>=4 and p[-1]=='ok' and (p[2] in eq if known else p[2] not in eq and p[2] not in defined) and p[2] not in ver and not p[2].startswith('_') and int(p[1])<=maxsize:
+        signal.alarm(READ_LIMIT)
         try: gen_core.run(p[2]); cand.append(p[2])
+        except Timeout: cnt['timeout']+=1
         except gen_core.Skip as e: cnt[re.sub(r'[0-9a-f]{4,}','',str(e).split()[0] if str(e) else '?')]+=1
         except Exception as e: cnt['EXC '+type(e).__name__]+=1
+        finally: signal.alarm(0)
 print(len(cand),cnt.most_common(10),flush=True)
 if known:
     # the check of the generator itself: it writes C for functions already proven Equivalent (by hand or by an earlier run)
@@ -54,6 +69,7 @@ for ri,(vi,pt) in enumerate(rounds):
     if not remaining: break
     items=[]
     for n in remaining:
+        signal.alarm(BUILD_LIMIT)
         try:
             vs=gen_pipe.variants(n,pt)
             if vi>=len(vs): continue
@@ -62,9 +78,13 @@ for ri,(vi,pt) in enumerate(rounds):
             t=gen_drv.tests(n,c,s)
             items.append((n,s,t,c.protos))
         except Exception as e: pass
+        finally: signal.alarm(0)
     if not items: continue
     stem='gen_tmp%d'%ri
-    passed,failed,deferred,dropped,err=gen_pipe.run_file_robust(stem,items)
+    try:
+        passed,failed,deferred,dropped,err=gen_pipe.run_file_robust(stem,items)
+    finally:
+        restore_evidence()
     print(ri,vi,pt,'items',len(items),'passed',len(passed),'failed',len(failed),'dropped',len(dropped),err[:100],flush=True)
     keep=[it for it in items if it[0] in passed]
     done|=set(passed)
