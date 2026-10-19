@@ -1,5 +1,7 @@
 # Katana SDK releases: what exists, what to search for
 
+Used in step 1 (Decomp project setup): which SDK to ask the user for.
+
 What the skill knows about each release, so the user knows what to look for. These are names and
 file names as they have been seen in public archives (archive.org items, collectors' sites,
 preservation sites), given as search terms. Nothing here is a download link, and the sources
@@ -58,7 +60,7 @@ banner per release:
 
 So a game whose banners say 1999 libraries was compiled by SHC 5.1 R03-R08, and byte-matching it
 through R10.1's R11 compiler is not guaranteed: when `sdk_scan.py` names the release, build with
-that release's `shc` (step 6's `SDK_PATH`), and say so in the repo's README.
+that release's `shc` (step 2's `SDK_PATH`), and say so in the repo's README.
 
 ## Prototypes and dev kit dumps as material
 

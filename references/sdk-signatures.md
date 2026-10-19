@@ -1,5 +1,7 @@
 # Naming library code by signature
 
+Used in step 2 (Signature-driven baseline); the section on another decomp's names belongs to step 4 (Opportunity-driven optional boosts).
+
 Two sources of names, both turned into Ghidra function-ID hashes (`scripts/ghidra/ExportSigs.java`)
 and applied with `scripts/ghidra/ApplySigs.java <sigs> <out> apply` (unique matches only; ambiguous
 hashes are listed, never guessed). Check a run: matched names sorted by target address should keep
@@ -11,6 +13,7 @@ Any decomp whose build reproduces its game's executable is a names source: a nam
 executable go through `ExportSigs.java` the same way. Games from the same developer share
 libraries no SDK has (a middleware or engine library): one such decomp named a sister game's
 rendering-library functions that no SDK table could. Apply it with `fill`, after the SDK tables.
+This is step 4 (boosts), and a sibling decomp is an offer: the user names the repo (it can be one of their own); nothing else is read.
 
 ## From the SDK's own libraries
 

@@ -1,16 +1,28 @@
-# @TITLE@ decomp (kick-off)
+# @TITLE@ decomp
 
 ![decomp progress](badge.svg?p=0.0)
 
 **Explore this decomp project with [Shuriken Explorer](https://consolesplayingconsoles.github.io/dc-shuriken-explorer/) and see the game's models, skeletons, animations, textures, images, sounds, text and side-by-side C and assembly code directly in your browser.**
 
-A decompilation of the Dreamcast **@TITLE@**, in progress. It rebuilds the game's executable
-byte for byte from one assembly file per function (the baseline the build keeps checking), with
-@NAMED@ of its @FUNCS@ functions named so far. A function is **done** when its C behaves like the
-original (Equivalent, checked by `tools/equiv.py`); byte-identical C (Matching) is the bonus tier.
+A decompilation of the Dreamcast **@TITLE@**, in progress. It rebuilds the game's executable byte for byte, with
+@NAMED@ of its @FUNCS@ functions named so far. A function is **done** when its C behaves like the original (Equivalent);
+byte-identical C (Matching) is the bonus tier.
 
 **This repository contains no game code or data.** You supply your own disc; `setup.sh` generates
 everything game-derived on your machine, and `.gitignore` keeps it out of git.
+
+## The steps
+
+This decomp follows the six steps of the dc-decomp-kickoff skill, from the disc to proven C for every function. `AGENTS.md` has the detail.
+
+| # | Step                                    | Decomp completion         | You provide                        | What it does                                                                                                                                                                                                                                                                                                               |
+|---|-----------------------------------------|---------------------------|------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 1 | **Decomp project setup**                | -                         | The disc as a `.gdi`, a Katana SDK | Installs the tools (Docker, Python 3) and checks your game disc and SDK.                                                                                                                                                                                                                                                   |
+| 2 | **Signature-driven baseline**           | -                         |                                    | Reads the disc, splits the executable into one assembly file per function, rebuilds it **byte for byte** with the SDK's own assembler and linker, and names every function it can match by signature.                                                                                                                      |
+| 3 | **Asset mapping**                       | -                         |                                    | Writes the text map (every string with its pointers, text per disc file), the model map, the texture list and the audio map.                                                                                                                                                                                               |
+| 4 | **Opportunity-driven optional boosts**  | Varies greatly by project | The materials                      | Uses what you hand over to save work in every step after it, the earlier the better: a later port (Android is the strongest), a prototype or debug build, cheat codes, other regions, existing notes, the same game on another console, a sibling decomp. It never looks for these itself and never reads your other code. |
+| 5 | **Incremental script-generated decomp** | ~25% (higher with boosts) | SDK library sources (optional)     | Proves C for what the tools can write on their own: the SDK's own library source where you have it, then generated C, then a second pass that draws the test cases again to cover more of the original. Generated C is reported apart from hand-written C.                                                                 |
+| 6 | **Experience-driven agentic decomp**    | 100%                      |                                    | Takes what is left one pocket at a time, function by function: C and test cases until each function is proven. The plan is in the repo's `AGENTS.md`.                                                                                                                                                                      |
 
 ## Supported version
 
@@ -58,8 +70,8 @@ Docker, `DC_LOCAL=1` runs the tools through `wibo` instead.
 | `docs/equivalent.md` | The evidence for each Equivalent function (written by `tools/equiv.py`) |
 | `sdk-verified.txt` | Library functions whose bytes the SDK source you supplied reproduces (written by `tools/sdk_source.py`) |
 | `sdk-source/` | The C of those library functions, from the SDK source you supplied (local, git-ignored) |
-| `AGENTS.md` | The per-function decompilation loop: Equivalent first, Matching as the bonus |
-| `tools/` | Disc reader, splitter, text mapper, model mapper, C-unit layout, progress report, missed-function finder, SH-4 disassembler and simulator, the Equivalent check (`equiv.py`) with its helpers (`checksizes.py`, `classify.py`, `poollist.py`, `port_equiv.py`), the SDK-source check (`sdk_source.py`), live checks against the running game (optional) |
+| `AGENTS.md` | The six steps this decomp follows, and the per-function decompilation loop: Equivalent first, Matching as the bonus |
+| `tools/` | Disc reader, splitter, text mapper, model mapper, C-unit layout, progress report, missed-function finder, SH-4 disassembler and simulator, the Equivalent check (`equiv.py`) with its helpers (`checksizes.py`, `classify.py`, `poollist.py`), the SDK-source check (`sdk_source.py`), live checks against the running game (optional) |
 
 `text-map/` (generated) lists the executable's strings, how much text each disc file holds, and every image file
 (`images.tsv`). Counts and lists for you to read, not a verdict.
@@ -89,14 +101,16 @@ that stays local). Regenerate it with `python3 tools/model_map.py 1ST_READ.BIN "
 
 ## Equivalent C and shared library code
 
+How strong an Equivalent function is depends on its test cases, so `tools/equiv.py` reports how many of the original's instructions they
+run. The original's code is kept as one assembly file per function, the baseline the build keeps checking. C written by `tools/gen_equiv` is
+the lower gate: it is generated, checked on generated cases, and then polished (`gen_equiv --retest`, and cases by hand for the branches
+nobody ran). `AGENTS.md` lists the six steps this decomp follows, up to 100%.
+
 `src/<file>.c` with no `@unit` header is C checked for behaviour only: `python3 tools/equiv.py src/<file>.c`
 runs each function in an SH-4 interpreter twice per test case, the original bytes and your compiled C,
 and they must agree on calls, memory writes and the result. Passing functions are listed in
 `tests/equivalent.txt` and counted as done. The loop, and how to write many of them quickly, is in
-`AGENTS.md` and the kickoff skill's `references/equivalent-pipeline.md`. Library code the game shares
-with another decomp of this skill (the NAOMI library, the C runtime) need not be rewritten:
-`python3 tools/port_equiv.py <that decomp> .` finds those functions here by their code, ports the C and
-its cases, and keeps only what `equiv.py` confirms on this game's own bytes.
+`AGENTS.md` and the kickoff skill's `references/equivalent-pipeline.md`.
 
 ## Matching C units (the build tier)
 
@@ -133,7 +147,7 @@ functions carry a name in all, because small wrappers inherit the name of the fu
 ## How this was started
 
 This repo was autogenerated using
-[dc-decomp-kickoff](https://github.com/consolesplayingconsoles/dc-decomp-kickoff) @SKILL_VERSION@.
+[dc-decomp-kickoff](https://github.com/consolesplayingconsoles/dc-decomp-kickoff) @SKILL_VERSION@. It follows the six steps above; `AGENTS.md` says how.
 
 ## Third-party sources
 

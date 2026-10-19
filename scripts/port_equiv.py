@@ -16,8 +16,8 @@ src/*.c with tests/<file>/<function>.json). For every function the source has as
    function. Each mapped RAM address or callee is added to the destination's symbols.txt under the SOURCE's
    name (several names may share an address), and a destination function with no real name (FUN_...) takes
    the source's.
-3. Port the C: the matched functions with the file's declarations, to src/<tag>_<file>.c, and each function's
-   cases to tests/<tag>_<file>/<function>.json with their addresses translated (mapped addresses, and the
+3. Port the C: the matched functions with the file's declarations, to src/<file>_2.c, and each function's
+   cases to tests/<file>_2/<function>.json with their addresses translated (mapped addresses, and the
    other 0C... RAM addresses of the source moved to the destination's 8C... base).
 4. Run the destination's own `tools/equiv.py -q` on the ported file; a function whose body names something
    still unmapped (a link error) is dropped and the run repeated. Only what equiv.py prints EQUIVALENT stays: the
@@ -107,7 +107,7 @@ def split_c(text):
 
 def main(argv):
     dry = '--dry' in argv
-    tag = 'port'
+    tag = ''
     args = []
     it = iter(argv[1:])
     for a in it:
@@ -250,7 +250,7 @@ def main(argv):
         if not mine:
             continue
         pre, defs = split_c(text)
-        stem = '%s_%s' % (tag, f[:-2])
+        stem = '%s_%s' % (tag, f[:-2]) if tag else f[:-2] + '_2'          # no marker of where it came from: ported C is ordinary progress
         out_c = os.path.join(dst['path'], 'src', stem + '.c')
         keep = []                      # what an earlier port already put in this file stays in it
         if os.path.exists(out_c):
@@ -259,9 +259,7 @@ def main(argv):
         tried = list(mine)
         for attempt in range(6):
             body = ''.join(pre) + '\n'.join(t for n, t in defs if n in mine or n in keep or t.lstrip().startswith('static')) + '\n'
-            open(out_c, 'w').write(
-                '/* Ported from %s (src/%s) by scripts/port_equiv.py: only the functions the destination has. */\n'
-                % (os.path.basename(src['path'].rstrip('/')), f) + body)
+            open(out_c, 'w').write(body)
             tdir = os.path.join(dst['path'], 'tests', stem)
             os.makedirs(tdir, exist_ok=True)
             import json
@@ -319,9 +317,7 @@ def main(argv):
                 os.rmdir(tdir)
         elif passed != tried:
             body = ''.join(pre) + '\n'.join(t for n, t in defs if n in passed or n in keep or t.lstrip().startswith('static')) + '\n'
-            open(out_c, 'w').write(
-                '/* Ported from %s (src/%s) by scripts/port_equiv.py: only the functions the destination has. */\n'
-                % (os.path.basename(src['path'].rstrip('/')), f) + body)
+            open(out_c, 'w').write(body)
     for n, why in report:
         results.setdefault(n, why)
     ok = sorted(n for n, v in results.items() if v == 'EQUIVALENT')

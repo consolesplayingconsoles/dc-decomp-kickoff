@@ -93,17 +93,73 @@ def stack_top():
         import sh4sim
         return sh4sim.STACK_TOP-0x100
     except Exception: raise Skip('no simulator for stack arguments')
+LAST_READS=[]
+RUNTIME={a for a,n in G.FUNCS.items() if n.startswith('_')}       # the compiler's runtime helpers run for real, as equiv.py runs them
 def original_runs(name,case):
-    """How many instructions the original takes on a case (None when it does not finish): lets the generator keep only the
-    cases a loop actually ends on. Needs tools/sh4sim.py next to this directory; without it every case is kept."""
+    """What the original does on a case: (instructions it takes, the instruction addresses it ran), or (None, set()) when it does not
+    finish. Lets the generator keep only the cases a loop actually ends on, and pick the cases that reach the most code. Needs
+    tools/sh4sim.py next to this directory; without it every case is kept."""
     try:
         sys.path.insert(0,os.path.join(os.path.dirname(os.path.abspath(__file__)),'..'))
         import sh4sim
-    except Exception: return 0
+    except Exception: return 0,None
     start,size=G.SPANS[name]
     base=int(open('BASE').read().strip(),16)
-    r=sh4sim.run(dict(case,exe='1ST_READ.BIN',base='%08X'%base,entry='%08X'%start,end='%08X'%(start+size),steps=100000),'.',deep=lambda t:False)
-    return None if r['error'] else r['steps']
+    r=sh4sim.run(dict(case,exe='1ST_READ.BIN',base='%08X'%base,entry='%08X'%start,end='%08X'%(start+size),steps=100000),'.',deep=lambda t:t in RUNTIME)
+    LAST_READS[:]=r.get('reads',[])
+    if r['error']: return None,set()
+    return r['steps'],set(r.get('covered',[]))
+def grow(name,runs,V,rng,HOT,budget=1200):
+    """Coverage-guided growth: take one of the cases that reach the most code, change one input (a word in memory, a register, the
+    result of a call) to a value from V, and keep the new case when it runs an instruction no case has run yet. A chain of guards
+    (a flag that must be 1, then the next one) is reached one step at a time this way, where random inputs never get through."""
+    seen=set()
+    for d,n,c in runs:
+        if c: seen|=c
+    pool=[(d,c) for d,n,c in runs if n is not None and c]
+    for _ in range(budget):
+        if not pool: break
+        top=sorted(pool,key=lambda dc:-len(dc[1]))[:6]
+        d,c=top[0] if rng.random()<0.7 else rng.choice(top)
+        e=json.loads(json.dumps(d))
+        n0,c0=original_runs(name,e)
+        start,size=G.SPANS[name]
+        late=[a&~3 for a in LAST_READS if 0x0C000000<=a<0x0D000000 and not start-0x1000<=a<start+size+0x1000][-10:]
+        v=rng.choice(HOT) if rng.random()<0.7 else rng.choice(V)
+        if late and rng.random()<0.8:
+            # the words the original read last are the ones its final guard looked at: set one of them
+            a=late[-1] if rng.random()<0.6 else rng.choice(late); k='%08X'%a
+            h=e['poke'].get(k,'00000000'*2)
+            e['poke'][k]=struct.pack('<I',v).hex()+h[8:]
+            prev='%08X'%((a-4)&0xffffffff)          # the neighbour's second word lies on this word: set it to the same value
+            if prev in e['poke']: e['poke'][prev]=e['poke'][prev][:8]+struct.pack('<I',v).hex()+e['poke'][prev][16:]
+        else:
+            slots=[('regs',k) for k in e.get('regs',{}) if not k.startswith('fr')]+[('call',i) for i in range(len(e.get('calls',[])))]
+            if not slots: continue
+            kind,k=rng.choice(slots)
+            if kind=='regs': e['regs'][k]='%08X'%v
+            else: e['calls'][k]['r0']='%08X'%v
+        n,cov=original_runs(name,e)
+        if n is None or cov is None: continue
+        if cov-seen:
+            seen|=cov; runs.append((e,n,cov)); pool.append((e,cov))
+    return runs
+def pick(name,cases,want,V=None,rng=None,HOT=None):
+    """Of many candidate cases, the ones the original finishes on, chosen greedily by the new instructions each reaches (the
+    instruction coverage the equivalence check then rests on), padded with the rest up to want."""
+    runs=[(d,)+original_runs(name,d) for d in cases]
+    if V and rng and all(c is not None for d,n,c in runs): runs=grow(name,runs,V,rng,HOT or V)
+    ok=[(d,c) for d,n,c in runs if n is not None]
+    if any(c is None for d,c in ok): return [d for d,c in ok][:want]
+    chosen=[];seen=set();left=list(ok)
+    while left and len(chosen)<want:
+        best=max(left,key=lambda dc:len(dc[1]-seen))
+        if not best[1]-seen: break
+        chosen.append(best[0]);seen|=best[1];left.remove(best)
+    for d,c in left:
+        if len(chosen)>=want: break
+        chosen.append(d)
+    return chosen
 def tests(name,c,src):
     ip=sorted(c.iuse); fp=sorted(c.fuse)
     loopy=c.has_loop
@@ -115,7 +171,7 @@ def tests(name,c,src):
     for n in ip:
         if n in addr_params: basemap['a%d'%n]=0x0C800000+(n-4)*0x10000
     consts=set()
-    for m in re.findall(r'(?:==|&|>=|>|<=|<|\+|-)\s*\(?(0x[0-9A-Fa-f]+|\d+)',src):
+    for m in re.findall(r'(?:==|!=|&|>=|>|<=|<|\+|-)\s*\(?(0x[0-9A-Fa-f]+|\d+)',src):
         try:
             v=int(m,0); consts|={v&0xffffffff,(v+1)&0xffffffff,(v-1)&0xffffffff,(v<<1)&0xffffffff}
         except Exception: pass
@@ -134,7 +190,7 @@ def tests(name,c,src):
     cases=[]
     rng=random.Random(hash(name)&0xffff)
     chained=any(k=='e' and re.search(r'\b[tu]\d+\b|\bstk\b',e) for k,e in c.mem_addrs)
-    for i in range(60 if (loopy or chained) else 22):
+    for i in range(160 if (loopy or chained) else 120):
         bm=dict(basemap)
         for n in ip:
             if n not in addr_params: bm['a%d'%n]=rng.choice(V)
@@ -163,11 +219,9 @@ def tests(name,c,src):
         if c.ncalls or c.tail:
             d['calls']=[dict({'r0':'%08X'%rng.choice(pool)},**({'poke_arg':{r:struct.pack('<8I',*[rng.choice(pool) for _ in range(8)]).hex() for r in sorted(c.frame_regs)}} if c.frame_regs else {})) for _ in range(ncalls)]
         cases.append(d)
-    if loopy or chained:
-        kept=[d for d in cases if original_runs(name,d) is not None]
-        if len(kept)<12: raise Skip('the original does not finish on the cases')
-        cases=kept[:22]
-    return {'dev':cases[:15],'holdout':cases[15:]}
+    cases=pick(name,cases,36,V,rng,sorted(consts|{0,1,2,0xFFFFFFFF}))
+    if len(cases)<(12 if (loopy or chained) else 6): raise Skip('the original does not finish on the cases')
+    return {'dev':cases[0::2][:18],'holdout':cases[1::2][:18]}
 def protos_text(protos):
     out=[]
     for n,sig in sorted(protos.items()):

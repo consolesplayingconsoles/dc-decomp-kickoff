@@ -1,34 +1,29 @@
 # dc-decomp-kickoff
 
-Give Claude your Dreamcast game disc and a Katana SDK, and it kicks off the decompilation project of your game from zero, giving you and your AI agents a fully formed repo with everything you need to start decompiling: function names, mappings, asset references, documentation for AI agents, and the whole toolchain running in Docker. Welcome to 1998.
+Give Claude your Dreamcast game disc and a Katana SDK, and it starts the decompilation of your game and guides your AI agent to completion. The repo rebuilds the
+executable byte for byte, with function names, maps of the game's text, models and sounds, and documentation for you and your
+agent. Welcome to 1998.
 
-> A new decomp project will start at a range of 0-10% depending on the game and the extras provided (SDK sources, prototypes, ports...). Zombie Revenge for example started at 6.5% with SDK sources alone.
- 
-The output repo rebuilds the game's executable byte for byte, names what it can match, and maps the game's
-text, 3D models and sounds, so you start by reading and naming instead of setting up. A function counts as done when
-its C **behaves like the original** (proven in an SH-4 simulator), with byte-identical C as the bonus tier.
+The process was worked out on real Dreamcast decomps and is refined with every game that goes through it, so each decomp is easier than the last.
 
-You get a repo that:
+A function counts as done when its C **behaves like the original** (proven in an SH-4 simulator, with the share of the original's
+instructions the test cases ran reported beside it); byte-identical C is the bonus tier.
 
-| # | Feature                        | Does this                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-|---|--------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 1 | Byte-for-byte rebuild          | Rebuilds the game's executable **byte for byte**, from one assembly file per function, with the SDK's own Hitachi assembler and linker (the baseline: the build keeps matching as C replaces assembly).                                                                                                                                                                                                                                                                                                                                                 |
-| 2 | Names                          | Already names every function it can match by signature (the SDK's own libraries).                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| 3 | Text map                       | Has a text map for translators: every string in the executable with every pointer to it, how much text each disc file holds and which code opens it, and a list of every image file.                                                                                                                                                                                                                                                                                                                                                                    |
-| 4 | Model map                      | Has a model map: every model it recognises in the disc files (the NAOMI library's flat format, Ninja models and motions, object trees stored as a memory image, and a few other common formats), the table in the executable that holds each, the texture lists, and characters assembled from a known skeleton, in one plain-text file, `model-map/game.dcgs`. It starts with no knowledge of the game, and a `models.txt` per game records what people learn (tables, names): whoever runs the skill can name what they recognise and commit it back. |
-| 5 | Audio map                      | Lists every sound it recognises: CRI ADX and AHX streams, WAV files, sample streams, and the DTPK, SMLT and SMPB sound banks, in archives or on their own, with channels, sample rate and length. The archives carry no names, so a sound is named the same way a model is.                                                                                                                                                                                                                                                                             |
-| 6 | Equivalent C                   | Describes the loop for taking functions from assembly to C, with the build checking each step, and `tools/equiv.py` checking each function's C against the original (calls, memory writes and result, on test cases, in an SH-4 interpreter): **Equivalent C** is what counts as done, so a function can be decompiled and proven without reproducing the compiler's exact output.                                                                                                                                                                      |
-| 7 | Tools                          | Has the tools that made that fast: size, instruction and literal-pool checks per function, and `port_equiv.py`, which carries a sibling decomp's verified C for shared library code (the NAOMI library, the C runtime) into a new one, each function checked again on the new game's own bytes.                                                                                                                                                                                                                                                         |
-| 8 | Progress                       | Reports one status the same way for every project: done (equivalent C), matching C, named and documented, so projects compare.                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| 9 | Git-ignored game code and data | Keeps the game's code and data out of git: what carries its bytes or text is generated from your disc, or from your SDK's sources, and git-ignored; what only describes it (addresses, sizes, names, the model map) is committed.                                                                                                                                                                                                                                                                                                                       |
+## The decompilation steps
 
-**Note:** given the volume of data the skill needs, and since Claude will not download games, SDKs or any extra that contains IP.
-Sharing the heavy files with Claude becomes tricky: you either need a paid account, 
-or a workaround to share files with the sandboxed Claude. 
-Even on a paid account, execution time and file size limits apply. Claude Code is preferred. Claude chat will work but is less automatic. 
-It will ask you to run certain commands yourself.
+Claude uses the dc-decomp-kickoff skill to start the repo and follows these steps. **Following them can guide you all the way to 100%**, and you are free to fork at any moment and
+follow your own strategy. Every step ends by printing the project's progress.
+  
+| # | Step                                    | Decomp completion         | You provide                        | What it does                                                                                                                                                                                                                                                                                                               |
+|---|-----------------------------------------|---------------------------|------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 1 | **Decomp project setup**                | -                         | The disc as a `.gdi`, a Katana SDK | Installs the tools (Docker, Python 3) and checks your game disc and SDK.                                                                                                                                                                                                                                                   |
+| 2 | **Signature-driven baseline**           | -                         |                                    | Reads the disc, splits the executable into one assembly file per function, rebuilds it **byte for byte** with the SDK's own assembler and linker, and names every function it can match by signature.                                                                                                                      |
+| 3 | **Asset mapping**                       | -                         |                                    | Writes the text map (every string with its pointers, text per disc file), the model map, the texture list and the audio map.                                                                                                                                                                                               |
+| 4 | **Opportunity-driven optional boosts**  | Varies greatly by project | The materials                      | Uses what you hand over to save work in every step after it, the earlier the better: a later port (Android is the strongest), a prototype or debug build, cheat codes, other regions, existing notes, the same game on another console, a sibling decomp. It never looks for these itself and never reads your other code. |
+| 5 | **Incremental script-generated decomp** | ~25% (higher with boosts) | SDK library sources (optional)     | Proves C for what the tools can write on their own: the SDK's own library source where you have it, then script-generated C, then a second pass that draws the test cases again to cover more of the original. Script-generated C is reported apart from agentic C.                                                        |
+| 6 | **Experience-driven agentic decomp**    | 100%                      |                                    | Takes what is left one pocket at a time, function by function: C and test cases until each function is proven. The plan is in the repo's `AGENTS.md`.                                                                                                                                                                      |
 
-Future versions of dc-decomp-kickoff could include a workaround when found, please share ideas if you have any.
+**Note:** dc-decomp-kickoff never downloads games, SDKs or any material that contains IP, and the heavy files are yours to hand over. Claude Code is preferred: Claude chat is less automatic and will ask you to run some commands yourself.
 
 ## What it reads
 
@@ -40,18 +35,6 @@ Future versions of dc-decomp-kickoff could include a workaround when found, plea
 | Textures   | PowerVR twiddled and VQ, through the executable's own lists, a model file's own lists, or a `textures` rule                                                       | Other formats are listed in `images.tsv`                              |
 | Audio      | CRI ADX and AHX streams, WAV, sample streams, DTPK, SMLT and SMPB banks                                                                                           | Other formats are not listed                                          |
 
-Found a game outside these? Open an issue with what you've worked out about its format, or open a pull request. Every game contributes to improving future decomps for everyone.
-
-## What is in this repository
-
-| Path                         | What                                                                                                                                                         |
-|------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| [`SKILL.md`](SKILL.md)       | The procedure Claude follows.                                                                                                                                |
-| [`scripts/`](scripts/)       | The tools it runs and copies into each repo's `tools/`: disc reader, splitter, text and model mappers, SH-4 simulator, the Equivalent check and its helpers. |
-| [`template/`](template/)     | What each new repo starts from: `build.sh`, `setup.sh`, `disc.sh`, `textures.sh`, `models.txt`, `README.md`, `AGENTS.md`, `KICKOFF`, `gitignore`.            |
-| [`references/`](references/) | Evidence from every game it has run on, SDK notes, the Equivalent pipeline, the memory map.                                                                  |
-| [`VERSION`](VERSION)         | The skill's version (each repo records the one it is at in `KICKOFF`; [upgrading](references/upgrade.md) brings it to a newer one).                          |
-
 ## Worked examples
 
 | Game                        | Release                  | Repo                                                                                        | What it is                                                                                                                                | Evidence                                                                        |
@@ -60,24 +43,23 @@ Found a game outside these? Open an issue with what you've worked out about its 
 | Virtua Tennis               | USA, MK-51054, V1.001    | [virtua-tennis-decomp](https://github.com/consolesplayingconsoles/virtua-tennis-decomp)     | A decomp started beside Crazy Taxi, which shares its library with it, for a combined mod: the same names, Equivalent C and model map      | [Evidence](references/evidence.md#virtua-tennis-usa-mk-51054-v1001)             |
 | Boku Doraemon               | Japan, T-41802M, V1.003  | [boku-doraemon-decomp](https://github.com/consolesplayingconsoles/boku-doraemon-decomp)     | An experiment: a translation target                                                                                                       | [Evidence](references/evidence.md#boku-doraemon-japan-t-41802m-v1003)           |
 | Illbleed                    | Japan, T45601M, V1.003   | [illbleed-decomp](https://github.com/consolesplayingconsoles/illbleed-decomp)               | An experiment: a second translation target, also doable                                                                                   | [Evidence](references/evidence.md#illbleed-japan-crazy-games-t45601m-v1003)     |
-| Sonic Adventure             | Europe, MK-51000, V1.003 | [sonic-adventure-decomp](https://github.com/consolesplayingconsoles/sonic-adventure-decomp) | A kickoff run: names and maps (text, models, textures, sounds), no function decompiled yet                                                | None yet                                                                        |
-| Zombie Revenge              | Europe, MK-51038, V1.000 | [zombie-revenge-decomp](https://github.com/consolesplayingconsoles/zombie-revenge-decomp)   | A kickoff run: 6.5% done from the SDK source alone, plus a model map                                                                      | None yet                                                                        |
+| Sonic Adventure             | Europe, MK-51000, V1.003 | [sonic-adventure-decomp](https://github.com/consolesplayingconsoles/sonic-adventure-decomp) | Names and maps (text, models, textures, sounds)                                                                                           | None yet                                                                        |
+| Zombie Revenge              | Europe, MK-51038, V1.000 | [zombie-revenge-decomp](https://github.com/consolesplayingconsoles/zombie-revenge-decomp)   | Names, the SDK's own source verified, and a model map                                                                                     | None yet                                                                        |
 | Virtua Fighter 3            | US, MK-51001, V1.002     | [vf3-decomp](https://github.com/celsowm/vf3-decomp) (another team's)                        | An experiment: names for their decomp ([the merged PR](https://github.com/celsowm/vf3-decomp/pull/1))                                     | [Evidence](references/evidence.md#virtua-fighter-3tb-us-mk-51001-v1002)         |
 | Phantasy Star Online Ver. 2 | US, MK-51193, V1.004     | None                                                                                        | **Not compatible**: the boot file has none of the game's code, which loads from over 600 files at runtime, so the kickoff stops at step 1 | [Evidence](references/evidence.md#phantasy-star-online-ver-2-us-mk-51193-v1004) |
 
 ## Evidence and method
 
-The evidence behind the examples above, and the method the repos follow.
+- [references/evidence.md](references/evidence.md): Records what dc-decomp-kickoff did on each game it has run on. If you run your own decomp please share the generated evidence so the tool can grow.
 
-|   | Read                                                                     | What it is                                                                                                                                      |
-|:--|--------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------|
-|   | [`references/evidence.md`](references/evidence.md)                       | What the skill did on each game it has been run on. If you run it on a game, the last step prints your run in that format: send it as an issue. |
-|   | [`references/equivalent-pipeline.md`](references/equivalent-pipeline.md) | How Equivalent C is written fast, and checked, at scale.                                                                                        |
+- [references/equivalent-pipeline.md](references/equivalent-pipeline.md): Explains how Equivalent C is written and checked at scale. [SKILL.md](SKILL.md) is the procedure Claude follows;
+
+- [scripts/](scripts/), [template/](template/) and [references/](references/): hold what it runs and copies into each repo.
 
 ## Install
 
-The skill is a folder: [`SKILL.md`](SKILL.md) plus the [`scripts/`](scripts/), [`template/`](template/) and [`references/`](references/) it runs.
-Install the whole folder when possible. Where only [`SKILL.md`](SKILL.md) can be added, the skill fetches the rest itself.
+dc-decomp-kickoff is a skill folder: [SKILL.md](SKILL.md) plus the [scripts/](scripts/), [template/](template/) and [references/](references/) it runs.
+Install the whole folder when possible. Where only [SKILL.md](SKILL.md) can be added, dc-decomp-kickoff fetches the rest itself.
 
 * **Claude Code:** clone it into your skills folder, then run `/dc-decomp-kickoff` to start a decomp of your game:
   ```
@@ -85,17 +67,15 @@ Install the whole folder when possible. Where only [`SKILL.md`](SKILL.md) can be
   ```
   The work runs on your machine, with your game and SDK images where they already are.
 
-If only [`SKILL.md`](SKILL.md) got installed, the skill fetches its own tools from this repo before starting.
-
-**What you provide:** the game disc as a `.gdi` with its track files (only `.gdi`) and a Katana SDK. The skill reads the disc and reports which SDK
+**What you provide:** the game disc as a `.gdi` with its track files (only `.gdi`) and a Katana SDK. dc-decomp-kickoff reads the disc and reports which SDK
 release it was built with; that release's library sources, or those of another release, are accepted as well. Not all
 games have a later port or a prototype, but where they do, providing them is encouraged, as they can be the strongest
-source of information available. Skipping the optional steps can result in a weaker kickoff output. Python 3 is required
+source of information available. Skipping the optional boosts means more work in the later steps. Python 3 is required
 wherever it runs, and Docker on any OS. Without Docker (Linux x86_64 only), `scripts/setup_tools.sh` installs the tools
-the skill needs, one step at a time.
+dc-decomp-kickoff needs, one step at a time.
 
-**Optional, and worth having:** each of these gives the decomp a stronger starting point. The skill asks for them
-one by one (a path, a link, or "no"), and only uses what you give it: it never fetches games, SDKs or any other material that contains IP.
+**Optional, and worth having:** each of these saves work, and the earlier it is used the more it saves (the SDK's own source is the clearest case). dc-decomp-kickoff asks for them
+one by one (a path, a link, or "no"), and only uses what you give it: it never fetches games, SDKs or any other material that contains intellectual property.
 
 | # | Material                                               | What it gives you                                                                                                                                                                                                          |
 |---|--------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -105,11 +85,12 @@ one by one (a path, a link, or "no"), and only uses what you give it: it never f
 | 4 | Other regions or revisions                             | The same code, so names and addresses carry across.                                                                                                                                                                        |
 | 5 | Existing reverse-engineering notes or a partial decomp | A repo, thread or wiki page: reference names and pitfalls.                                                                                                                                                                 |
 | 6 | A decomp of the same game on another console           | Structures, class names and logic; no bytes match.                                                                                                                                                                         |
+| 7 | A sibling decomp                                       | Names for library code shared with another game from the same team: exact matches only, from a repo you name.                                                                                                              |
 
 ## Third-party sources
 
 The procedure needs a Katana SDK. The repositories
-named in the skill are identified solely as examples of the type of material required. We have no
+named in dc-decomp-kickoff are identified solely as examples of the type of material required. We have no
 affiliation with, and make no representation regarding, those repositories, their contents, or
 their licensing. Nothing is retrieved without your confirmation, and you are solely responsible for
 determining whether you are entitled to obtain and use any such material.

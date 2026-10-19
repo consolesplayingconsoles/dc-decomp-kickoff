@@ -356,3 +356,54 @@ as an issue) to add a game.
 - Still skipped (CT, 200 bytes): address-of-local, indirect call (56), jump table, stack arguments, calls to the compiler's
   `_divls`/`_modls`/`_quick_odd_mvn` helpers (49: the generator cannot say what they take), a loop that changes a stack local,
   an address that the argument values alone do not give (array index with `<<`/casts)
+
+### From 50% to 62% on Crazy Taxi, and Virtua Tennis 29% to 48% (2026-10-19)
+
+What moved the numbers, in order of size:
+
+- **Callee argument counts (gen_equiv).** The generator took a call's arguments from the registers set at the call, so two calls to
+  one function often disagreed (leftover registers) and the function was skipped ("proto conflict"). It now reads the callee's own
+  code for the argument registers it uses before writing them (`callee_arity`). Crazy Taxi: 50 more functions; Virtua Tennis: 546.
+- **Library source with a missing header.** The Shinobi backup library source needs a private header (`sg_bup2.h`) that no SDK
+  folder holds. Seven names were missing; a reconstruction in the repo's `sdk-headers/` (the file handle's layout read from the
+  game's own `vmsfs_fopen`) made the library compile, and the byte comparison keeps only what matches. `tools/sdk_source.py` also
+  stubs any other missing header, and `sdk-patches.txt` (file, old text, new text) edits the staged source: the game was built with
+  the library's `USE_STATIC` off, which took 366 verified functions to 396. About 40 functions of that file differ in code, not in
+  values: probably another version of the library.
+- **Many hand-checked functions are already counted.** SDK-source verification overlaps hand-written C: 104 newly verified
+  functions moved the Crazy Taxi count by 27.
+- **Wrong sizes in functions.txt**: `checksizes.py` fixed 410 (the code after a literal pool); a second heuristic flagged
+  functions the simulator handles fine and was dropped (26 of its candidates were already proven).
+
+Mistakes worth not repeating:
+
+- In a test case, a float register (`"fr4"`) and a mocked float result (`"fr0"`) are the bit pattern as hex in reading order
+  (`40A00000` is 5.0). Memory pokes are bytes (`0000A040`). Writing the register value as the memory bytes gives a denormal, and the
+  case still passes, only weakly.
+- `equiv.py` records every function it passes in `tests/equivalent.txt`, also for a scratch file. A generator run that is killed
+  leaves names with no C behind them, and the count inflates (Virtua Tennis showed 44.5% instead of 29.2%). `gen_equiv` now puts
+  the evidence files back after each round; `tools/audit_equivalent.py` finds (and `--fix` removes) such entries, and the pre-commit hook runs it.
+- Two `gen_equiv` runs on Virtua Tennis stalled in a later round and a third did not; the cause was never found. An alarm-signal
+  time limit (`READ_LIMIT`, `BUILD_LIMIT`) cannot interrupt a hang in compiled code, so it may not catch such a stall. `GEN_TRACE=1`
+  prints the function being processed, which names the culprit if it happens again.
+
+### How good "Equivalent" is: instruction coverage (Crazy Taxi, 2026-10-19)
+
+- **Measured.** `equiv.py` now reports, per function, how many of the original's instructions the cases ran (the listed bytes without literal
+  pools and without the padding after the last return). Over the whole of Crazy Taxi: hand-written C 98.1% (949 of 998 functions
+  completely covered, 20 under 80%); generated C 68.9% (346 of 599 completely covered, 182 under 80%).
+- **Why generated C was low.** Random inputs cannot get through a chain of guards (a flag that must be 1, then the next flag, then the
+  next): the first cases stopped at the first guard. `FUN_0c05a5e0`, nine such guards in a row, ran 27 of 151 instructions.
+- **What fixed the cases.** `gen_equiv` now draws many candidate cases, runs the original in the simulator on each, and grows the set:
+  it takes a case that reaches a lot of code, sets one of the memory words the original read last (or a register, or a call result) to a
+  value the code compares against, and keeps the new case if it runs an instruction no case has run. `FUN_0c05a5e0` went from 27 to 124
+  of 151 instructions with the same C. `gen_equiv --retest` does this for functions already generated.
+- **What it found.** The new cases showed generated C that was wrong on a branch the old cases never reached: `FUN_0c02f02a`,
+  `setObjGroupExec`, `FUN_0c15c8dc`, `FUN_0c0217b4`, `Drv_Execute` and `ADXT_DiscardSmpl` (the run was interrupted, so the list is
+  partial). Those functions keep their old cases until the C is fixed.
+- **Not finished.** The re-draw over all generated batches never completed (it was interrupted twice and has no way to skip batches already
+  done), so the totals above are the pre-re-draw ones.
+- **What changed in the skill.** The run is organised as six steps (setup, baseline, asset mapping, optional boosts, script-generated decomp,
+  agentic decomp) with the same titles in the README, `SKILL.md` and the repo's `AGENTS.md`; generated C is the lower tier and reported
+  apart; sibling decomps and ports are an offer the user names, never a search; `roadmap.md` was retired into
+  `references/agentic-decomp.md`.

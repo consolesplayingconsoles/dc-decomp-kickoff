@@ -72,6 +72,62 @@ def iop(op,a,b=None):
     if op=='not': return ('e','(~%s)'%ex(a))
     if op=='neg': return ('e','(-%s)'%ex(a))
     raise Skip(op)
+_ARITY={}
+_WRITE_ONLY=('mov','mov.b','mov.w','mov.l','extu.b','extu.w','exts.b','exts.w','neg','negc','not','swap.b','swap.w','sts','sts.l','float','mova',
+             'fmov','fmov.s','fldi0','fldi1','fabs','fneg')
+_COMPARE=('cmp','tst','fcmp')
+def callee_arity(fname):
+    """(integer arguments, float arguments) a function reads before it writes them, from a straight scan of its code up to its
+    first return: r4-r7 and fr4-fr11. None when the code cannot be read. A guess for the prototype, not a proof: the call is
+    compared on these arguments only."""
+    if fname in _ARITY: return _ARITY[fname]
+    res=None
+    try:
+        out=subprocess.run(['python3','tools/shdis.py','--func',fname],capture_output=True,text=True).stdout.splitlines()[2:]
+        seen_r=set(); wrote=set(); maxi=-1; maxf=-1; after_ret=0
+        for l in out:
+            m=re.match(r'([0-9a-f]{8}) ([0-9a-f]{4})\s+(\S+)\s*(.*)',l)
+            if not m: continue
+            mn=m.group(3); ops=m.group(4).split(';')[0].strip()
+            if after_ret:
+                after_ret-=1
+                if after_ret==0: break
+            a=[x.strip() for x in re.split(r',(?![^(]*\))',ops)] if ops else []
+            regs=lambda t: re.findall(r'\b(f?r\d+)\b',t)
+            base=mn.split('/')[0]
+            dest=None; reads=[]
+            if mn in ('jsr','bsr','jmp','bra','rts','nop','rte') or mn.startswith('b'):
+                for t in a: reads+=regs(t)
+                if mn in ('jsr','bsr'):
+                    pass
+            elif base in _COMPARE:
+                for t in a: reads+=regs(t)
+            elif mn in _WRITE_ONLY and len(a)>=2:
+                last=a[-1]
+                if re.fullmatch(r'f?r\d+',last): dest=last
+                else: reads+=regs(last)
+                for t in a[:-1]: reads+=regs(t)
+                if len(a)>=2 and dest and ('@' in a[0]): pass
+            elif len(a)>=2 and re.fullmatch(r'f?r\d+',a[-1]):
+                dest=a[-1]; reads+=regs(a[-1])
+                for t in a[:-1]: reads+=regs(t)
+            else:
+                for t in a: reads+=regs(t)
+            if mn=='fmac': reads.append('fr0')
+            for r in reads:
+                if r in wrote: continue
+                if re.fullmatch(r'r[4-7]',r): maxi=max(maxi,int(r[1:])-4)
+                elif re.fullmatch(r'fr(4|5|6|7|8|9|10|11)',r): maxf=max(maxf,int(r[2:])-4)
+            if dest: wrote.add(dest)
+            if mn in ('jsr','bsr'):
+                wrote.update(['r4','r5','r6','r7']+['fr%d'%i for i in range(4,12)])
+            if mn=='rts': after_ret=2
+        res=(maxi+1,maxf+1)
+    except Exception:
+        res=None
+    _ARITY[fname]=res
+    return res
+
 def run(name,passthru=False):
     out=subprocess.run(['python3','tools/shdis.py','--func',name],capture_output=True,text=True).stdout.splitlines()[2:]
     ins=[]
@@ -330,6 +386,11 @@ def run(name,passthru=False):
         for n in range(4,12):
             r='fr%d'%n
             if r in c.FR and c.FR[r]!=DIRTY: fav.append(n)
+        ar=callee_arity(fname)
+        if ar and not c.pend:                    # the registers the callee reads: leftovers set for other reasons are not arguments
+                                                 # (with arguments on the stack all four registers are positional: not trimmed)
+            avail=[n for n in avail if n<4+ar[0]]
+            fav=[n for n in fav if n<4+ar[1]]
         ia=[]
         k=4
         while k in avail: ia.append(k); k+=1

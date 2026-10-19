@@ -1,5 +1,7 @@
 # Names from a later port that kept its symbols
 
+Used in step 4 (Opportunity-driven optional boosts).
+
 Many Dreamcast games were later ported (Android, iOS, PC, consoles) from the same source. A port
 built as a shared library usually keeps its symbol table: every exported function and global by
 its original name, C++-mangled with the argument types. The code is a different CPU and compiler,
