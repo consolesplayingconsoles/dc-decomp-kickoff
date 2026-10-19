@@ -407,3 +407,8 @@ Mistakes worth not repeating:
   agentic decomp) with the same titles in the README, `SKILL.md` and the repo's `AGENTS.md`; generated C is the lower tier and reported
   apart; sibling decomps and ports are an offer the user names, never a search; `roadmap.md` was retired into
   `references/agentic-decomp.md`.
+- **Retry rounds barely pay; untried functions do.** `gen_equiv` used to run five rounds (the first, then retries of the failures
+  with other code shapes). Over two Crazy Taxi runs the first round passed 98 of 131 candidates and the retry rounds 4 more, at as
+  much time again. The generator now runs the first round only. A function it fails is left alone until something changes around
+  it: a proven neighbour in the address space fixes its start and end (the sizes tools `checksizes.py` check), and a proven caller
+  shows its argument types, return use and what it expects the function to do. Work the functions that have no attempt yet first.

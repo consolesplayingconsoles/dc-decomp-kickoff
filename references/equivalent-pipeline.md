@@ -34,11 +34,15 @@ names the repo (it can be one of their own), and nothing else is read.
 
 ### Generated Equivalent C (scripts/gen_equiv)
 
+Time: drawing the cases is the slow part (the original runs in the simulator for every candidate case). It prints a progress line every ten functions; run it detached and keep working. How long it takes depends on the machine, so the doc gives no figures: measure them with the try run below.
+
 `python3 tools/gen_equiv [max size]` writes Equivalent C for the functions that need no thinking and keeps only the ones
 `equiv.py` calls Equivalent: straight-line code, constant and argument stores, getters, forward `if`/`else`/early
 returns, loops, calls to named functions, single-precision floats. It writes `src/gen_<letter>.c` and
 `tests/gen_<letter>/` (22 cases each: values from a fixed set plus the constants the code compares against, calls
 answered with varied results).
+
+The run is long on a big game and prints progress as it goes; it runs one round over the whole game (smallest functions first) and writes the passing functions when it ends; the functions it cannot do are not retried (retry rounds found nothing, see evidence.md). The first time, tell the user: "we'll do a short try run to be able to estimate bigger runs better", and run it on the smallest functions only (a small max size), detached. Then report what it measured (seconds per function, how many passed) and offer options based on that data: each option says its gain and its wait as ranges, not exact numbers (for example "5 to 10% more of the functions", "1 to 2 hours"; the real values come from the try run on the user's machine); a range is enough to plan and that the machine stays busy meanwhile, so the user can plan around it. Run the chosen option detached. Later runs reuse the measured seconds per function. People accept waiting when the work is done for them and they know in advance how long it takes.
 
 How it reads control flow (`gen_cfg.py` builds the graph, `gen_core.py` writes the C): the code is followed by
 execution, not top to bottom, so literal pools in the middle of a function are never read. Each conditional branch
