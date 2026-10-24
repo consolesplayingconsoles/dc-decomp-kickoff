@@ -119,6 +119,28 @@ as an issue) to add a game.
   starts `functions.txt` has (2,389 vs 2,824 here): `dec` there now says to use `mkdec`, and a
   query that throws no longer loses the output of the ones before it
 
+### Step 9 on Crazy Taxi: from a disc that fits to one that plays (2026-10-24)
+
+- The fitting build froze before the SEGA logo, then at the memory card window, then twisted the cab driver's arms. Three causes,
+  none a wrong C statement: each a belief of the pipeline that the hardware does not share, invisible to equiv.py by construction.
+- Pool reads: generated C read float constants from the original's literal pools by address (`*(float *)0xC057A4C`, 500.0 in
+  Init_SEGA_LOGO's pool); the build from C puts other code there. 399 reads in 162 files; `codeconsts.py --write` puts the values
+  in. The checker runs the C against the original image, where the address does hold the constant. Also 5 function pointers and 101
+  of those reads sat on lines starting with `*(`, which cbuild.py skipped as comment lines (tests/cbuild).
+- Mid-function calls: Exec_LCD was cut at 210 bytes in functions.txt, over five functions and half of Exec_LCDLogoDemo, and its C
+  called Exec_LCDLogoDemo+140; the build made a second copy of that function with an entry label there, where the original has
+  r11-r14, PR and a stack argument pushed: six pops nobody pushed, a return into garbage, the freeze (the first frame with LCD
+  access on). Three such cuts (Exec_LCD 32 bytes, Put_TotalDrum 166 with its pool mid-body, Put_Remain_Time_Gauge 170), four calls,
+  one unlisted function (breathMove+232, a real entry). cbuild.py now refuses a call into a C function's middle (tests/cbuild).
+- Result types: fcvHermiteAngle ends `ftrc fr1,fpul; sts fpul,r0` (an int angle in r0) and was declared float, returning the
+  leftover fr0; its caller read r0: every curve-driven joint angle was garbage. CheckColliPoleEdge the same (0/1/2 in r0). The
+  checker compares only the declared register. `retcheck.py` reads each function's ending and refuses a mismatch (tests/retcheck);
+  on the repo it then found nlUnitNormalVectorCW/CCW (0/1 in r0, declared float, callers drop the value).
+- Method, every time static: the frame it stops in (from what is on screen), its call graph from the original, the built image
+  against the original (addresses inside the old code that no symbol owns; second copies; endings), then one function. About one
+  session for the three. Flycast GDB breakpoints had never fired here (above), and no debugger was needed.
+- State: BOOTS TO MENU and PLAYABLE ticked, STABLE `[?]` not tested yet; the operator plays on.
+
 ### Virtua Tennis (USA), MK-51054 V1.001
 - Run: 2026-10-12 (v0.5) and later sessions, on macOS (Docker), started beside Crazy Taxi for a combined mod
 - Executable: 2,084,052 bytes, linked at 0x8C010000; SDK by banners: R10.1 (25 of 30 library builds match R10.1/R11b;

@@ -1,11 +1,11 @@
 ---
 name: dc-decomp-kickoff
-description: "Kick off and run the decompilation of a Sega Dreamcast (Katana) game (a byte-identical build; functions done when their C behaves like the original). Use when someone has a Dreamcast disc and wants a decomp project: names applied from SDK signatures, the executable split into one assembly file per function, a build that reproduces the original byte for byte, asset maps, and the C proven function by function, then built into the game, in eight steps."
+description: "Kick off and run the decompilation of a Sega Dreamcast (Katana) game (a byte-identical build; functions done when their C behaves like the original). Use when someone has a Dreamcast disc and wants a decomp project: names applied from SDK signatures, the executable split into one assembly file per function, a build that reproduces the original byte for byte, asset maps, and the C proven function by function, then built into the game, in nine steps."
 ---
 
 # Kicking off a Dreamcast decomp
 
-The goal is a decomp that goes from the disc to proven C for every function, and then to the game built from that C, in eight steps: it rebuilds the original executable
+The goal is a decomp that goes from the disc to proven C for every function, and then to the game built from that C, in nine steps: it rebuilds the original executable
 byte for byte, every function is its own file, the names come from the SDK, and the C is proven function by function.
 A function is done when its C behaves like the original (Equivalent: `tools/equiv.py` runs both
 in an SH-4 interpreter on test cases and compares calls, writes and result); byte-identical C
@@ -13,19 +13,20 @@ in an SH-4 interpreter on test cases and compares calls, writes and result); byt
 
 ## The steps (hard rules)
 
-Every run follows these eight steps, in this order, under these exact titles: six to proven C for every function, then two to build
-the game from it. They are the milestones of the run, and the README lists the same eight. The user can stop after any step or fork into their own strategy; you never skip a step, reorder them or merge them.
+Every run follows these nine steps, in this order, under these exact titles: six to proven C for every function, then three to build,
+run and stabilise the game from it. They are the milestones of the run, and the README lists the same nine. The user can stop after any step or fork into their own strategy; you never skip a step, reorder them or merge them.
 
-| # | Title                              | What it covers                                                                             | Where                                                |
-|---|------------------------------------|--------------------------------------------------------------------------------------------|------------------------------------------------------|
-| 1 | Decomp project setup               | the tools, the disc, the executable and its base, which SDK, where the repo goes           | [Step 1](#step-1-decomp-project-setup)               |
-| 2 | Signature-driven baseline          | Ghidra, SDK names and types, the split, the repo and a byte-matching build, the game build | [Step 2](#step-2-signature-driven-baseline)          |
-| 3 | Asset mapping                      | text, model, texture and audio maps                                                        | [Step 3](#step-3-asset-mapping)                      |
-| 4 | Opportunity-driven optional boosts | cheat codes, other regions, notes, a later port, a prototype, a sibling decomp             | [Step 4](#step-4-opportunity-driven-optional-boosts) |
-| 5 | Incremental script-generated decomp        | the SDK's library source, generated C, the polish pass                                     | [Step 5](#step-5-incremental-script-generated-decomp)        |
-| 6 | Experience-driven agentic decomp   | the hand-over, the repo's `AGENTS.md`, the loop                                            | [Step 6](#step-6-experience-driven-agentic-decomp)   |
-| 7 | Code size reduction                | the proven C made small enough to fit where the original code was, still proven            | [Step 7](#step-7-code-size-reduction)                |
-| 8 | Build from C                       | the executable built from the C, the image checks, a disc to play                          | [Step 8](#step-8-build-from-c)                       |
+| # | Title                               | What it covers                                                                                          | Where                                                 |
+|---|-------------------------------------|---------------------------------------------------------------------------------------------------------|-------------------------------------------------------|
+| 1 | Decomp project setup                | the tools, the disc, the executable and its base, which SDK, where the repo goes                        | [Step 1](#step-1-decomp-project-setup)                |
+| 2 | Signature-driven baseline           | Ghidra, SDK names and types, the split, the repo and a byte-matching build, the game build              | [Step 2](#step-2-signature-driven-baseline)           |
+| 3 | Asset mapping                       | text, model, texture and audio maps                                                                     | [Step 3](#step-3-asset-mapping)                       |
+| 4 | Opportunity-driven optional boosts  | cheat codes, other regions, notes, a later port, a prototype, a sibling decomp                          | [Step 4](#step-4-opportunity-driven-optional-boosts)  |
+| 5 | Incremental script-generated decomp | the SDK's library source, generated C, the polish pass                                                  | [Step 5](#step-5-incremental-script-generated-decomp) |
+| 6 | Experience-driven agentic decomp    | the hand-over, the repo's `AGENTS.md`, the loop                                                         | [Step 6](#step-6-experience-driven-agentic-decomp)    |
+| 7 | Code size reduction                 | the proven C made small enough to fit where the original code was, still proven                         | [Step 7](#step-7-code-size-reduction)                 |
+| 8 | Build from C                        | the executable built from the C, the image checks, a disc to play                                       | [Step 8](#step-8-build-from-c)                        |
+| 9 | Runtime repairs                     | the disc run on the console or an emulator, each stop traced to its function and its step, `status.txt` | [Step 9](#step-9-runtime-repairs)                     |
 
 How a step is run:
 1. **List the steps to the user, with their titles, before anything starts.**
@@ -170,7 +171,7 @@ procedure below.
 
 ## Procedure
 
-The eight steps, in order. Each one is announced and closed as the section above says.
+The nine steps, in order. Each one is announced and closed as the section above says.
 
 ### Step 1: Decomp project setup
 
@@ -462,8 +463,20 @@ code had, so the build of step 8 leaves every other address of the executable wh
   the build take those functions from the original asm although their C is proven: a test aid, empty in a real build. The image must have the original size; outside the game
   code only the pointer words to game functions may differ, each pointing at its function's new address. `make disc GDI="..."`
   writes a copy of the disc with it.
-- **Test**: the user runs the disc. A crash is debugged on the game, not guessed: sample the program counter over Flycast's GDB
-  server, compare memory with the original disc at the same moment, then read that one function.
+- **Checks before the build**: `make c` first runs `tools/8-build/retcheck.py`: every function's C must return in the register the
+  original returns in (`sts fpul,r0` / `mov ...,r0` is r0, a write to `fr0` is fr0); a mismatch stops the build. The pre-commit hook
+  runs it too. `cbuild.py` refuses a C call into the middle of another C function, naming the address and the C line.
+
+### Step 9: Runtime repairs
+
+- **Run**: the user runs the disc on the console or an emulator and reports where it stops or what is wrong. Each stop is traced to
+  one function and to the step whose output caused it (a function cut wrong in `functions.txt` from step 2, generated C or a
+  declaration from step 5), and fixed there, proven again, built again. Nothing is guessed from the symptom: the frame it stops in,
+  its call graph from the original, the built image against the original (stale addresses, second copies, result registers), then
+  the one function. Flycast's GDB server (program counter samples, memory reads) is the last resort when reading does not settle it.
+- **Known classes** (Crazy Taxi, 2026-10-24; `references/evidence.md`): constants read from the original's literal pools by address
+  (`tools/8-build/codeconsts.py --write` puts the values in); a C call into another function's middle from a wrong cut (`cbuild.py`
+  refuses it); a result type declared on the wrong register (`tools/8-build/retcheck.py` refuses it).
 - **Badge**: one badge, `badges/progress.svg`. `status.txt` in the repo lists the statuses in order (`[x] BUILDS FROM C`,
   `[ ] BOOTS TO MENU`, `[ ] PLAYABLE`, `[?] STABLE`: `[x]` reached, `[ ]` tested and not reached, `[?]` not tested yet, shown as a question mark); each needs the ones above it, and progress.py stops on a tick under an
   untick. Before BUILDS FROM C is ticked the badge shows the measures only.
@@ -584,8 +597,10 @@ Grouped by the step that first needs them (scripts, then templates, then referen
 | `scripts/tools/8-build/fit.py`                    | in the repo: reads the linked map: every part inside its place, the room a part has by the optimizer's ratio |
 | `scripts/tools/8-build/relocasm.py`               | in the repo: assembly pieces that can move (real instructions, labels, symbols) for functions with no C |
 | `scripts/tools/8-build/relocptr.py`               | in the repo: pointer words to game functions, in what stays where it is, follow the functions |
+| `scripts/tools/8-build/codeconsts.py`             | in the repo: C that reads a constant from the original's code by its address (a literal pool the build overwrites): lists them, `--write` puts the values in |
+| `scripts/tools/8-build/retcheck.py`               | in the repo: each function's result register from the original's code before its `rts` against its C declaration; `make c` and the pre-commit hook run it, a mismatch refuses |
 | `scripts/tools/layout.py`                  | in the repo: reads `layout.txt` (the regions the build and the cases need) |
-| `template/Makefile`                  | in the repo: `make` (the matching build), `make setup`, `make c`, `make disc`, `make progress` |
+| `template/Makefile`                  | in the repo: `make` (the matching build), `make setup`, `make c` (`retcheck.py` first), `make disc`, `make progress` |
 
 ### Tools for all steps
 
