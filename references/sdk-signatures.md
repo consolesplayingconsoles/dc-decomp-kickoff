@@ -39,7 +39,7 @@ Pipeline (all with the SDK's own Hitachi tools, run under `wibo` in a Linux cont
 Only exported (non-static) functions get names. Coverage follows the SDK version: a copy from the
 game's own era matches best.
 
-## After the tables: masked comparison, position, listings (`scripts/sdk_masked.py`)
+## After the tables: masked comparison, position, listings (`scripts/tools/1-2-baseline/sdk_masked.py`)
 
 Function-ID hashes need the whole function identical. A game linked with a library build no
 release shipped (Sega-internal builds, a `zr` suffix in the banners) differs in a few words and

@@ -12,6 +12,8 @@ What is left after the script-generated decomp (step 5) is a handful of pockets;
 | Game code | the game's own functions | generator, then hand-written C with cases; decomp names first |
 | Compiler runtime, libm, tables | runtime routines and data counted as functions | name and size them correctly; a data table listed as a function is a `D` line, not work |
 
+**Order.** Take the functions that unlock the most others first: many callers, a family of similar siblings, or a neighbour whose size or arguments they settle. Smallest-first is only the tiebreak.
+
 Every pocket ends with the same bar: the cases run the original's instructions (see `equivalent-pipeline.md`, instruction coverage and the two tiers).
 
 ## Live data

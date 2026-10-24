@@ -15,10 +15,11 @@ import struct
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SCRIPTS = os.path.join(os.path.dirname(os.path.dirname(HERE)), "scripts")
+SCRIPTS = os.path.join(os.path.dirname(os.path.dirname(HERE)), "scripts", "tools", "3-assets")
 
 
 def load_map_tool():
+    sys.path.insert(0, os.path.dirname(os.path.dirname(SCRIPTS)))
     sys.path.insert(0, SCRIPTS)
     spec = importlib.util.spec_from_file_location("model_map", os.path.join(SCRIPTS, "model_map.py"))
     mod = importlib.util.module_from_spec(spec)

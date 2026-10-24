@@ -22,7 +22,7 @@ with several masks.
 ## Step 4: boosts
 
 ### Carrying the C to another game
-`scripts/port_equiv.py <source repo> <destination repo>` finds the source's Equivalent functions in the
+`scripts/tools/4-boosts/port_equiv.py <source repo> <destination repo>` finds the source's Equivalent functions in the
 destination by masked code, maps globals and callees from the aligned pools, ports the C and the cases
 and lets the destination's own `equiv.py` decide. Between two NAOMI games it moved 39 library functions
 (CT to VT) and 46 (VT to CT) with no hand work; what does not match is a different library version.
@@ -32,11 +32,11 @@ names the repo (it can be one of their own), and nothing else is read.
 
 ## Step 5: script-generated decomp
 
-### Generated Equivalent C (scripts/gen_equiv)
+### Generated Equivalent C (scripts/tools/5-generated/gen_equiv)
 
 Time: drawing the cases is the slow part (the original runs in the simulator for every candidate case). It prints a progress line every ten functions; run it detached and keep working. How long it takes depends on the machine, so the doc gives no figures: measure them with the try run below.
 
-`python3 tools/gen_equiv [max size]` writes Equivalent C for the functions that need no thinking and keeps only the ones
+`python3 tools/5-generated/gen_equiv [max size]` writes Equivalent C for the functions that need no thinking and keeps only the ones
 `equiv.py` calls Equivalent: straight-line code, constant and argument stores, getters, forward `if`/`else`/early
 returns, loops, calls to named functions, single-precision floats. It writes `src/gen_<letter>.c` and
 `tests/gen_<letter>/` (22 cases each: values from a fixed set plus the constants the code compares against, calls
@@ -55,7 +55,7 @@ register that is read in the next pass and changed by the loop becomes a C varia
 Skipped, with a reason: a loop with several exits that do not lead on to one another, a loop that changes a stack
 local, a jump table, an indirect call, branches that share a join in a way the arms cannot nest.
 
-`python3 tools/gen_equiv --known` is the check of the generator itself: it writes C for functions already proven
+`python3 tools/5-generated/gen_equiv --known` is the check of the generator itself: it writes C for functions already proven
 Equivalent and tests it, restoring `tests/equivalent.txt` and `docs/equivalent.md` afterwards.
 
 Limits: no jump table, no indirect call, no stack arguments, no address of a local; prototypes are guessed (ints and
@@ -68,50 +68,80 @@ Equivalent means the C agreed with the original on the cases, so it is only as s
 function, how many of the original's instructions the cases ran ("212 of 220 instructions": the listed bytes without literal
 pools and without the padding after the last return). An instruction no case ran is a branch nobody checked.
 
-Measured on Crazy Taxi (2026-10-19): hand-written functions 98.1% of instructions run (949 of 998 completely), generated functions
-68.9% (346 of 599 completely, 182 under 80%). Random inputs cannot get through a chain of guards (a flag that must be 1, then the next
-flag, then the next), so the generator's first cases stopped at the first guard.
+Measured on Crazy Taxi (2026-10-21): the cases run 82.7% of the instructions of the 2,667 functions found Equivalent (hand-written
+code ran 98% of its instructions, generated code lower; random inputs cannot get through a chain of guards, so the first cases stop at
+the first guard). There is **no gate**: a function that passes is done, however much the cases ran. The quality figure is the
+**total test coverage**: instructions the cases ran, summed over every Equivalent function, divided by their instructions
+(`tools/progress.py` prints it and the badge states it). Each function's own figure stays in `docs/equivalent.md`; a function with
+nothing to compare (it returns nothing and no case showed a write, a call or a device access) passes with "0 of N" and counts as done
+with no coverage.
 
-Two tiers, in this order:
-1. **Lower gate (generated C).** `gen_equiv` writes C and cases and keeps a function the check calls Equivalent. Report these apart from
-   hand-written C: the evidence is weaker until the second tier.
-2. **Polish pass.** `python3 tools/gen_equiv --retest [gen_x ...]` draws the cases again for functions already generated: many
-   candidates, then growth guided by the original's own coverage (take the case that reaches the most code, set one of the memory
-   words the original read last, or a register or call result, to a value the code compares against, keep the case if it runs a new
-   instruction), then the cases that add coverage are kept. The existing C then runs on them. A function that fails was wrong on a
-   branch the old cases never reached: it keeps its old cases and is listed so its C gets fixed by hand. Crazy Taxi: `FUN_0c05a5e0`
-   went from 27 to 124 of 151 instructions, and the first full run found functions whose generated C was wrong.
+Two kinds of effort, in this order:
+1. **Script-generated C.** `gen_equiv` writes C and cases, and the check keeps what passes. Report it apart from hand-written C.
+   The cases come from the draw: random candidates, growth guided by the original's own coverage (take the case that reaches the
+   most code, change one memory word, register or call result to a value the code compares against, keep the case if it runs a new
+   instruction), and **directed cases** that flip a branch only one side of which any case reached (found from where each value came
+   from: an argument, a loaded word, a call result), with rescue chains for wait loops.
+2. **Raise the coverage.** `--direct` runs the directed cases on functions under a target and `--retest` draws again for functions
+   already generated. A function whose C fails on the new cases was wrong on a branch the old ones never reached: it is listed with
+   the first difference, and its old cases stay.
 
-Open decision (not made yet): a coverage threshold under which a function is not called Equivalent, and whether the progress count
-reports generated and hand-written C separately.
+### Where a function stands
+Every function that is not done is in one of these states, each named for the first step it has not passed
+(`tools/5-generated/remaining.py --table`, the same rows as the README's Progress block):
+
+| State | Meaning |
+|---|---|
+| Not written C | the reader has not produced C for it yet |
+| Written C with errors | the reader could not write C (the reason is listed) |
+| Not drawn | no test cases yet |
+| Drawn with errors | the draw found no case the original finishes on, or timed out |
+| Checked with errors | the C differs from the original on the cases, or does not compile |
+| Done | the check passed |
+
+Functions the compiler has no C for (control registers the SDK headers have no intrinsic for, registers other than r4-r7 read as inputs,
+double precision under `-fpu=single`) are counted apart as "No C form" and leave the denominator.
+
+### Not losing work between runs
+- `state/results.jsonl` (`tools/ledger.py`) records every outcome; a case set is archived before it is replaced.
+- `state/kept/<function>.json` keeps the C, the cases and the first difference of everything that reached the check and did not pass.
+  `gen_equiv --recheck [--rebuild]` checks it again in seconds after a fix to the checker or the C writer, with no new draw; cases
+  are reused only while the draw is the version that made them.
+- Named runs (`--run NAME --jobs N`) have their own log and report and take turns on `state/.gen.lock` for the shared steps.
+  Results are checked and written in **byte batches** (`GEN_BATCH`, default 8000 bytes of original code), biggest functions first, so
+  one slow function never holds the rest back and an interrupted run loses only the draws in flight. The log has one line per
+  function with its bytes and seconds. Give a slow machine more time with `GEN_TIME_FACTOR`, and do not start a whole-game run
+  while other work needs the machine.
+- `tools/consistency.py [--fix]` reports and repairs C defined twice, cases without C, C without a recorded pass; run it after runs
+  overlapped and before a commit.
 
 Coverage is also what to raise by hand: a function under its target gets cases written for the branches that no case ran.
 
 ## Step 6: agentic decomp
 
 ### Before writing any C: the three checks (a minute each, scripted)
-1. **The size is right.** `python3 tools/checksizes.py [name ...]`: a function with a literal pool in
+1. **The size is right.** `python3 tools/1-2-baseline/checksizes.py [name ...]`: a function with a literal pool in
    the middle ends at its last `rts` and delay slot, not at the pool; listings made by a linear sweep stop
    too early, and the C then "stops" or jumps to an address just past the function. Fix the `F` line
    (`functions.txt`), re-run `split_asm.py` and `build.sh` (still `MATCH`). Read the function first:
    `python3 tools/shdis.py --func <name>`.
-   `python3 tools/checksizes.py --hidden` is the other direction: an entry listed longer than its code has another function inside it, which
+   `python3 tools/1-2-baseline/checksizes.py --hidden` is the other direction: an entry listed longer than its code has another function inside it, which
    counts as proven with the entry though no case runs it. Split it (`functions.txt`, `split_asm.py`, build `MATCH`) before counting.
 
-2. **It can be C.** `python3 tools/classify.py [name ...]`: the FPU register banks (`frchg`, `fschg`,
+2. **It can be C.** `python3 tools/5-generated/classify.py [name ...]`: the FPU register banks (`frchg`, `fschg`,
    `ftrv`), `fsrra`/`fsca` (not in the simulator), control registers other than SR, cache and trap instructions
    have no C. Moving SR to or from a register is fine: SHC's `get_imask`/`set_imask` (`_builtin_get_imask`,
    `_builtin_set_imask`) write it in C. `fipr` and `fmac` are fine with values that are exact in float (they round once). Classify
    first; do not spend a try on a function that cannot be done. Run `checksizes.py` first: the
    classifier reads only the listed size.
-3. **Every name it uses exists.** `python3 tools/poollist.py <name>`: each literal-pool value, as a
+3. **Every name it uses exists.** `python3 tools/6-agentic/poollist.py <name>`: each literal-pool value, as a
    function (or "no F line": a function the analysis missed, add it to `functions.txt`), a RAM address
    (its name, or `MISSING`: add `<ADDR> <name>` to `symbols.txt`; a pool word that is a RAM address is the
    *address* of a global) or a plain number.
 
 ### Writing the C and the cases
 
-For C you write by hand, `python3 tools/gen_equiv --draw src/<file>.c` writes the cases (an existing file is kept unless `--force`): they are drawn from the
+For C you write by hand, `python3 tools/5-generated/gen_equiv --draw src/<file>.c` writes the cases (an existing file is kept unless `--force`): they are drawn from the
 prototype and chosen by how much of the original they run, so a small function gets full coverage without a hand-written JSON. Write cases by hand only
 for what coverage shows nobody reached.
 - The first function of a group costs a few minutes; the rest are mechanical. Keep a generator script per
@@ -167,7 +197,7 @@ for what coverage shows nobody reached.
 > Your list is `<file>` (address, size, name). Run commands from `<repo>`. Read `AGENTS.md` and the
 > examples `src/<example>.c` with `tests/<example>/`. Write C to `src/<group>.c` and cases to
 > `tests/<group>/<function>.json` (dev first, then holdout written after the C passes dev; every branch).
-> Run `python3 tools/checksizes.py <name>`, `classify.py` and `poollist.py` first. Always run the check
+> Run `python3 tools/1-2-baseline/checksizes.py <name>`, `classify.py` and `poollist.py` first. Always run the check
 > through the lock: `build/eqlock.sh python3 tools/equiv.py -q src/<group>.c [function]`. Fix a wrong size
 > or add a symbol only through the lock / a grep first. Never touch other files, `tools/`, `docs/`,
 > `tests/equivalent.txt`, git, or `build.sh`. Blocked (the C cannot express it): say why and move on. At most

@@ -290,8 +290,8 @@ as an issue) to add a game.
 
 
 ### Equivalent tier (2026-10-12, Crazy Taxi's `src/extrand.c`)
-- The bar for game code changed from byte-matching to behaviour: `scripts/sh4sim.py` (an SH-4
-  interpreter, stdlib) runs a function from a case, `scripts/equiv.py` compiles a C file and
+- The bar for game code changed from byte-matching to behaviour: `scripts/tools/sh4sim.py` (an SH-4
+  interpreter, stdlib) runs a function from a case, `scripts/tools/equiv.py` compiles a C file and
   runs each function twice per case (original bytes, compiled C), comparing calls out (target,
   r4-r7, fr4-fr11), memory writes and the return register taken from the C prototype
 - First run: `extRand` (no byte match: its mask lands in r2, the original's in r3, after 22
@@ -330,7 +330,7 @@ as an issue) to add a game.
   third of a game's functions from it and `port_equiv.py`, then hand work or loop support
 
 ### gen_equiv reads branches and loops (Crazy Taxi, 2026-10-18)
-- Run: `python3 tools/gen_equiv 200` on a copy of the CT repo (working tree with the corrected function sizes), functions of up to
+- Run: `python3 tools/5-generated/gen_equiv 200` on a copy of the CT repo (working tree with the corrected function sizes), functions of up to
   200 bytes not yet covered. Before: the generator wrote C for 2 of them (the straight-line leftovers). After: **113 functions
   Equivalent** on `equiv.py` (44 with loops, 55 with `if`/`else`/early returns, 14 straight-line that earlier skips had hidden);
   38 of the 113 are 129-200 bytes (`classify.py` without names stops at 128, so the old run never looked at them)
@@ -366,7 +366,7 @@ What moved the numbers, in order of size:
   code for the argument registers it uses before writing them (`callee_arity`). Crazy Taxi: 50 more functions; Virtua Tennis: 546.
 - **Library source with a missing header.** The Shinobi backup library source needs a private header (`sg_bup2.h`) that no SDK
   folder holds. Seven names were missing; a reconstruction in the repo's `sdk-headers/` (the file handle's layout read from the
-  game's own `vmsfs_fopen`) made the library compile, and the byte comparison keeps only what matches. `tools/sdk_source.py` also
+  game's own `vmsfs_fopen`) made the library compile, and the byte comparison keeps only what matches. `tools/5-generated/sdk_source.py` also
   stubs any other missing header, and `sdk-patches.txt` (file, old text, new text) edits the staged source: the game was built with
   the library's `USE_STATIC` off, which took 366 verified functions to 396. About 40 functions of that file differ in code, not in
   values: probably another version of the library.
@@ -382,7 +382,7 @@ Mistakes worth not repeating:
   case still passes, only weakly.
 - `equiv.py` records every function it passes in `tests/equivalent.txt`, also for a scratch file. A generator run that is killed
   leaves names with no C behind them, and the count inflates (Virtua Tennis showed 44.5% instead of 29.2%). `gen_equiv` now puts
-  the evidence files back after each round; `tools/audit_equivalent.py` finds (and `--fix` removes) such entries, and the pre-commit hook runs it.
+  the evidence files back after each round; `tools/5-generated/audit_equivalent.py` finds (and `--fix` removes) such entries, and the pre-commit hook runs it.
 - Two `gen_equiv` runs on Virtua Tennis stalled in a later round and a third did not; the cause was never found. An alarm-signal
   time limit (`READ_LIMIT`, `BUILD_LIMIT`) cannot interrupt a hang in compiled code, so it may not catch such a stall. `GEN_TRACE=1`
   prints the function being processed, which names the culprit if it happens again.
@@ -412,3 +412,157 @@ Mistakes worth not repeating:
   much time again. The generator now runs the first round only. A function it fails is left alone until something changes around
   it: a proven neighbour in the address space fixes its start and end (the sizes tools `checksizes.py` check), and a proven caller
   shows its argument types, return use and what it expects the function to do. Work the functions that have no attempt yet first.
+
+### From proven C to a build from C (Crazy Taxi, 2026-10-22 to 2026-10-23)
+- Start: all 3,321 functions that can be C proven Equivalent. Room for the game block: the old game code (342,336 bytes) and the
+  fill in the file before it (58,328): 400,664. The libraries, data and SDK stay where they are; 181 pointer words follow the code.
+- Measuring: a function's size as the distance to the next symbol left out its literal pool (the compiler puts a file's pool after
+  its last function), so the first fit estimate ("fits with 8.5 KB spare") was 27 KB optimistic. The real number came from linking:
+  421,966 bytes of code and 24,884 of constants. Only a link measures a build.
+- What closed the gap, largest first: frame arrays without a zero initialiser (the copy from a zero constant cost 24.9 KB of data and
+  5.5 KB of code over 268 functions); one literal pool per unit of merged generated files and short calls inside a unit (1.6 KB);
+  the byte mover `_slow_mvn` as a struct copy instead of a load and a store per byte (864 bytes in one function); a value the
+  original loaded once held in a local instead of reloaded at each of 57 uses (764 bytes in one function); the 8 functions that do
+  need a zeroed frame zeroed by a loop (1,680 bytes of constants); 45 small functions shrunk with the pool counted (332 bytes).
+  Result: fits with 16 bytes spare; the image has the original size; outside the game code only the pointer words differ.
+- Dead ends (so the next game skips them): trying every generator switch on the biggest functions (no gain on any); holding
+  repeated values where stores may change them (3 of 4 not equivalent); bigger units (worse: callers and callees end up far apart);
+  the order of declarations (no effect on the frame); leaving out code a static scan calls unreferenced (it cannot show a function
+  is never reached: the build has to stay the whole game). Shrinking the biggest functions again after earlier passes found nothing:
+  the gains came from small functions and from patterns.
+- What the build exposed: merging files under one old-style declaration changed call arguments in 19 functions (units now merge only
+  files whose declarations agree). Calls that drop arguments the callee reads: the generator counted arguments from a scan that stops
+  at the first return and does not see a register passed on to a call through a pointer; 460 game functions call with fewer
+  arguments than the callee takes, and the check compared only the arguments the C declares, so they proved. Two of them crashed the
+  boot (an interrupt registered without its callback; the VMU file system's callbacks registered without theirs).
+- Debugging on the running game: Flycast's GDB server ignores breakpoints in this build (with and without the dynarec). Sampling the
+  program counter, and comparing memory with the original disc at the same moment, found both crashes.
+
+### Step 8 after the argument fix: what regenerating cost (Crazy Taxi, 2026-10-23)
+- The regeneration: once the generator counted pass-through arguments, 453 functions were regenerated with `shrink.py --regen`, which
+  keeps the new C at any size. The earlier shrinking of those functions was discarded and nothing in the log said so. Of the 370 with a
+  known earlier size, 346 came out bigger, +49,640 bytes in all (PutCourse 5,000 -> 24,908). The build went from fitting with
+  16 bytes spare (and a boot crash) to 36,900 over. Re-shrinking brought PutCourse back to 5,044. Regenerate only what is wrong, or keep
+  the old C where the new is not smaller, and write the size cost in the log when the pass is run.
+- What the log says is not what the build says: two builds measured 10,248 and then 7,204 bytes over, a real gain of 3,044, while the
+  shrink log summed to 22,460 over the same functions (14%); the earlier build had 68%. Only a link measures; a sum of per-function
+  sizes does not (pools and merged units change the total).
+- The shrink list held 853 of its 1,439 remaining functions outside the game range (library, SDK, runtime), which the build keeps from
+  the original. Filter a list to the range the build replaces before a run.
+- A current C that cannot be measured is not "not smaller": the size check put it under the prototypes of the new generation, where
+  a callee declared float and tested with `!` does not compile ("Scalar required for !"). Measured under its unit's own
+  declarations it compiles. The log now says "not measurable", and the recheck's failing case (kept in state/results.jsonl all along)
+  goes into the log with the new C in build/shrink-failed/.
+- The proof cache key hashes the source of equiv.py and sh4sim.py, so any edit to the checker voids every pass. A saved copy of the
+  old checker (state/proof-key-equiv.py) keeps the keys of functions the change cannot affect.
+- Open generator limits (tests in tests/gen_equiv fail by design, OPEN): words pushed for a call whose cleanup is merged with the
+  frame teardown in one `add` before the epilogue are read as spills and dropped (replayChangeControl, adxt_stat_decinfo,
+  mwSbOpenPort; the generator writes `printfn()` with no arguments); phantom parameters on regenerated functions with no known cause
+  (Drv_StartGetOn, kmiInitPAL, ShallWeHaveSomeRelaxation); compiler helpers with their own convention are refused (_fmtout).
+- One function sat at 98% CPU in the generator with no limit (probably SetTotalRecords): the shrink has no time limit per function.
+- Dead ends added: shrinking library functions to fit the game block (no effect on it); estimating the fit from the log (wrong twice,
+  by 12,000 bytes once).
+- What the original compiler did that the build does not (Crazy Taxi, 2026-10-23): calls between functions of the same source file are
+  `bsr` (2 bytes, no pool word). Of the original's 734 `bsr` calls between game functions, 674 have caller and callee in different
+  units of the build from C (units are made from the generator's batch files, not from the original source files), so they are
+  `mov.l` + `jsr` + a pool word, about 6 bytes more each: roughly 4 KB of the 7,204 bytes over. 22 are in the same unit and still
+  long; 36 are still short. The lever is the unit step (group by the original files), not the shrink, which measures each function
+  alone where every call is long. Read from the build's units.json and the original's reachable code; not tried.
+- Dead end (Crazy Taxi, 2026-10-23): a mnemonic histogram of the original against the build over the game range showed 36% more `mul.l`
+  (3,967 against 2,913), but most of it was data words that decode as instructions (the original has 37,000 data words in that range,
+  the build 9,800). Counted per function over the code only: 210 against 258 `mul.l` in the 97 functions that differ, concentrated
+  in two (gdc_CourseObjGroupSet 7 -> 31, gdc_CourseAdvLoadReq 33 -> 47), at most about 300 bytes. Count per function, not over a range.
+- From a matching decomp (Tokyo Bus Guide, `docs/lessons_learned.md`), C shapes that change SHC's output: a nested `if (a) { if (b) break; }
+  else if (c) break;` leaves the first `break`'s jump as dead bytes; two independent `if`s with `continue` after the first, or the two
+  conditions joined with `&&`, remove them. A pointer-walk loop with a separate trailing counter is SHC's strength reduction of one
+  indexed loop, and the plain indexed loop compiles differently. `T buf[N] = {0}` puts N bytes of zeros in the constant section. Not
+  tried on Crazy Taxi: the generated loops are `for (;;)` with `break`, so they are candidates for extra forms in the shrink.
+- Hitachi's inter-module optimizer (`OPTLNKSH.EXE`, Ver. 1.1 Release05, in SDK r10.1 beside `lnk.exe`; Sega's note in the r1.55j
+  SDK, `dc_sdk/optlnksh.txt`), measured on Crazy Taxi's game block (2026-10-23): compile the C with `-goptimize` (the code does not
+  change; it writes one `.iop` per source under `shciop/`), link with `optlnksh -optimize=<items>` instead of `lnk`. One link of the
+  same 414 objects at one address: plain 404,888 bytes; `branch` 403,540 (-1,348); `same_code` -20; `branch,same_code` -1,368;
+  `branch,same_code,register,string_unify` 397,148 (-7,740); `safe` -7,716. The default (`-optimize`) also deletes symbols and does
+  not link this build. Running it under wibo: `optlnksh` starts `OPTSH.EXE` and `lnk.exe` itself and only finds them in its own
+  folder (a Unix or Windows PATH does not help), and the SHC driver rejects a path with a `-` in it. Messages: the same as the plain
+  link (no new kinds). Not yet in the build: the layout is decided from module sizes before the link; the optimized bytes are not
+  the bytes the checker proved (calls between C modules may skip register saves); asm objects are not optimized.
+- With the optimizer in the build (Crazy Taxi, 2026-10-23, `cbuild.py fit`): fits. Part 1 (fill block) 58,256 of 58,328 bytes,
+  part 2 (old game code) 340,860 of 342,336, nothing in the overflow, the image the original size; outside the game code 524 bytes
+  differ (the pointer words). It took filling each part by its own measured ratio (part 1 shrinks 1.3%, part 2 1.5%: one ratio for
+  both overfilled part 1 by 236 bytes). The optimizer prints ** 1170 ADDRESS SPACE DUPLICATE from its first, unoptimized pass,
+  where parts filled for the optimized sizes overlap; the result is judged from the final map and the ELF segments. Once the
+  optimizer crashed (PROGRAM ERROR(1704)) and wrote an empty map. Boot not tested yet.
+- Boot test of the fitting optimized build (Crazy Taxi, 2026-10-23): the loading message, then black. Found with Flycast's GDB server
+  (`cpc/scripts/flycast_gdb.py`: PC samples and memory reads): the CPU loops in the build's table pieces at 0C013A44-0C013E0C with
+  interrupts masked; the SDK's `vmsfs_c_progress` had jumped to the game's VMU callback `BupProgressCallback`, placed at 0C013150, and
+  that memory is zero at run time. The game clears 0C010100-0C014000 (the boot block, copied to 0C004000 and run there; docs/engine.md
+  says so), and the layout's fill block started at 0C011C28, inside it: everything placed in 0C011C28-0C014000 is wiped. The usable
+  fill is 0C014000-0C020000 (49,152 bytes, not 58,328). Not the optimizer: the callback's code is the same in the plain and the
+  optimized links.
+- Release flags (Katana SDK r9, `shinobi/sample/dc.inc`, the sample makefile games started from): debugging on `-size -debug`,
+  debugging off `-speed -nodebug`; the SDK's own libraries are built `-optimize=1 ... -size` (which is why they reproduce byte
+  for byte with the build's flags). A release game was probably compiled for speed, so C compiled with `-size` can come out smaller
+  than the original without leaving anything out (Crazy Taxi `replayChangeControl` hand-written: 2,244 bytes against the original's
+  2,818, equivalent on 45 cases covering 591 of 1,118 instructions).
+- Dead end (Crazy Taxi, 2026-10-23): the flat form's self-copies of a frame slot (`*(unsigned int *)((int)stk + 60) = *(int *)((int)stk
+  + 60);`, 2,147 in game functions, 600 in PutCourse) cost nothing: SHC drops them (PutCourse 5,044 -> 5,032 bytes without them).
+
+- Directed cases poked the function's own constants (Crazy Taxi, 2026-10-24): a compared value traced back to a load from the
+  function's literal pool (`mova` + `fmov.s`, `mov.l @(disp,pc)`) was treated as an input and poked (Psg_Execute -6.0 at 0C06DF74
+  set to 1.0; 3 of 22 new cases there, 10 of 24 for PutCourse_CheckPiece). That changes the original only, since the C keeps its own
+  copy of the constant, so a right C differs. `directed.apply` now refuses a source inside the function's range (tests/directed).
+- A structure passed by value (Crazy Taxi, 2026-10-24): SHC puts it in the caller's outgoing stack area (copied there with
+  `_quick_mvn` / `_quick_odd_mvn`), never in r4-r7. The checker counted it as an integer register (it compared r4, a leftover)
+  and missed its stack words; it now counts it by its words (tests/structargs). The generator got both sides wrong: the
+  caller copied the structure into its own frame and passed a register instead (`ptfn(0x5, a5)`), and the callee was given r4-r7
+  as parameters it never reads. Fixed (2026-10-24): a block copy whose destination is the stack pointer, followed by a call at the
+  same depth, passes `*(StkN *)(source)` by value; a function that reads only the caller's stack words takes one `StkN s`; the
+  StkN typedefs head the file (cases `structargfn`, `stackreadfn` in tests/gen_equiv). Hand fixes: gdc_CourseStartLoadReq,
+  kmiInitPAL, kmiInitNTSC, kmiSetVideoTimings(KmVideoTimings: 252 bytes), Start_Proposal(int, int, NLpoint3).
+- Dead end (Crazy Taxi, 2026-10-24): tools/equiv.py is not safe to run several at once in one repo. Three in parallel (xargs -P 3)
+  crashed on a missing build/equiv/<stem>.map and reported whole files "not compiled" (179 functions in one), files that pass when
+  run alone. One run at a time; a full recheck of 1,220 files is a long job, not a quick one.
+- Structure sizes on SH (Crazy Taxi, 2026-10-24): the checker first counted every field as 4 bytes, so `AngleR { short x, y, z; }`
+  (Model_Put_Sprite3D's angle) came out 3 stack words instead of 2 and every caller was compared on a leftover word. It now sizes
+  fields by type (char 1, short 2, int/float/pointer 4, double 8), aligns each to its size, rounds the structure to its largest
+  alignment and then to words; an unknown field type counts as a word (tests/structargs: shorts, { char; short } = 1 word).
+- Drawing time (Virtua Tennis, 2026-10-24): 117 of 799 functions timed out drawing cases (60 s each). The two loops that run the
+  original on candidates (pick, grow in gen_drv.py) ran every candidate and up to 250 stale growth tries, at up to 1.3 s a run for a
+  function whose runs hit the step cap. Now one deadline per function (GEN_DRAW_SECONDS, default 40) covers every attempt: the
+  candidates stop at it once 12 have ended (what a function with a loop needs) and the growth stops at it, so the function keeps
+  the cases found (tests/drawbudget). Of the 117, 49 also had a size in functions.txt shorter than their code (a branch past the
+  listed end, tools/1-2-baseline/checksizes.py flags it): the simulator never saw them return, every run went to the cap. The size
+  is data, corrected per function in that run; the splitter that writes the sizes is not fixed yet.
+  Rerun of the timeouts (2026-10-24): the deadline did not hold. 22 of the first 43 drawn still timed out. 13 were short sizes the
+  per-function correction had missed (vmsfs_init: 194 listed, 250 real; its own tail after the mid-body pool was called as another
+  function 16,644 times): `checksizes.py --extend` lists 719 such entries in Virtua Tennis, so the whole list is applied (`--write`)
+  in step 2 before any draw, never per function. 7 were wait loops on a word a callee sets (rankDispLoad waits for
+  `*0x8C34A1F0 == 1` around fileLoadPoll): random cases end 2 or 3 of 40 at 2 s a run, and the rule "stop once 12 have ended"
+  never fired, so every candidate ran (about 400 a function, 3 attempts) until the 60 s alarm. Now the deadline stops the drawing
+  however few ended, later attempts are skipped and the rest goes to directed.rescue (read sequences for such words), and the
+  deadline is two thirds of the function's limit, max(60, size/8) s times GEN_TIME_FACTOR, so a slow function that ends keeps the
+  longer time Crazy Taxi gave its slow draws (GEN_TIME_FACTOR 5 to 15 on kmiStartRenderTextureEntry, exec_KyakuMain). A longer
+  limit alone never converted a wait loop (Crazy Taxi kmRenderTexture, ExecArrow, kyakuTaskExec timed out at 12x and 15x).
+  Open: a loop that waits for a callee to return a value (emotFaceReset, entryPickRandomChara until -1): past the case's 48
+  scripted results every call returns 0, so it never ends; rescue flips pokes and reads, not call results.
+- Phantom parameters (Crazy Taxi, 2026-10-24): the flat form took every r4-r7 and fr4-fr11 the function mentions as a parameter,
+  and the liveness behind it counted every call as reading r4-r7 and fr4-fr11. A function that sets its callee's argument
+  registers itself (Start_Fog, gdc_SpriteFreeMenu, hudDrawTime) got a4-a7, and its callers were compared on leftover registers.
+  Now only registers live at entry are parameters, and a call reads the arguments its callee takes (its code's arity or its
+  proven definition; the block copy and division helpers their own registers; an unknown callee still all of them). Case
+  `phantomfn` in tests/gen_equiv runs in both forms: the flat form wrote (int a4, int a5, int a6), now (void).
+- Report stages (Virtua Tennis, 2026-10-24): tools/5-generated/remaining.py counted a function at the first step it had not passed,
+  but a reason the generator gives for not reading a function is in its own words ("cannot read: arg gap"), so the rule's
+  fall-through put every one under "Written C with errors": 172 functions (118,072 bytes), none of them with C. The stage rule is now
+  a function (stage) whose fall-through is "Not written C"; only C the generator wrote and could not finish is past that step
+  (tests/remaining).
+- Lost register saves (Crazy Taxi, 2026-10-24): the build from C froze after loading the save. The optimizing link
+  (optlnksh -optimize=...,register,...) drops a function's saves of r8-r14 when it believes it sees every caller; the original's
+  pointer tables (task callbacks, interrupt hooks) are rewritten after the link (relocasm.py), so it does not see those callers.
+  vmuExit as compiled saves r14 (MOV.L R14,@-R15 ... MOV.L @R15+,R14), as linked it does not. 609 functions, windowEnterStep and
+  SetScreen on the path after the load among them. The checker never saw it: sh4sim leaves every stack store and the final r8-r14
+  out of the comparison, and r15_balanced is read by no tool. Now OPTIMIZE has no register item: every function keeps the saves the
+  compiler wrote (the compiler's assembly of all 239 build units against the linked game, 1,224 functions). Ruled out on the way, with the
+  real save run in the simulator: buAnalyzeBackupFileImage, buCalcCRC (11,312 bytes) and SetTotalRecords give the same memory in
+  the original and the build. Flycast GDB software breakpoints never fired (0 hits, placed before or after the game loads, both
+  address forms, dynarec on or off): not a tool to rely on here.

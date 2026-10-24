@@ -10,6 +10,7 @@ objects.txt
 text-map/
 text-dump/
 build/
+state/
 sdk-source/
 *.sigs
 report*.txt

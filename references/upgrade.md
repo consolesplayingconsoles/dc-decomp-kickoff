@@ -40,13 +40,15 @@ or an upgrade never does, and a missing or unreadable `KICKOFF` is never taken t
 3. **Both versions side by side.** `git worktree add <tmp>/from <from commit>` and the same for the
    target (or `git archive`). Every action below compares `<tmp>/from` with `<tmp>/to`, never with
    the working copy of the skill.
-4. **Tools** (the repo's copies must be identical to the skill's): every file of the target's tools
-   list (SKILL.md step 2: `scripts/...` into `tools/`, `tools-image/`, `hooks/`) is copied over the
-   repo's. A tool the target no longer lists is removed from `tools/`; one it adds is copied in.
+4. **Tools** (the repo's copies must be identical to the skill's): the target's `scripts/tools/` tree is copied over the repo's
+   `tools/` (from v2 the whole tree: step folders, `toolpath.py`, `hooks/`, `tools-image/`; before v2 a list in SKILL.md step 2).
+   A tool the target no longer has is removed from `tools/`; one it adds is copied in. From a version before v2, the repo's flat
+   `tools/*.py` are removed after the tree is in (each one now lives in its step folder), and every script, hook and document
+   of the repo that names a tool by path is updated to the new path.
    A repo whose `tools/` file differs from the from-version's copy has a local edit: show the user
    the diff before overwriting it.
 5. **Template files** (the repo has filled their placeholders and may have edited them): `build.sh`,
-   `setup.sh`, `disc.sh`, `textures.sh`, `README.md`, `AGENTS.md`, `models.txt` (header comments only:
+   `setup.sh`, `disc.sh`, `textures.sh`, `Makefile` (from v2), `README.md`, `AGENTS.md`, `models.txt` (header comments only:
    the rules are the repo's) and `template/gitignore` as `.gitignore`. Apply the skill's own change
    between the two versions as a patch: `git diff <from> <to> -- template/<file>`, applied to the
    repo's file (`git apply --3way` or `patch`). A new template file is copied in and its placeholders

@@ -1,7 +1,7 @@
 # What is known about this game's 3D models: tables whose layout is understood, one rule per line.
-# `tools/model_map.py` reads this file, scans the disc for models and names each one by the first of:
+# `tools/3-assets/model_map.py` reads this file, scans the disc for models and names each one by the first of:
 # a rule here, a data symbol, the functions that use its table. Addresses are hex; `_` is a space in labels.
-# Rules (the full syntax is in the header of tools/model_map.py):
+# Rules (the full syntax is in the header of tools/3-assets/model_map.py):
 #   array <addr> <count> <group> <label>            pointers at addr + 4*i: "<label> <i>"
 #   chars <addr> <count> <group> <slot:label,...>   a table of pointers to arrays of part pointers
 #   structs <addr> <stride> <count> <namestr off> <group> <off:label,...>   records holding model pointers
