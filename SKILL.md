@@ -465,7 +465,7 @@ code had, so the build of step 8 leaves every other address of the executable wh
 - **Test**: the user runs the disc. A crash is debugged on the game, not guessed: sample the program counter over Flycast's GDB
   server, compare memory with the original disc at the same moment, then read that one function.
 - **Badge**: one badge, `badges/progress.svg`. `status.txt` in the repo lists the statuses in order (`[x] BUILDS FROM C`,
-  `[ ] BOOTS TO MENU`, `[ ] PLAYABLE`, `[ ] STABLE`); each needs the ones above it, and progress.py stops on a tick under an
+  `[ ] BOOTS TO MENU`, `[ ] PLAYABLE`, `[?] STABLE`: `[x]` reached, `[ ]` tested and not reached, `[?]` not tested yet, shown as a question mark); each needs the ones above it, and progress.py stops on a tick under an
   untick. Before BUILDS FROM C is ticked the badge shows the measures only.
 
 ## Rules

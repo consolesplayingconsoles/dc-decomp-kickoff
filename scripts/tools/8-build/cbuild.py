@@ -189,6 +189,17 @@ def pieces():
         if n in moved:
             del labels[a]
             rep[a] = '((int)%s%s)' % (n, (' + %d' % (a - start_of[n])) if a != start_of[n] else '')
+    if labels:
+        # A call or jump into the middle of a function cannot be right: the original's frame is pushed there (Crazy Taxi Exec_LCD into
+        # Exec_LCDLogoDemo+140: six pops that were never pushed, the game froze at the memory card window). The address is either a
+        # function functions.txt does not list yet (list it; the C then names it) or a function cut short (fix its size, rewrite its C).
+        nums = in_code_numbers(OUT + '/src')
+        lines = ['[ERROR] the C calls into the middle of a function (%d addresses):' % len(labels)]
+        for a, n in sorted(labels.items()):
+            where = ', '.join('%s:%d' % (os.path.basename(f), i) for f, i in nums.get(a, [])[:4])
+            lines.append('  %08X = %s+%d  (%s)' % (a, n, a - start_of[n], where))
+        lines.append('list it in functions.txt as its own function, or fix the caller\'s size in functions.txt and its C')
+        sys.exit('\n'.join(lines))
     alt = {}
     for a, n in labels.items():
         alt.setdefault(n, []).append(a)
