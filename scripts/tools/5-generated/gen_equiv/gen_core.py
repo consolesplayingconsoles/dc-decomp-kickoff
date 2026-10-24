@@ -669,6 +669,7 @@ def _run(name,passthru=False,frame=False,flat=False):
             if a[0].startswith('#'): n=int(a[0][1:])
             else:
                 v=c.R.get(a[0])
+                if isinstance(v,tuple) and v[0]=='e' and v[1] in c.lvconst: v=c.lvconst[v[1]]      # a loop variable the code just set to a constant
                 if not isint(v): raise Skip('stack pointer step')
                 n=v-(1<<32) if v&0x80000000 else v
                 if mn=='sub': n=-n
@@ -718,6 +719,8 @@ def _run(name,passthru=False,frame=False,flat=False):
                     if (mn=='mov.w' and part%2) : raise Skip('stack argument read')
                     c.iuse.add(n)
                     c.R[a[1]]=('e','((%s)(a%d >> %d))'%('short' if mn=='mov.w' else 'signed char',n,8*part)); return
+                if isf and mn=='fmov.s' and ab%4==0:        # a float the caller left on the stack: the stack parameter's bits, read as a float
+                    n=8+ab//4; c.iuse.add(n); c.FR[a[1]]=('e','*(float *)&a%d'%n); return
                 if isf or mn!='mov.l' or ab%4: raise Skip('stack argument read')
                 n=8+ab//4
                 c.iuse.add(n); c.R[a[1]]=('s','a%d'%n); return
@@ -1073,6 +1076,7 @@ def _run(name,passthru=False,frame=False,flat=False):
         if fname in ('_quick_odd_mvn','_quick_evn_mvn','_quick_mvn','_slow_mvn'):
             # a block copy: length r0 (bytes), destination r1, source r2; r0 is left unknown (and r1 for the byte copy), r2-r7 are kept
             n=c.gi('r0')
+            if isinstance(n,tuple) and n[0]=='e' and n[1] in c.lvconst: n=c.lvconst[n[1]]      # a loop variable the code just set to the length
             if tail: raise Skip('block copy tail')
             d=c.gi('r1'); sr=c.gi('r2')
             if fname=='_quick_mvn' and isint(n) and n>64:
@@ -1405,6 +1409,8 @@ def _run(name,passthru=False,frame=False,flat=False):
                 q=[q for q in left if isinstance(q[2],tuple) and any(o is not q and re.search(r'\b%s\b'%o[1],q[2][1]) for o in left)][0]
                 q[2]=keep(q[2][1],q[3]); continue
             emit('%s = %s;'%(pick[1],fx(pick[2]) if pick[3] else ex(pick[2])))
+            if isinstance(pick[2],int) and not pick[3]: c.lvconst[pick[1]]=pick[2]      # the variable holds this constant until it is assigned again
+            else: c.lvconst.pop(pick[1],None)
             if isinstance(pick[2],int) and not pick[3] and canon(pick[2]) in FUNCS:
                 c.lvk[pick[0]]=pick[2]           # a call target: the call must still see the constant, so the register keeps it (the variable has it too)
             else:
@@ -1998,7 +2004,7 @@ def _run(name,passthru=False,frame=False,flat=False):
             step(i); i+=1
 
     c.D=0; c.maxD=0; c.pend=[]; c.frame_regs=set(); c.frame=bool(frame) or any(x[0]=='mov' and x[1].startswith('r15,') for x in ins)
-    c.rets=[]; c.lvk={}; c.lv={}; c.exits=[]; c.conts=[]; c.nbreak=[]; c.ncont=[]; c.active=[]; c.loopstack=[]; c.steps=0; c.macl=None; c.direct=False; c.has_loop=False
+    c.rets=[]; c.lvk={}; c.lvconst={}; c.lv={}; c.exits=[]; c.conts=[]; c.nbreak=[]; c.ncont=[]; c.active=[]; c.loopstack=[]; c.steps=0; c.macl=None; c.direct=False; c.has_loop=False
     # jump tables: `mova table,r0; mov.w @(r0,rX),r0; braf r0` and a table of 16-bit offsets from the braf + 4; rX holds twice the index
     def find_switches():
         sw={}

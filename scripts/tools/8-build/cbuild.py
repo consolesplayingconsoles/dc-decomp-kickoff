@@ -87,13 +87,18 @@ CODE_TOP = (0x0C, 0x8C, 0xAC)
 ZERO = re.compile(r'^(    int stk\[\d+\]) = \{0\};', re.M)
 
 
+def is_comment(l):
+    """A comment line: `/*` opens one, ` * ` continues it, `*/` closes it. A line starting with `*(` is code, a store through a pointer."""
+    return l.lstrip().startswith(('/*', '*/', '* '))
+
+
 def in_code_numbers(srcdir):
     """{address: [(file, line)]} for the numbers in the C that point inside the game code region but are not a function's entry."""
     ent = {a for a, s, n in functions()}
     out = {}
     for f in sorted(glob.glob(srcdir + '/*.c')):
         for i, l in enumerate(open(f, errors='replace').read().split('\n'), 1):
-            if l.lstrip().startswith(('/*', '*')):
+            if is_comment(l):
                 continue
             for m in LIT.finditer(l):
                 v = int(m.group(1), 16)
@@ -225,7 +230,7 @@ def pieces():
             return m.group(0)
         out = []
         for l in t.split('\n'):
-            out.append(l if l.lstrip().startswith(('/*', '*')) else LIT.sub(sub, l))
+            out.append(l if is_comment(l) else LIT.sub(sub, l))
         if used or funcs:
             names = sorted({m.group(1) for u in used for m in re.finditer(r'\(int\)(\w+)', u)})
             head = ''.join('extern char %s[];\n' % n for n in names)

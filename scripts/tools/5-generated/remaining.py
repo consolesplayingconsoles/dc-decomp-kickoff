@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """remaining.py: every function that is not done yet, by its current state and the cause it shares with others. Run in the repo.
 
-    python3 tools/5-generated/remaining.py [--fresh] [--jobs N]
+    python3 tools/5-generated/remaining.py [--fresh] [--jobs N] [--batch N] [--limit S]
+
+  --batch N   read N functions at a time and save the cache after each batch: a function that holds a worker costs its batch, not the pass
+  --limit S   no function is read for more than S seconds (the default is max(120, size/3): two hours for a 21 KB function)
 
 For each function that has no Equivalent C and is not SDK-verified, the first of these that applies:
   blocked     classify.py names an instruction no tool handles yet
@@ -61,6 +64,26 @@ def tool_hash():
     return h.hexdigest()
 
 
+LIMIT = None            # --limit S: no function is read for more than S seconds (default: max(120, size/3), two hours for a 21 KB function)
+
+
+def alarm_seconds(size):
+    """How long one function may be read: max(120, size/3) seconds, and no more than --limit when given."""
+    t = max(120, size // 3)
+    return min(LIMIT, t) if LIMIT else t
+
+
+def read_batches(todo, jobs, batch, reader, on_batch):
+    """Reads `todo` ([(name, size)]) `batch` functions at a time with up to `jobs` workers. `on_batch({name: state})` gets each batch's results
+    before the next one starts (the caller saves them), so a function that holds a worker costs its batch, not the whole pass."""
+    ctx = multiprocessing.get_context('fork')
+    for i in range(0, len(todo), batch):
+        chunk = todo[i:i + batch]
+        with ctx.Pool(min(jobs, len(chunk))) as pool:
+            done = dict(pool.imap_unordered(reader, chunk, chunksize=1))
+        on_batch(done)
+
+
 def read_one(task):
     name, size = task
     if gen_core is None:
@@ -68,7 +91,7 @@ def read_one(task):
     def stop(*_):
         raise TimeoutError()
     signal.signal(signal.SIGALRM, stop)
-    signal.alarm(max(120, size // 3))
+    signal.alarm(alarm_seconds(size))
     try:
         gen_core.run(name)
         return name, 'readable'
@@ -106,6 +129,10 @@ def main():
     table_only = '--table' in sys.argv            # print only the by-state table (for the README): reads nothing, writes nothing
     noread = '--no-read' in sys.argv or table_only            # report from what the steps already recorded: nothing is read here (a function with no read result is 'Not read')
     jobs = max(1, (os.cpu_count() or 2) - 2)
+    batch = int(sys.argv[sys.argv.index('--batch') + 1]) if '--batch' in sys.argv else 0       # read this many functions at a time, saving after each batch
+    if '--limit' in sys.argv:
+        global LIMIT
+        LIMIT = int(sys.argv[sys.argv.index('--limit') + 1])
     if '--jobs' in sys.argv:
         jobs = max(1, int(sys.argv[sys.argv.index('--jobs') + 1]))
     exe = open('1ST_READ.BIN', 'rb').read()
@@ -172,13 +199,25 @@ def main():
             line = '[%5ds] %s' % (time.time() - t0, msg)
             log.write(line + '\n'); log.flush(); sys.stderr.write(line + '\n')
         note('reading %d functions with %d workers' % (len(todo), jobs))
-        ctx = multiprocessing.get_context('fork')
-        with ctx.Pool(jobs) as pool:
-            for k, (name, state) in enumerate(pool.imap_unordered(read_one, todo, chunksize=4), 1):
-                a, sz = [(x[0], x[1]) for x in undone if x[2] == name][0]
-                cache[name] = [key(a, sz), state]
-                if k % 10 == 0 or k == len(todo):
-                    note('read %d of %d functions (%d with errors so far)' % (k, len(todo), sum(1 for v in cache.values() if v[1] != 'readable')))
+        if batch:
+            sizes = {x[2]: (x[0], x[1]) for x in undone}
+            doneN = [0]
+            def keep(done):                       # the batch's results go into the cache file before the next batch starts
+                for name, state in done.items():
+                    a, sz = sizes[name]
+                    cache[name] = [key(a, sz), state]
+                doneN[0] += len(done)
+                json.dump({'tools': th, 'read': cache}, open(cache_file, 'w'))
+                note('read %d of %d functions (%d with errors so far; saved)' % (doneN[0], len(todo), sum(1 for v in cache.values() if v[1] != 'readable')))
+            read_batches(todo, jobs, batch, read_one, keep)
+        else:
+            ctx = multiprocessing.get_context('fork')
+            with ctx.Pool(jobs) as pool:
+                for k, (name, state) in enumerate(pool.imap_unordered(read_one, todo, chunksize=4), 1):
+                    a, sz = [(x[0], x[1]) for x in undone if x[2] == name][0]
+                    cache[name] = [key(a, sz), state]
+                    if k % 10 == 0 or k == len(todo):
+                        note('read %d of %d functions (%d with errors so far)' % (k, len(todo), sum(1 for v in cache.values() if v[1] != 'readable')))
         note('done')
         json.dump({'tools': th, 'read': cache}, open(cache_file, 'w'))
     rows = []

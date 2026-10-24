@@ -466,6 +466,36 @@ def fn_deferred():
     return a
 
 
+def fn_spsteploop():
+    # structargfn inside a counted loop (hudFontNumPut, crowdAnimModel, shopDrawPrice, Virtua Tennis: "stack pointer step"): a 12-byte point is
+    # copied to the outgoing area by `mov #12,r0 / sub r0,r15`, the register holding a constant that the loop's join may have made unknown
+    a = Asm()
+    a.op(0x2FE6); a.op(STS_PR); a.op(0x7FF4)                     # mov.l r14,@-r15 / sts.l pr,@-r15 / add #-12,r15: the point
+    a.op(mov_i(14, 2)); a.op(mov_i(0, 0))                        # two rounds; r0 is read at the top of the loop, so the loop carries it
+    a.label('top')
+    a.op(0x2F02)                                                 # mov.l r0,@r15: the carried r0 (it is 12 from the second round on)
+    a.op(0x2F42); a.op(0x1F51); a.op(0x1F62)                     # mov.l r4,@r15 / r5,@(4,r15) / r6,@(8,r15)
+    a.op(0x62F3); a.op(0xE00C); a.op(0x3F08)                     # mov r15,r2 / mov #12,r0 / sub r0,r15: the outgoing area
+    a.load(3, 'm'); a.op(jsr(3)); a.op(0x61F3)                   # _slow_mvn(r0 = 12, r1 = sp, r2 = the point)
+    a.load(1, 'f'); a.op(jsr(1)); a.op(0xE405)                   # ptfn(5, the point), mov #5,r4 in the delay slot
+    a.op(0x7F0C)                                                 # add #12,r15: the outgoing area is dropped
+    a.op(dt(14)); a.jump('bf', 'top')
+    a.op(0x7F0C); a.op(LDS_PR); a.op(RTS); a.op(0x6EF6)          # add #12,r15 / lds.l @r15+,pr / rts / mov.l @r15+,r14
+    a.pool('m', ADDR['_slow_mvn']); a.pool('f', ADDR['ptfn'])
+    return a
+
+
+def fn_floatstack():
+    # reads the float the caller left on the stack as its first stack argument (cpuInRange, Virtua Tennis: "stack argument read"): two
+    # registers saved, so the word is at @(8,r15), loaded with r0 as the offset, then stored through r5
+    a = Asm()
+    a.op(0x2FE6); a.op(0x2FD6)                                   # mov.l r14,@-r15 / mov.l r13,@-r15
+    a.op(mov_i(0, 8)); a.op(0xF4F6)                              # mov #8,r0 / fmov.s @(r0,r15),fr4
+    a.op(0xF54A)                                                 # fmov.s fr4,@r5
+    a.op(0x6DF6); a.op(RTS); a.op(0x6EF6)                        # mov.l @r15+,r13 / rts / mov.l @r15+,r14
+    return a
+
+
 def fn_varcall():
     # printfn(0x33, 5, 7), a variadic call as SHC writes it (nlPrintf in replayChangeControl, Crazy Taxi): every argument pushed,
     # the last one first and the format in the delay slot, nothing in r4-r7; the caller pops 12 bytes afterwards
@@ -547,7 +577,7 @@ FUNCS = [('storefn', fn_store), ('ifelsefn', fn_ifelse), ('earlyfn', fn_early), 
          ('twoargfn', fn_twoarg), ('thunkfn', fn_thunk), ('passfn', fn_pass), ('callerfn', fn_caller),
          ('_slow_mvn', fn_slowmvn_helper), ('copyfn', fn_copy), ('threearg', fn_onereg), ('defcallerfn', fn_defcaller),
          ('vecmk', fn_structret), ('vsetfn', fn_structret), ('structfn', fn_struct),
-         ('fptrdef', fn_fptrdef), ('fptrcallerfn', fn_fptrcaller), ('onefn', fn_ret), ('twofn', fn_ret), ('twocallfn', fn_twocall), ('fivefn', fn_ret), ('fivecallfn', fn_fivecall), ('fivepassfn', fn_fivepass), ('printfn', fn_ret), ('varcallfn', fn_varcall), ('varcall4fn', fn_varcall4), ('voidfn', fn_ret), ('floatretfn', fn_floatret), ('ptfn', fn_ret), ('structargfn', fn_structarg), ('stackreadfn', fn_stackread), ('retvalfn', fn_retval), ('phantomfn', fn_phantom), ('stackpassfn', fn_stackpass), ('stackindfn', fn_stackind), ('stackspillfn', fn_stackspill), ('stackclobberfn', fn_stackclobber), ('switchfn', fn_switch), ('brafcompfn', fn_brafcomputed), ('stk4fn', fn_ret), ('stackframefn', fn_stackframe), ('stackframeintfn', fn_stackframeint), ('stackframeint2fn', fn_stackframeint2), ('readstack2', fn_readstack2), ('readstack1', fn_readstack1), ('deferredfn', fn_deferred)]
+         ('fptrdef', fn_fptrdef), ('fptrcallerfn', fn_fptrcaller), ('onefn', fn_ret), ('twofn', fn_ret), ('twocallfn', fn_twocall), ('fivefn', fn_ret), ('fivecallfn', fn_fivecall), ('fivepassfn', fn_fivepass), ('printfn', fn_ret), ('varcallfn', fn_varcall), ('varcall4fn', fn_varcall4), ('voidfn', fn_ret), ('floatretfn', fn_floatret), ('ptfn', fn_ret), ('structargfn', fn_structarg), ('stackreadfn', fn_stackread), ('retvalfn', fn_retval), ('phantomfn', fn_phantom), ('stackpassfn', fn_stackpass), ('stackindfn', fn_stackind), ('stackspillfn', fn_stackspill), ('stackclobberfn', fn_stackclobber), ('switchfn', fn_switch), ('brafcompfn', fn_brafcomputed), ('stk4fn', fn_ret), ('stackframefn', fn_stackframe), ('stackframeintfn', fn_stackframeint), ('stackframeint2fn', fn_stackframeint2), ('readstack2', fn_readstack2), ('readstack1', fn_readstack1), ('deferredfn', fn_deferred), ('spsteploopfn', fn_spsteploop), ('floatstackfn', fn_floatstack)]
 
 
 def main():
@@ -580,9 +610,9 @@ def main():
                   "        print('@@@@ ' + n); print('SKIPPED ' + str(e))\n")
         out = subprocess.run([sys.executable, "-c", script] + [n for n, _ in FUNCS if not n.startswith('_') and n not in ('threearg', 'vecmk', 'vsetfn', 'fptrdef', 'onefn', 'twofn', 'fivefn', 'printfn', 'voidfn')], cwd=tmp, stdout=subprocess.PIPE,
                              stderr=subprocess.STDOUT, universal_newlines=True).stdout
-        flat = subprocess.run([sys.executable, "-c", script, 'phantomfn'], cwd=tmp, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        flat = subprocess.run([sys.executable, "-c", script, 'phantomfn', 'spsteploopfn'], cwd=tmp, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                               universal_newlines=True, env=dict(os.environ, GEN_FORM='flat')).stdout       # the flat form, where the bug was
-        out += flat.replace('@@@@ phantomfn', '@@@@ phantomfn_flat')
+        out += flat.replace('@@@@ phantomfn', '@@@@ phantomfn_flat').replace('@@@@ spsteploopfn', '@@@@ spsteploopfn_flat')
         parts = {}
         for chunk in out.split('@@@@ ')[1:]:
             name, _, text = chunk.partition('\n')
@@ -654,6 +684,12 @@ def main():
             # FIXED, kept as a regression (motionSet then motionRootFirst in playerInit, Virtua Tennis): the stack adjustment is deferred past the next call. Each call
             # takes the words its callee reads from the stack (two, then one), the earlier ones are not the later call's arguments
             ('deferredfn', ["readstack2(0x1, 0x2, 0x3, 0x4, 0x8, 0x9)", "readstack1(0x5, 0x6, 0x7, 0x8, 0x7)"]),
+            # OPEN (hudFontNumPut and 11 more, Virtua Tennis: "stack pointer step"): the register stack-pointer step inside a loop
+            ('spsteploopfn', ["not:SKIPPED", "ptfn(0x5, "]),
+            ('spsteploopfn_flat', ["not:SKIPPED", "ptfn(0x5, "]),      # the same in the flat form, where every register is a variable
+            # OPEN (cpuInRange and 12 more, Virtua Tennis: "stack argument read"): a float the caller left on the stack is read as the
+            # function's stack parameter, its bits reinterpreted as a float
+            ('floatstackfn', ["not:SKIPPED", "a8"]),
             # a register written before it is read, or one a callee does not take, is not a parameter (Start_Fog, Crazy Taxi)
             ('phantomfn', ["phantomfn(void)", "onefn("]),
             ('phantomfn_flat', ["phantomfn(void)", "onefn("]),
