@@ -19,8 +19,14 @@
                               calls) still has its stack words compared: the registers were already all compared, the stack was not
                               (Crazy Taxi: navi_GetRouteTbl called getNearLineIndex without its pushed fifth argument, the nearest road
                               line was measured from a stack leftover, the destination arrow led down wrong streets)
-                    variadic  a callee the caller's file prototypes as `(int, ...)` is compared on its definition's arguments, not on
-                              the first one only (Crazy Taxi: kmCreateTABuffer called kmiSetTAEnvironment with 2 of 6 arguments)
+                    variadic  a callee the caller's file prototypes as `(int, ...)` is compared on the arguments its definition
+                              READS, not on the first one only (Crazy Taxi: kmCreateTABuffer called kmiSetTAEnvironment with 2 of
+                              6 arguments); one whose definition reads only its stack word (a printf-style function: the
+                              registers are leftovers) is compared on that word alone (mwRnaErrCallFunc, ADXERR_CallErrFunc:
+                              their callers differed on leftover r4/r5)
+                    leftover  a stack word the caller did not write since its last call is a leftover, not an argument: a call is
+                              compared on it only when the caller stored it (ADXF_AddPartition -> ADXERR_CallErrFunc: the original
+                              passes its arguments in registers, the callee reads a stack word neither side set)
                     key       a function the checker change cannot affect keeps the proof key of the checker saved in
                               state/proof-key-equiv.py, so its earlier pass still counts; one it can affect has a new key
 """
@@ -34,16 +40,17 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL = os.path.dirname(os.path.dirname(HERE))
 
 CALLER_C = ("int threearg(int);\nvoid fptrs(int, int);\nvoid five(int, int, int, int);\nint whole(int, int);\nextern int noproto();\n"
-            "int varproto(int, ...);\n\n"
+            "int varproto(int, ...);\nint varused(int, ...);\n\n"
             "int caller(void)\n{\n    five(1, 2, 3, 4);\n    fptrs(1, 2);\n    whole(1, 2);\n    noproto(1, 2, 3, 4);\n"
-            "    varproto(1, 2);\n    return threearg(1);\n}\n")
+            "    varproto(1, 2);\n    varused(1, 2);\n    return threearg(1);\n}\n")
 DEFS_C = ("int threearg(int a4, int a5, int a6)\n{\n    return a4 + a5 + a6;\n}\n\n"
           "void fptrs(float *vd, float *vs)\n{\n    *vd = *vs;\n}\n\n"
           "void five(int a4, int a5, int a6, int a7, int a8)\n{\n    *(int *)a4 = a8;\n}\n\n"
           "int whole(int a4)\n{\n    return a4;\n}\n\n"
           "int noproto(int a4, int a5, int a6, int a7, int a8, int a9)\n{\n    return a8 + a9;\n}\n\n"
-          "int varproto(int a4, int a5, int a6, int a7, int a8)\n{\n    return a8;\n}\n")
-FUNCS = ['threearg', 'fptrs', 'five', 'whole', 'noproto', 'varproto', 'caller']
+          "int varproto(int a4, int a5, int a6, int a7, int a8)\n{\n    return a8;\n}\n\n"
+          "int varused(int a4, int a5, int a6, int a7, int a8)\n{\n    return a4 + a5 + a6 + a7 + a8;\n}\n")
+FUNCS = ['threearg', 'fptrs', 'five', 'whole', 'noproto', 'varproto', 'varused', 'caller']
 
 
 def main():
@@ -65,7 +72,7 @@ def main():
                              universal_newlines=True).stdout
         got = dict(l.split(' ', 1) for l in out.strip().split('\n') if ' ' in l)
         want = {'threearg': '(3, 0) 0', 'fptrs': '(2, 0) 0', 'five': '(4, 0) 1', 'whole': '(2, 0) 0',
-                'noproto': 'None 2', 'varproto': '(4, 0) 1'}
+                'noproto': 'None 2', 'varproto': '(0, 0) 1', 'varused': '(4, 0) 1'}
         bad = ['%s: compared on %s, want %s' % (n, got.get(n, 'nothing'), w) for n, w in want.items() if got.get(n) != w]
         script = ("import sys; sys.path.insert(0, 'tools'); import toolpath, equiv\n"
                   "orig = equiv.callview('0C010100', ['00000001', '00000002', 'AAAA', 'BBBB'], [], {}, None, [True, True, False, False], 1)\n"
@@ -108,6 +115,19 @@ def main():
         for n_, want_ in (('threearg', '3'), ('five', '5')):
             if got4.get(n_) != want_:
                 bad.append('mirror: a call to %s linked at 8C... is compared on %s values, want %s (%s)' % (n_, got4.get(n_), want_, out4.strip()[-200:]))
+        script = ("import sys; sys.path.insert(0, 'tools'); import toolpath, equiv\n"
+                  "equiv.STACKN.clear(); equiv.STACKN[0x0C010100] = 1\n"
+                  "ar = {0x0C010100: (1, 0)}\n"
+                  "v = lambda w, chg: equiv.callview('0C010100', ['00000001', 'X', 'X', 'X'], [], ar, None, [True, False, False, False], None, None, None, [w, 'A', 'B', 'C'], chg)\n"
+                  "print('leftover', v('11111111', [False] * 4) == v('22222222', [False] * 4))\n"
+                  "print('written', v('11111111', [True] + [False] * 3) == v('22222222', [True] + [False] * 3))\n"
+                  "print('unknown', v('11111111', None) == v('22222222', None))\n")
+        out5 = subprocess.run([sys.executable, "-c", script], cwd=tmp, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                              universal_newlines=True).stdout
+        got5 = dict(l.split(' ', 1) for l in out5.strip().split('\n') if ' ' in l)
+        for k_, want_ in (('leftover', 'True'), ('written', 'False'), ('unknown', 'False')):
+            if got5.get(k_) != want_:
+                bad.append('leftover (%s): %s' % (k_, out5.strip()[-300:]))
         if got2.get('kept') != 'True':
             bad.append('pointer: identical pointer calls differ (%s)' % out2.strip()[-200:])
         if not bad:

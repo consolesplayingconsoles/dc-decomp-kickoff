@@ -467,6 +467,31 @@ def fn_readstack1():
     return a
 
 
+def fn_readframe3():
+    # a callee with a frame of its own (r14 and PR pushed, a 4-byte local) that takes r4 and reads three words the caller left above it,
+    # at @(12,r15), @(16,r15), @(20,r15) (sprPutAtAlpha reads the 12-byte point passed by value that way)
+    a = Asm()
+    a.op(0x2FE6); a.op(STS_PR); a.op(0x7FFC)                                   # mov.l r14,@-r15 / sts.l pr,@-r15 / add #-4,r15
+    a.load(3, 'p'); a.op(movl_st(4, 3))
+    a.op(0x52F3); a.op(movl_st(2, 3)); a.op(0x52F4); a.op(movl_st(2, 3)); a.op(0x52F5); a.op(movl_st(2, 3))
+    a.op(0x7F04); a.op(LDS_PR); a.op(RTS); a.op(0x6EF6); a.pool('p', STORE)    # add #4,r15 / lds.l @r15+,pr / rts / mov.l @r15+,r14
+    return a
+
+
+def fn_readframe3p():
+    # the same three words reached through a pointer into the caller's area, as sprPutAtAlpha does: `mov r15,r4 / add #12,r4`, then
+    # fmov.s @r4, @(4,r4), @(8,r4) (a float register argument is in fr4 and the 12-byte point is passed by value)
+    a = Asm()
+    a.op(0x2FE6); a.op(STS_PR); a.op(0x7FFC)                                   # mov.l r14,@-r15 / sts.l pr,@-r15 / add #-4,r15
+    a.load(2, 'p'); a.op(movl_st(4, 2))
+    a.op(0x64F3); a.op(0x740C)                                                  # mov r15,r4 / add #12,r4
+    a.op(0xF348); a.op(0xF23A)                                                  # fmov.s @r4,fr3 / fmov.s fr3,@r2
+    a.op(0xE004); a.op(0xF346); a.op(0xF23A)                                    # mov #4,r0 / fmov.s @(r0,r4),fr3 / fmov.s fr3,@r2
+    a.op(0xE008); a.op(0xF346); a.op(0xF23A)                                    # mov #8,r0 / fmov.s @(r0,r4),fr3 / fmov.s fr3,@r2
+    a.op(0x7F04); a.op(LDS_PR); a.op(RTS); a.op(0x6EF6); a.pool('p', STORE)
+    return a
+
+
 def fn_deferred():
     # two calls whose pushed words are dropped together after the second (SHC defers the stack adjustment: motionSet then motionRootFirst in
     # playerInit, Virtua Tennis): rs2(1, 2, 3, 4, 8, 9) pushes two words, rs1(5, 6, 7, 8, 7) pushes one, then one add #12,r15
@@ -595,7 +620,7 @@ FUNCS = [('storefn', fn_store), ('ifelsefn', fn_ifelse), ('earlyfn', fn_early), 
          ('twoargfn', fn_twoarg), ('thunkfn', fn_thunk), ('passfn', fn_pass), ('callerfn', fn_caller),
          ('_slow_mvn', fn_slowmvn_helper), ('copyfn', fn_copy), ('threearg', fn_onereg), ('defcallerfn', fn_defcaller),
          ('vecmk', fn_structret), ('vsetfn', fn_structret), ('structfn', fn_struct),
-         ('fptrdef', fn_fptrdef), ('fptrcallerfn', fn_fptrcaller), ('onefn', fn_ret), ('twofn', fn_ret), ('twocallfn', fn_twocall), ('fivefn', fn_ret), ('fivecallfn', fn_fivecall), ('fivepassfn', fn_fivepass), ('printfn', fn_ret), ('varcallfn', fn_varcall), ('varcall4fn', fn_varcall4), ('voidfn', fn_ret), ('floatretfn', fn_floatret), ('ptfn', fn_ret), ('structargfn', fn_structarg), ('stackreadfn', fn_stackread), ('retvalfn', fn_retval), ('phantomfn', fn_phantom), ('stackpassfn', fn_stackpass), ('stackindfn', fn_stackind), ('stackspillfn', fn_stackspill), ('stackclobberfn', fn_stackclobber), ('switchfn', fn_switch), ('brafcompfn', fn_brafcomputed), ('stk4fn', fn_ret), ('stackframefn', fn_stackframe), ('stackframeintfn', fn_stackframeint), ('stackframeint2fn', fn_stackframeint2), ('readstack2', fn_readstack2), ('readstack1', fn_readstack1), ('deferredfn', fn_deferred), ('spsteploopfn', fn_spsteploop), ('floatstackfn', fn_floatstack), ('passdef', fn_passdef), ('defthunkfn', fn_defthunk)]
+         ('fptrdef', fn_fptrdef), ('fptrcallerfn', fn_fptrcaller), ('onefn', fn_ret), ('twofn', fn_ret), ('twocallfn', fn_twocall), ('fivefn', fn_ret), ('fivecallfn', fn_fivecall), ('fivepassfn', fn_fivepass), ('printfn', fn_ret), ('varcallfn', fn_varcall), ('varcall4fn', fn_varcall4), ('voidfn', fn_ret), ('floatretfn', fn_floatret), ('ptfn', fn_ret), ('structargfn', fn_structarg), ('stackreadfn', fn_stackread), ('retvalfn', fn_retval), ('phantomfn', fn_phantom), ('stackpassfn', fn_stackpass), ('stackindfn', fn_stackind), ('stackspillfn', fn_stackspill), ('stackclobberfn', fn_stackclobber), ('switchfn', fn_switch), ('brafcompfn', fn_brafcomputed), ('stk4fn', fn_ret), ('stackframefn', fn_stackframe), ('stackframeintfn', fn_stackframeint), ('stackframeint2fn', fn_stackframeint2), ('readstack2', fn_readstack2), ('readstack1', fn_readstack1), ('readframe3', fn_readframe3), ('readframe3p', fn_readframe3p), ('deferredfn', fn_deferred), ('spsteploopfn', fn_spsteploop), ('floatstackfn', fn_floatstack), ('passdef', fn_passdef), ('defthunkfn', fn_defthunk)]
 
 
 def main():
@@ -703,6 +728,12 @@ def main():
             # FIXED, kept as a regression (motionSet then motionRootFirst in playerInit, Virtua Tennis): the stack adjustment is deferred past the next call. Each call
             # takes the words its callee reads from the stack (two, then one), the earlier ones are not the later call's arguments
             ('deferredfn', ["readstack2(0x1, 0x2, 0x3, 0x4, 0x8, 0x9)", "readstack1(0x5, 0x6, 0x7, 0x8, 0x7)"]),
+            # a callee declares the stack words it reads and no more: the generator padded them to four, so a function reading one,
+            # two or three words had phantom stack parameters (a8..a11), and the checker compared a caller's own local at the next
+            # word as an argument (sprPutAtAlpha reads three words, declared four: 34 Virtua Tennis callers differed on a leftover)
+            ('readframe3', ["int a8, int a9, int a10)", "not:a11"]),
+            ('readframe3p', ["not:SKIPPED", "int a8, int a9, int a10)", "not:a11"]),
+            ('readstack2', ["int a8, int a9)", "not:a10"]),
             # OPEN (hudFontNumPut and 11 more, Virtua Tennis: "stack pointer step"): the register stack-pointer step inside a loop
             ('spsteploopfn', ["not:SKIPPED", "ptfn(0x5, "]),
             ('spsteploopfn_flat', ["not:SKIPPED", "ptfn(0x5, "]),      # the same in the flat form, where every register is a variable

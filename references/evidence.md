@@ -141,6 +141,51 @@ as an issue) to add a game.
   session for the three. Flycast GDB breakpoints had never fired here (above), and no debugger was needed.
 - State: BOOTS TO MENU and PLAYABLE ticked, STABLE `[?]` not tested yet; the operator plays on.
 
+### Step 9 on Crazy Taxi: plays in the emulator, black screen on the console (2026-10-25)
+
+- Symptom: the build from C boots, shows the 50/60 Hz picker and plays in Flycast (real BIOS, region Europe); on a PAL
+  Dreamcast through GDEMU the screen stays black after the BIOS licence screen. The original disc and a mod built on it play
+  there, so the fault was in the build. Confirmed the same evening: with the fix below the build boots on the console
+  (operator's test, 2026-10-25). Earlier that day the arrow fix (1) had been confirmed in the emulator the same way.
+- Found: dropped arguments, four shapes, all invisible to equiv.py as it was. (1) A fifth argument the caller pushes on the
+  stack (`mov.l rX,@-r15` before `jsr`, `add #4,r15` after): seven calls of getNearLineIndex through casts naming four
+  arguments (navi_GetRouteTbl, navi_GetRouteDataB, getNearLinkedLine); the nearest road line was measured from a stack
+  leftover and the destination arrow sent the player down wrong streets. Confirmed fixed in the emulator by the operator.
+  (2) A float passed through: TOANG2 forwards fr5 to nlArcTan2(y, x), the generated form took one float. (3) A prototype the
+  generator wrote as variadic `(int, ...)` for a plain function: kmiSetTAEnvironment got 2 of its 6 arguments, kmSetBorderColor
+  reads its colour from the stack. Fixed; they did not change the console's behaviour. (4) A pass-through trampoline:
+  nlInitLibraryDC is `bra nlInitLibrary0` with r4, r5 (the display flags 0x80), r6 untouched; the generated C was
+  `int nlInitLibraryDC(void) { return nlInitLibrary0(); }` and InitSys called it with one argument. nlInitLibrary0 then read a
+  leftover r5: `*0xC2AEDB8 = table[r5 & 0xF]` came out -1 on the console (0 in the emulator), kmSetDisplayMode refused the mode
+  and never wrote the PAL sync timings or the display registers. The emulator draws whatever it is given; a TV gets no signal.
+  This one matched the symptom exactly, and the disc with it boots on the console.
+- Why the checker missed each: a call is compared on the arity the calling file declares (a cast, `extern f();`, `(int, ...)`),
+  the stack words only when that prototype names them; a trampoline that leaves r4-r7 untouched matches a void C that also
+  leaves them untouched, and the drop shows only at its caller, compared on the callee's declared (void) arity. equiv.py now
+  compares every call on the callee's definition (registers and stack words, a variadic prototype included; tests/equiv). The new
+  rule over-reports a true variadic callee whose definition over-declares register parameters (mwRnaErrCallFunc,
+  ADXERR_CallErrFunc read only their stack word; their callers now DIFFER on leftover r4/r5): open.
+- Closing the round at 100% (0 functions, 0 bytes left): the strict checker found two more of the class and two false alarms.
+  technicalBonusExec passed a 6-byte angle by value (copied onto the stack by _quick_odd_mvn before each Model_Put_Sprite3D
+  call) and its casts dropped it; its first call also read the struct through r2, set in the delay slot of a `bt/s` that runs
+  on both paths and that the generator lost (open in gen_equiv). mwRnaCreate and ADXF_AddPartition differed only on a stack
+  word nobody stored: the original calls a printf-style error reporter with its arguments in registers and the reporter reads a
+  stack word, a leftover on both sides. The simulator now records which outgoing stack words the caller stored since its last
+  call (stackchg) and equiv.py compares only those, the way chg already did for registers (tests/equiv `leftover`); a variadic
+  prototype is raised only to the parameters the definition's body reads (`varused`). 44 pass-through trampolines (mostly the
+  ADX streaming wrappers) and 14 of their callers were regenerated with the current generator, which already counted
+  pass-through arguments: the repo's C predated that fix.
+- Method that found (4) when static reading had run dry: run the original and the build in the GDB Flycast to the same function
+  entry (a software breakpoint placed a few seconds after start fires; one placed before the game loads does not, see 2026-10-24),
+  dump RAM, diff outside the executable, drop the words that are the same function at its moved address. The Kamui state
+  differed (display size 640x512 against 320x240, the SPG timing words zero in the build), and the input that differed led to
+  the call. The in-house simulator cannot reach that point (no BIOS, no interrupts); the whole-game run it can do agreed on
+  every hardware access up to sys_init, which is before the fault.
+- Ruled out on the way, each by a byte check: the disc patcher (the original executable round-trips with all three tracks
+  identical), the pointer-word rewrite (the P1/P2 prefix is kept, no 8C/AC pointer into the game code exists outside it), the
+  boot stub (kept as original bytes, every PC-relative target inside it), the 48 KB of C placed in the executable's 0xFFFD filler
+  (the original never writes there up to attract mode), stack depth (within 16 bytes at the first frame).
+
 ### Virtua Tennis (USA), MK-51054 V1.001
 - Run: 2026-10-12 (v0.5) and later sessions, on macOS (Docker), started beside Crazy Taxi for a combined mod
 - Executable: 2,084,052 bytes, linked at 0x8C010000; SDK by banners: R10.1 (25 of 30 library builds match R10.1/R11b;

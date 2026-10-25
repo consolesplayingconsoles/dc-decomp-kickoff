@@ -21,3 +21,5 @@ __pycache__/
 
 # patch leftovers
 *.orig
+# case-file backups the retest tool leaves behind
+*.json.old
