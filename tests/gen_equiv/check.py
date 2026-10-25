@@ -15,6 +15,7 @@
                       copy     _slow_mvn with a constant length is a char struct assignment, not a load and a store per byte
                                (replayChangeControl: 864 bytes, Crazy Taxi)
                       defcaller a callee whose code reads one register but whose proven definition takes three gets three
+                      defthunk  a tail jump to a callee that reads nothing but whose proven definition takes one: the stub takes it and passes it on
                       fptr     a float pointer parameter in a callee's definition is an integer argument (Drv_FacePsgFrame)
                       order    two call results passed to a third call: each call its own statement, in order (Drv_FacePsgFrame)
                       struct   a structure returned through a hidden pointer pushed in the delay slot, and one passed by value on
@@ -234,6 +235,22 @@ def fn_defcaller():
 
 def fn_ret():
     a = Asm(); a.op(RTS); a.op(NOP)
+    return a
+
+
+def fn_passdef():
+    # itself a tail jump to onefn touching no register, so its code reads nothing; its proven definition (DEFS_C) takes a4
+    a = Asm()
+    a.load(1, 'f'); a.op(jmp(1)); a.op(NOP); a.pool('f', ADDR['onefn'])
+    return a
+
+
+def fn_defthunk():
+    # a tail jump to passdef touching no register: the callee's code reads nothing, its definition takes one argument, so the
+    # stub takes it and passes it on (mpdrv_set_hreset -> mpdrv_set_hreset_ns, Virtua Tennis: `return f();` against `f(int a4)`
+    # is SHC's "Scalar required for !", 32 functions)
+    a = Asm()
+    a.load(1, 'f'); a.op(jmp(1)); a.op(NOP); a.pool('f', ADDR['passdef'])
     return a
 
 
@@ -569,7 +586,8 @@ DEFS_C = ("typedef struct { int w[4]; } Stk4;\nint stk4fn(Stk4 s)\n{\n    return
           "void vecmk(int a4, int a5, int a6, int a7, int a8)\n{\n    *(int *)a8 = a4;\n}\n"
           "void fivefn(int a4, int a5, int a6, int a7, int a8)\n{\n    *(int *)a4 = a5 + a6 + a7 + a8;\n}\n"
           "void voidfn(int a4)\n{\n    *(int *)0xC2A0000 = a4;\n}\n"
-          "void fptrdef(float *vd, float *vs, float *vt)\n{\n    *vd = *vs;\n}\n")
+          "void fptrdef(float *vd, float *vs, float *vt)\n{\n    *vd = *vs;\n}\n"
+          "int passdef(int a4)\n{\n    return a4;\n}\n")
 
 
 FUNCS = [('storefn', fn_store), ('ifelsefn', fn_ifelse), ('earlyfn', fn_early), ('loopfn', fn_loop),
@@ -577,7 +595,7 @@ FUNCS = [('storefn', fn_store), ('ifelsefn', fn_ifelse), ('earlyfn', fn_early), 
          ('twoargfn', fn_twoarg), ('thunkfn', fn_thunk), ('passfn', fn_pass), ('callerfn', fn_caller),
          ('_slow_mvn', fn_slowmvn_helper), ('copyfn', fn_copy), ('threearg', fn_onereg), ('defcallerfn', fn_defcaller),
          ('vecmk', fn_structret), ('vsetfn', fn_structret), ('structfn', fn_struct),
-         ('fptrdef', fn_fptrdef), ('fptrcallerfn', fn_fptrcaller), ('onefn', fn_ret), ('twofn', fn_ret), ('twocallfn', fn_twocall), ('fivefn', fn_ret), ('fivecallfn', fn_fivecall), ('fivepassfn', fn_fivepass), ('printfn', fn_ret), ('varcallfn', fn_varcall), ('varcall4fn', fn_varcall4), ('voidfn', fn_ret), ('floatretfn', fn_floatret), ('ptfn', fn_ret), ('structargfn', fn_structarg), ('stackreadfn', fn_stackread), ('retvalfn', fn_retval), ('phantomfn', fn_phantom), ('stackpassfn', fn_stackpass), ('stackindfn', fn_stackind), ('stackspillfn', fn_stackspill), ('stackclobberfn', fn_stackclobber), ('switchfn', fn_switch), ('brafcompfn', fn_brafcomputed), ('stk4fn', fn_ret), ('stackframefn', fn_stackframe), ('stackframeintfn', fn_stackframeint), ('stackframeint2fn', fn_stackframeint2), ('readstack2', fn_readstack2), ('readstack1', fn_readstack1), ('deferredfn', fn_deferred), ('spsteploopfn', fn_spsteploop), ('floatstackfn', fn_floatstack)]
+         ('fptrdef', fn_fptrdef), ('fptrcallerfn', fn_fptrcaller), ('onefn', fn_ret), ('twofn', fn_ret), ('twocallfn', fn_twocall), ('fivefn', fn_ret), ('fivecallfn', fn_fivecall), ('fivepassfn', fn_fivepass), ('printfn', fn_ret), ('varcallfn', fn_varcall), ('varcall4fn', fn_varcall4), ('voidfn', fn_ret), ('floatretfn', fn_floatret), ('ptfn', fn_ret), ('structargfn', fn_structarg), ('stackreadfn', fn_stackread), ('retvalfn', fn_retval), ('phantomfn', fn_phantom), ('stackpassfn', fn_stackpass), ('stackindfn', fn_stackind), ('stackspillfn', fn_stackspill), ('stackclobberfn', fn_stackclobber), ('switchfn', fn_switch), ('brafcompfn', fn_brafcomputed), ('stk4fn', fn_ret), ('stackframefn', fn_stackframe), ('stackframeintfn', fn_stackframeint), ('stackframeint2fn', fn_stackframeint2), ('readstack2', fn_readstack2), ('readstack1', fn_readstack1), ('deferredfn', fn_deferred), ('spsteploopfn', fn_spsteploop), ('floatstackfn', fn_floatstack), ('passdef', fn_passdef), ('defthunkfn', fn_defthunk)]
 
 
 def main():
@@ -608,7 +626,7 @@ def main():
                   "        print('@@@@ ' + n); print(gen_drv.build(n, v[0], False)[0])\n"
                   "    except gen_core.Skip as e:\n"
                   "        print('@@@@ ' + n); print('SKIPPED ' + str(e))\n")
-        out = subprocess.run([sys.executable, "-c", script] + [n for n, _ in FUNCS if not n.startswith('_') and n not in ('threearg', 'vecmk', 'vsetfn', 'fptrdef', 'onefn', 'twofn', 'fivefn', 'printfn', 'voidfn')], cwd=tmp, stdout=subprocess.PIPE,
+        out = subprocess.run([sys.executable, "-c", script] + [n for n, _ in FUNCS if not n.startswith('_') and n not in ('threearg', 'vecmk', 'vsetfn', 'fptrdef', 'onefn', 'twofn', 'fivefn', 'printfn', 'voidfn', 'passdef')], cwd=tmp, stdout=subprocess.PIPE,
                              stderr=subprocess.STDOUT, universal_newlines=True).stdout
         flat = subprocess.run([sys.executable, "-c", script, 'phantomfn', 'spsteploopfn'], cwd=tmp, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                               universal_newlines=True, env=dict(os.environ, GEN_FORM='flat')).stdout       # the flat form, where the bug was
@@ -630,6 +648,7 @@ def main():
             ('callerfn', ["passfn(0x1, 0x7"]),
             ('copyfn', ["struct mvb16 { char b[16]; }"]),
             ('defcallerfn', ["threearg(0x1, 0x2, 0x3)"]),
+            ('defthunkfn', ["(int a4)", "passdef(a4)"]),
             # both calls take five arguments, the pushed word last (open: today the pushed words are lost or misplaced)
             # a float pointer parameter is an integer argument: no float passed on, none taken (Drv_FacePsgFrame -> nlSubVector3op,
             # Crazy Taxi: three phantom floats)

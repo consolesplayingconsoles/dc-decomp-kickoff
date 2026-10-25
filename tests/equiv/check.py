@@ -15,6 +15,12 @@
                     mirror    a game linked at the cached mirror (8C...) is compared like one linked at 0C...: the call the checker
                               sees is normalised to 0C, so the callee's argument count must be found under that address too (a
                               1-argument callee was compared on r5-r7 leftovers, Virtua Tennis)
+                    nodecl    a callee the caller's file never prototypes (`extern int f();`, as the generated files declare library
+                              calls) still has its stack words compared: the registers were already all compared, the stack was not
+                              (Crazy Taxi: navi_GetRouteTbl called getNearLineIndex without its pushed fifth argument, the nearest road
+                              line was measured from a stack leftover, the destination arrow led down wrong streets)
+                    variadic  a callee the caller's file prototypes as `(int, ...)` is compared on its definition's arguments, not on
+                              the first one only (Crazy Taxi: kmCreateTABuffer called kmiSetTAEnvironment with 2 of 6 arguments)
                     key       a function the checker change cannot affect keeps the proof key of the checker saved in
                               state/proof-key-equiv.py, so its earlier pass still counts; one it can affect has a new key
 """
@@ -27,13 +33,17 @@ import tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL = os.path.dirname(os.path.dirname(HERE))
 
-CALLER_C = ("int threearg(int);\nvoid fptrs(int, int);\nvoid five(int, int, int, int);\nint whole(int, int);\n\n"
-            "int caller(void)\n{\n    five(1, 2, 3, 4);\n    fptrs(1, 2);\n    whole(1, 2);\n    return threearg(1);\n}\n")
+CALLER_C = ("int threearg(int);\nvoid fptrs(int, int);\nvoid five(int, int, int, int);\nint whole(int, int);\nextern int noproto();\n"
+            "int varproto(int, ...);\n\n"
+            "int caller(void)\n{\n    five(1, 2, 3, 4);\n    fptrs(1, 2);\n    whole(1, 2);\n    noproto(1, 2, 3, 4);\n"
+            "    varproto(1, 2);\n    return threearg(1);\n}\n")
 DEFS_C = ("int threearg(int a4, int a5, int a6)\n{\n    return a4 + a5 + a6;\n}\n\n"
           "void fptrs(float *vd, float *vs)\n{\n    *vd = *vs;\n}\n\n"
           "void five(int a4, int a5, int a6, int a7, int a8)\n{\n    *(int *)a4 = a8;\n}\n\n"
-          "int whole(int a4)\n{\n    return a4;\n}\n")
-FUNCS = ['threearg', 'fptrs', 'five', 'whole', 'caller']
+          "int whole(int a4)\n{\n    return a4;\n}\n\n"
+          "int noproto(int a4, int a5, int a6, int a7, int a8, int a9)\n{\n    return a8 + a9;\n}\n\n"
+          "int varproto(int a4, int a5, int a6, int a7, int a8)\n{\n    return a8;\n}\n")
+FUNCS = ['threearg', 'fptrs', 'five', 'whole', 'noproto', 'varproto', 'caller']
 
 
 def main():
@@ -50,11 +60,12 @@ def main():
                   "table = equiv.names()\n"
                   "arity, stackn = equiv.compared_arity('src/caller.c', table)\n"
                   "for n in %r:\n"
-                  "    print(n, arity.get(table[n]), stackn.get(table[n], 0))\n" % FUNCS[:4])
+                  "    print(n, arity.get(table[n]), stackn.get(table[n], 0))\n" % FUNCS[:-1])
         out = subprocess.run([sys.executable, "-c", script], cwd=tmp, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                              universal_newlines=True).stdout
         got = dict(l.split(' ', 1) for l in out.strip().split('\n') if ' ' in l)
-        want = {'threearg': '(3, 0) 0', 'fptrs': '(2, 0) 0', 'five': '(4, 0) 1', 'whole': '(2, 0) 0'}
+        want = {'threearg': '(3, 0) 0', 'fptrs': '(2, 0) 0', 'five': '(4, 0) 1', 'whole': '(2, 0) 0',
+                'noproto': 'None 2', 'varproto': '(4, 0) 1'}
         bad = ['%s: compared on %s, want %s' % (n, got.get(n, 'nothing'), w) for n, w in want.items() if got.get(n) != w]
         script = ("import sys; sys.path.insert(0, 'tools'); import toolpath, equiv\n"
                   "orig = equiv.callview('0C010100', ['00000001', '00000002', 'AAAA', 'BBBB'], [], {}, None, [True, True, False, False], 1)\n"
