@@ -492,6 +492,31 @@ def fn_readframe3p():
     return a
 
 
+def fn_stackonly1():
+    # a callee that takes NO register argument and reads one word the caller left on the stack, in a frame of its own (vecMake: the output
+    # pointer is its first stack word, r4-r7 are not read): declared as a structure by value, and a structure of one word is passed in a
+    # register, not on the stack, so it must stay padded to four words (a structure SHC puts on the stack)
+    a = Asm()
+    a.op(STS_PR); a.op(0x7FF4)                                                  # sts.l pr,@-r15 / add #-12,r15
+    a.load(3, 'p'); a.op(0x51F4); a.op(movl_st(1, 3))                           # mov.l @(16,r15),r1 / mov.l r1,@r3
+    a.op(0x7F0C); a.op(LDS_PR); a.op(RTS); a.op(NOP); a.pool('p', STORE)        # add #12,r15 / lds.l @r15+,pr / rts
+    return a
+
+
+def fn_copyin():
+    # copies the three words the caller left on the stack into a local with the word mover (hudFontNumPut, Virtua Tennis: its 12-byte
+    # point is passed by value and copied with _quick_odd_mvn from sp + 60): the copy reads all three, so all three are parameters,
+    # though only the copy's first address appears in the C
+    a = Asm()
+    a.op(0x2FE6); a.op(STS_PR); a.op(0x7FF4)                     # mov.l r14,@-r15 / sts.l pr,@-r15 / add #-12,r15: the local
+    a.op(0x62F3); a.op(0x7214); a.op(0x61F3)                     # mov r15,r2 / add #20,r2 (the caller's first stack word) / mov r15,r1
+    a.load(3, 'm'); a.op(jsr(3)); a.op(0xE00C)                   # _quick_odd_mvn(r0 = 12, r1 = the local, r2 = the caller's words)
+    a.load(7, 'p'); a.op(movl_st(4, 7)); a.op(0x51F2); a.op(movl_st(1, 7))      # r4 and the local's third word to the store
+    a.op(0x7F0C); a.op(LDS_PR); a.op(RTS); a.op(0x6EF6)          # add #12,r15 / lds.l @r15+,pr / rts / mov.l @r15+,r14
+    a.pool('m', ADDR['_quick_odd_mvn']); a.pool('p', STORE)
+    return a
+
+
 def fn_deferred():
     # two calls whose pushed words are dropped together after the second (SHC defers the stack adjustment: motionSet then motionRootFirst in
     # playerInit, Virtua Tennis): rs2(1, 2, 3, 4, 8, 9) pushes two words, rs1(5, 6, 7, 8, 7) pushes one, then one add #12,r15
@@ -524,6 +549,29 @@ def fn_spsteploop():
     a.op(dt(14)); a.jump('bf', 'top')
     a.op(0x7F0C); a.op(LDS_PR); a.op(RTS); a.op(0x6EF6)          # add #12,r15 / lds.l @r15+,pr / rts / mov.l @r15+,r14
     a.pool('m', ADDR['_slow_mvn']); a.pool('f', ADDR['ptfn'])
+    return a
+
+
+def fn_structreuse():
+    # spsteploopfn with the copy's source register reused for the call target, as SHC does (hudFontNumPut, Virtua Tennis): the byte mover
+    # takes the point from r2, then `mov.l @(pool),r2 / jsr @r2` calls ptfn through the same register. In the loop form the registers are
+    # C variables, and the structure argument was written as *(Stk3 *)(<r2's variable>) at the call, by which time it held ptfn's address:
+    # the call passed ptfn's own code bytes as the point. The structure passed is the copy in the outgoing area, not whatever r2 holds later
+    a = Asm()
+    a.op(0x2FE6); a.op(STS_PR); a.op(0x7FF4)                     # mov.l r14,@-r15 / sts.l pr,@-r15 / add #-12,r15: the point
+    a.op(0x6EF3)                                                 # mov r15,r14: the point's address, kept in a saved register (SHC: r14 = sp + 60)
+    a.op(mov_i(13, 2)); a.op(mov_i(0, 0)); a.op(mov_i(2, 0))
+    a.label('top')
+    a.op(0x2F02)
+    a.load(7, 'p'); a.op(movl_st(2, 7))                          # r2 read at the top of the loop: the loop carries it, so it is a C variable
+    a.op(0x2F42); a.op(0x1F51); a.op(0x1F62)                     # the point from r4-r6
+    a.op(0x62E3); a.op(0xE00C); a.op(0x3F08)                     # mov r14,r2 / mov #12,r0 / sub r0,r15
+    a.load(3, 'm'); a.op(jsr(3)); a.op(0x61F3)                   # _slow_mvn(r0 = 12, r1 = sp, r2 = the point)
+    a.load(2, 'f'); a.op(jsr(2)); a.op(0xE405)                   # mov.l @(pool),r2 / jsr @r2: ptfn through r2, mov #5,r4 in the slot
+    a.op(0x7F0C)
+    a.op(dt(13)); a.jump('bf', 'top')
+    a.op(0x7F0C); a.op(LDS_PR); a.op(RTS); a.op(0x6EF6)
+    a.pool('m', ADDR['_quick_odd_mvn']); a.pool('f', ADDR['ptfn']); a.pool('p', STORE)
     return a
 
 
@@ -618,9 +666,9 @@ DEFS_C = ("typedef struct { int w[4]; } Stk4;\nint stk4fn(Stk4 s)\n{\n    return
 FUNCS = [('storefn', fn_store), ('ifelsefn', fn_ifelse), ('earlyfn', fn_early), ('loopfn', fn_loop),
          ('whilefn', fn_whileloop), ('nestfn', fn_nest), ('nocondfn', fn_nocond), ('foreverfn', fn_forever),
          ('twoargfn', fn_twoarg), ('thunkfn', fn_thunk), ('passfn', fn_pass), ('callerfn', fn_caller),
-         ('_slow_mvn', fn_slowmvn_helper), ('copyfn', fn_copy), ('threearg', fn_onereg), ('defcallerfn', fn_defcaller),
+         ('_slow_mvn', fn_slowmvn_helper), ('_quick_odd_mvn', fn_slowmvn_helper), ('copyfn', fn_copy), ('threearg', fn_onereg), ('defcallerfn', fn_defcaller),
          ('vecmk', fn_structret), ('vsetfn', fn_structret), ('structfn', fn_struct),
-         ('fptrdef', fn_fptrdef), ('fptrcallerfn', fn_fptrcaller), ('onefn', fn_ret), ('twofn', fn_ret), ('twocallfn', fn_twocall), ('fivefn', fn_ret), ('fivecallfn', fn_fivecall), ('fivepassfn', fn_fivepass), ('printfn', fn_ret), ('varcallfn', fn_varcall), ('varcall4fn', fn_varcall4), ('voidfn', fn_ret), ('floatretfn', fn_floatret), ('ptfn', fn_ret), ('structargfn', fn_structarg), ('stackreadfn', fn_stackread), ('retvalfn', fn_retval), ('phantomfn', fn_phantom), ('stackpassfn', fn_stackpass), ('stackindfn', fn_stackind), ('stackspillfn', fn_stackspill), ('stackclobberfn', fn_stackclobber), ('switchfn', fn_switch), ('brafcompfn', fn_brafcomputed), ('stk4fn', fn_ret), ('stackframefn', fn_stackframe), ('stackframeintfn', fn_stackframeint), ('stackframeint2fn', fn_stackframeint2), ('readstack2', fn_readstack2), ('readstack1', fn_readstack1), ('readframe3', fn_readframe3), ('readframe3p', fn_readframe3p), ('deferredfn', fn_deferred), ('spsteploopfn', fn_spsteploop), ('floatstackfn', fn_floatstack), ('passdef', fn_passdef), ('defthunkfn', fn_defthunk)]
+         ('fptrdef', fn_fptrdef), ('fptrcallerfn', fn_fptrcaller), ('onefn', fn_ret), ('twofn', fn_ret), ('twocallfn', fn_twocall), ('fivefn', fn_ret), ('fivecallfn', fn_fivecall), ('fivepassfn', fn_fivepass), ('printfn', fn_ret), ('varcallfn', fn_varcall), ('varcall4fn', fn_varcall4), ('voidfn', fn_ret), ('floatretfn', fn_floatret), ('ptfn', fn_ret), ('structargfn', fn_structarg), ('stackreadfn', fn_stackread), ('retvalfn', fn_retval), ('phantomfn', fn_phantom), ('stackpassfn', fn_stackpass), ('stackindfn', fn_stackind), ('stackspillfn', fn_stackspill), ('stackclobberfn', fn_stackclobber), ('switchfn', fn_switch), ('brafcompfn', fn_brafcomputed), ('stk4fn', fn_ret), ('stackframefn', fn_stackframe), ('stackframeintfn', fn_stackframeint), ('stackframeint2fn', fn_stackframeint2), ('readstack2', fn_readstack2), ('readstack1', fn_readstack1), ('readframe3', fn_readframe3), ('readframe3p', fn_readframe3p), ('structreusefn', fn_structreuse), ('stackonly1', fn_stackonly1), ('copyinfn', fn_copyin), ('deferredfn', fn_deferred), ('spsteploopfn', fn_spsteploop), ('floatstackfn', fn_floatstack), ('passdef', fn_passdef), ('defthunkfn', fn_defthunk)]
 
 
 def main():
@@ -653,9 +701,9 @@ def main():
                   "        print('@@@@ ' + n); print('SKIPPED ' + str(e))\n")
         out = subprocess.run([sys.executable, "-c", script] + [n for n, _ in FUNCS if not n.startswith('_') and n not in ('threearg', 'vecmk', 'vsetfn', 'fptrdef', 'onefn', 'twofn', 'fivefn', 'printfn', 'voidfn', 'passdef')], cwd=tmp, stdout=subprocess.PIPE,
                              stderr=subprocess.STDOUT, universal_newlines=True).stdout
-        flat = subprocess.run([sys.executable, "-c", script, 'phantomfn', 'spsteploopfn'], cwd=tmp, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        flat = subprocess.run([sys.executable, "-c", script, 'phantomfn', 'spsteploopfn', 'structreusefn'], cwd=tmp, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                               universal_newlines=True, env=dict(os.environ, GEN_FORM='flat')).stdout       # the flat form, where the bug was
-        out += flat.replace('@@@@ phantomfn', '@@@@ phantomfn_flat').replace('@@@@ spsteploopfn', '@@@@ spsteploopfn_flat')
+        out += flat.replace('@@@@ phantomfn', '@@@@ phantomfn_flat').replace('@@@@ spsteploopfn', '@@@@ spsteploopfn_flat').replace('@@@@ structreusefn', '@@@@ structreusefn_flat')
         parts = {}
         for chunk in out.split('@@@@ ')[1:]:
             name, _, text = chunk.partition('\n')
@@ -733,9 +781,15 @@ def main():
             # word as an argument (sprPutAtAlpha reads three words, declared four: 34 Virtua Tennis callers differed on a leftover)
             ('readframe3', ["int a8, int a9, int a10)", "not:a11"]),
             ('readframe3p', ["not:SKIPPED", "int a8, int a9, int a10)", "not:a11"]),
+            ('stackonly1', ["not:SKIPPED", "Stk4 s"]),
+            # the words a block copy reads from the caller's area count, not only its first address (hudFontNumPut, Virtua Tennis: declared
+            # one stack word once the padding to four went, its point's other two words came out as zeros)
+            ('copyinfn', ["not:SKIPPED", "int a8, int a9, int a10)", "not:a11"]),
             ('readstack2', ["int a8, int a9)", "not:a10"]),
             # OPEN (hudFontNumPut and 11 more, Virtua Tennis: "stack pointer step"): the register stack-pointer step inside a loop
             ('spsteploopfn', ["not:SKIPPED", "ptfn(0x5, "]),
+            # the structure argument is the copy at SP, never the source register's later value (hudFontNumPut, Virtua Tennis)
+            ('structreusefn_flat', ["not:SKIPPED", r"re:ptfn\(0x5, \*\(Stk3 \*\)\(\(\(int\)stk \+ ", r"not:re:\*\(Stk3 \*\)\([RtT]\w*\)"]),
             ('spsteploopfn_flat', ["not:SKIPPED", "ptfn(0x5, "]),      # the same in the flat form, where every register is a variable
             # OPEN (cpuInRange and 12 more, Virtua Tennis: "stack argument read"): a float the caller left on the stack is read as the
             # function's stack parameter, its bits reinterpreted as a float
