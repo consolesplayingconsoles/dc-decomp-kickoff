@@ -563,6 +563,7 @@ Grouped by the step that first needs them (scripts, then templates, then referen
 | `scripts/tools/4-boosts/port_equiv.py`              | in the repo: carries Equivalent C for shared library code from a sibling decomp into this one (masked-code match, pool-word mapping, ported cases), every function re-checked by this repo's `equiv.py`                                                                                          |
 | `scripts/tools/5-generated/remaining.py`               | in the repo: every function not done yet, by its current state and the cause it shares with others (`--table`) |
 | `scripts/tools/5-generated/diverge.py`                 | in the repo: why one function's generated C differs from the original: the first mismatching call and where each argument came from |
+| `scripts/tools/5-generated/overreads.py`               | in the repo: reruns the cases with junk in unused RAM, on the original and on the C, and lists the Equivalent C that reads memory the original does not (a report; it records nothing) |
 | `references/equivalent-pipeline.md`  | writing Equivalent C at scale: the three checks, what the check compares, the lock for parallel workers, the worker brief                                                                                                                                                                        |
 
 ### Tools for step 6: Experience-driven agentic decomp

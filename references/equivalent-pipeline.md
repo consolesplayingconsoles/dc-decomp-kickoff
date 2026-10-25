@@ -76,6 +76,9 @@ the first guard). There is **no gate**: a function that passes is done, however 
 nothing to compare (it returns nothing and no case showed a write, a call or a device access) passes with "0 of N" and counts as done
 with no coverage.
 
+### Reads of memory the original does not read
+The simulator gives 0 for every byte of RAM a case did not set, so C that reads the wrong struct offset, or a global the original never touches, agrees with the original whenever that memory is 0. A console holds leftovers there, an emulator usually zeros. `python3 tools/5-generated/overreads.py src/<file>.c` reruns every case on both sides with unused RAM filled with junk (each byte a function of its address; the stack stays 0) and lists the functions that now differ. It is a report: Equivalent keeps its meaning and nothing is recorded. It also says how many cases read unset memory at all; where that is near zero (Crazy Taxi's hand-written files: 3 of about 600), a clean result says the cases already set what the function reads, not that the C is right. A case where the original itself stops on junk is skipped.
+
 Two kinds of effort, in this order:
 1. **Script-generated C.** `gen_equiv` writes C and cases, and the check keeps what passes. Report it apart from hand-written C.
    The cases come from the draw: random candidates, growth guided by the original's own coverage (take the case that reaches the
