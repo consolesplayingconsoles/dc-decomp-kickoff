@@ -6,6 +6,10 @@
                                 instruction is not 'no C form': only code control flow reaches is read (Crazy Taxi: 58 functions
                                 were wrongly set aside, putPlayerCar among them)
                     banked      the same instruction reached by the code is 'no C form'
+                    floatin     a function that reads fr12-fr15 on entry before writing them is 'no C form': those registers are
+                                the callee's to save, never C arguments, so the value is its caller's (a custom convention; Virtua
+                                Tennis nl_objput_mv_send_p2 reads fr12-fr15 from the routine before it). Saving and restoring one, as
+                                compiled C does, is not a read
                     poolclaim   a pc-relative load whose pool address lands on an instruction the code runs does not turn that
                                 instruction into data (Crazy Taxi: about 30 functions had code shown as .word)
 """
@@ -33,6 +37,8 @@ FUNCS = [
     ('jumptablefn', [bra(2), NOP, STC_R0BANK, 0x016C, RTS, NOP]),
     ('bankedfn', [STC_R0BANK, RTS, NOP, NOP]),
     # mov.l @(0,pc),r1 at +0 reads the word at +4, which is also the code's own next instruction (mov #1,r2)
+    ('floatinfn', [0xF6EC, RTS, NOP, NOP]),                              # fmov fr14,fr6: fr14 is an input
+    ('floatsavefn', [0xFFEB, 0xFEF9, RTS, NOP]),                         # fmov.s fr14,@-r15 / fmov.s @r15+,fr14: saved and restored
     ('poolclaimfn', [movl_pc(1, 0), NOP, mov_i(2, 1), RTS, NOP, NOP]),
 ]
 
@@ -65,11 +71,16 @@ def main():
             bad.append("jumptable: data after a branch read as code: %s" % verdict.get('jumptablefn'))
         if 'r0_bank' not in verdict.get('bankedfn', ''):
             bad.append("banked: a reached banked-register instruction not reported: %s" % verdict.get('bankedfn'))
+        if 'custom convention' not in verdict.get('floatinfn', ''):
+            bad.append("floatin: a function reading fr14 on entry not reported: %s" % verdict.get('floatinfn'))
+        if verdict.get('floatsavefn', '?').strip() != '[]':
+            bad.append("floatin: saving and restoring fr14 reported as an input: %s" % verdict.get('floatsavefn'))
         line4 = [l for l in dis.split('\n') if l.startswith('%08x' % (where['poolclaimfn'] + 4))]
         if not line4 or '.word' in line4[0] or 'mov' not in line4[0]:
             bad.append("poolclaim: the instruction at +4 is shown as %s" % (line4[0] if line4 else 'nothing'))
         if not bad:
             print("[decode] ok: data after a branch is not read as code; a reached banked-register instruction is 'no C form'; "
+                  "a callee-saved float register read on entry is 'no C form', saving one is not; "
                   "a pool claim on code the function runs leaves it code")
             return
         sys.exit("[ERROR] decode check failed:\n" + "\n".join(bad) + "\n--- classify ---\n" + out + "--- shdis ---\n" + dis)

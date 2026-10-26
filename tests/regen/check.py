@@ -9,11 +9,14 @@ with no game data and no compiler. Stdlib only.
                     back      a function the run did not prove gets its old C, cases and equivalent.txt line back
                     kept      a function the run proved keeps the new C: the old is not put back, and a file left with no function goes
                     once      putting back twice (the run's end, then its exit) restores once
+                    nonames   --regen with no function names stops with an error: it ran as a whole step-5 run instead (Virtua Tennis,
+                              a name list that came out empty)
                     wired     gen_equiv's __main__ takes --regen, takes out before it reads equivalent.txt, and puts back on exit
 """
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 
@@ -76,6 +79,10 @@ def main():
             bad.append('kept: gen_a.c, left with no function, should be gone')
         if 'f' in open('tests/equivalent.txt').read().split():
             bad.append('kept: the old equivalent.txt line came back over the new C')
+        r = subprocess.run([sys.executable, os.path.join(TOOLS, '5-generated', 'gen_equiv'), '--regen', '--jobs', '2'], stdout=subprocess.PIPE,
+                           stderr=subprocess.STDOUT, universal_newlines=True)
+        if r.returncode == 0 or 'needs function names' not in r.stdout:
+            bad.append('nonames: --regen with no names did not stop (exit %d): %s' % (r.returncode, r.stdout.strip()[-200:]))
         src = open(os.path.join(TOOLS, '5-generated', 'gen_equiv', '__main__.py')).read()
         i_out, i_keep = src.find('regen.take_out('), src.find("KEEP={f:open(f).read()")
         if i_out < 0 or not (0 <= i_out < i_keep):

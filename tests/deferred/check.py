@@ -7,6 +7,9 @@ game data and no compiler: the generator modules and the checker are stand-ins. 
                               checked or recorded: no C, no result row (Virtua Tennis --regen: 13 of 92 functions drawn were never
                               checked, and got their old C back). Each one must come back passed or failed
                     verdicts  a deferred function that differs is failed, not passed
+                    groups    the passed functions are written in groups whose prototypes agree, one file each: written together, a
+                              head declaring the callee one way broke the file for the function proven against the other (Virtua Tennis
+                              gen_ek.c: motionRootFirst against the old vecMake, 15 proven functions in a file that did not compile)
 """
 import os
 import re
@@ -62,6 +65,12 @@ def main():
         passed, failed, deferred, dropped, err = gen_pipe.run_file_robust('gen_tmp0', items)
         if failed != ['b'] or sorted(passed) != ['a', 'c', 'd']:
             bad.append('verdicts: passed %s failed %s; want b failed, a c d passed' % (sorted(passed), failed))
+        gs = gen_pipe.compatible_groups(items)
+        if sorted(sorted(i[0] for i in g) for g in gs) != [['a', 'c'], ['b'], ['d']]:
+            bad.append('groups: %s; want a+c, b, d' % [[i[0] for i in g] for g in gs])
+        main_src = open(os.path.join(TOOLS, '5-generated', 'gen_equiv', '__main__.py')).read()
+        if 'gen_pipe.compatible_groups(keep)' not in main_src:
+            bad.append('groups: write_batch does not split the passed functions with gen_pipe.compatible_groups')
         if [f for f in os.listdir('src') if f != 'gen_tmp0.c'] or [d for d in os.listdir('tests') if d != 'gen_tmp0']:
             bad.append('scratch: the deferred rounds left %s %s' % (os.listdir('src'), os.listdir('tests')))
     finally:
