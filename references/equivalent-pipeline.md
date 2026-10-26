@@ -58,6 +58,10 @@ local, a jump table, an indirect call, branches that share a join in a way the a
 `python3 tools/5-generated/gen_equiv --known` is the check of the generator itself: it writes C for functions already proven
 Equivalent and tests it, restoring `tests/equivalent.txt` and `docs/equivalent.md` afterwards.
 
+`python3 tools/5-generated/gen_equiv --regen <name> ...` writes functions again whose generated C exists, after a generator fix: the
+old C, cases and `tests/equivalent.txt` line are taken out (kept in `state/regen/`), the run picks the functions as having no C, and
+whatever the run does not prove gets its old C back, also when the run is stopped. Hand-written C and C marked `manual` are skipped.
+
 Limits: no jump table, no indirect call, no stack arguments, no address of a local; prototypes are guessed (ints and
 floats from the registers set before the call); the cases are random values (in a loop function small ones, and only
 those the original finishes on), so a branch they never reach can pass by luck. The C is plain (temps `t0`, hex
