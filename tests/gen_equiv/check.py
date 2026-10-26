@@ -572,6 +572,21 @@ def fn_argupdate():
     return a
 
 
+def fn_argnarrow():
+    # stores a short into the upper half of the first word of the point it was passed by value (mov.w into its own argument area;
+    # cameraExec cases 5, 6 and 9, Virtua Tennis, a short at sp+42), reads it back with mov.w, then passes the point on: the read sees
+    # the short, the copy sees the merged word. The reader stopped: a store into the caller frame other than a whole word
+    a = Asm()
+    a.op(STS_PR); a.op(mov_i(1, 7)); a.op(mov_i(0, 6)); a.op(0x0F15)            # sts.l pr,@-r15 / mov #7,r1 / mov #6,r0 / mov.w r1,@(r0,r15)
+    a.op(0x04FD)                                                                # mov.w @(r0,r15),r4 (the short back, for ptfn's first argument)
+    a.op(0x62F3); a.op(0x7204); a.op(0xE00C); a.op(0x3F08)                      # mov r15,r2 / add #4,r2 / mov #12,r0 / sub r0,r15
+    a.load(3, 'm'); a.op(jsr(3)); a.op(0x61F3)                                  # _quick_odd_mvn(12, sp, the point)
+    a.load(2, 'f'); a.op(jsr(2)); a.op(NOP)                                     # ptfn(the short, the point)
+    a.op(0x7F0C); a.op(LDS_PR); a.op(RTS); a.op(NOP)
+    a.pool('m', ADDR['_quick_odd_mvn']); a.pool('f', ADDR['ptfn'])
+    return a
+
+
 def fn_constfirst():
     # reads the caller's first stack word through r1 = 4 + r15, the constant first (bodyInit, Virtua Tennis: its hidden return pointer at
     # @(0x32C + sp)), and stores a4 through it: the word must be a stack parameter, though the address reads constant + (stk + n)
@@ -841,7 +856,7 @@ FUNCS = [('storefn', fn_store), ('ifelsefn', fn_ifelse), ('earlyfn', fn_early), 
          ('twoargfn', fn_twoarg), ('thunkfn', fn_thunk), ('passfn', fn_pass), ('callerfn', fn_caller),
          ('_slow_mvn', fn_slowmvn_helper), ('_quick_odd_mvn', fn_slowmvn_helper), ('copyfn', fn_copy), ('threearg', fn_onereg), ('defcallerfn', fn_defcaller),
          ('vecmk', fn_structret), ('vsetfn', fn_structret), ('structfn', fn_struct),
-         ('fptrdef', fn_fptrdef), ('fptrcallerfn', fn_fptrcaller), ('onefn', fn_ret), ('twofn', fn_ret), ('twocallfn', fn_twocall), ('fivefn', fn_ret), ('fivecallfn', fn_fivecall), ('fivepassfn', fn_fivepass), ('printfn', fn_ret), ('varcallfn', fn_varcall), ('varcall4fn', fn_varcall4), ('voidfn', fn_ret), ('floatretfn', fn_floatret), ('ptfn', fn_ret), ('structargfn', fn_structarg), ('stackreadfn', fn_stackread), ('retvalfn', fn_retval), ('phantomfn', fn_phantom), ('stackpassfn', fn_stackpass), ('stackindfn', fn_stackind), ('stackspillfn', fn_stackspill), ('stackclobberfn', fn_stackclobber), ('switchfn', fn_switch), ('brafcompfn', fn_brafcomputed), ('stk4fn', fn_ret), ('stackframefn', fn_stackframe), ('stackframeintfn', fn_stackframeint), ('stackframeint2fn', fn_stackframeint2), ('readstack2', fn_readstack2), ('readstack1', fn_readstack1), ('readframe3', fn_readframe3), ('readframe3p', fn_readframe3p), ('structreusefn', fn_structreuse), ('stackonly1', fn_stackonly1), ('copyinfn', fn_copyin), ('sretfn', fn_sret), ('sretdef', fn_sret), ('sretcallfn', fn_sretcall), ('sretcallpfn', fn_sretcallp), ('argupdatefn', fn_argupdate), ('fmergefn', fn_fmerge), ('fcarryfn', fn_fcarry), ('fslotfn', fn_fslot), ('fspillfn', fn_fspill), ('stkreads2', fn_stkreads2), ('framestkfn', fn_framestk), ('varpdef', fn_varreads1), ('varpush3fn', fn_varpush3), ('constfirstfn', fn_constfirst), ('twoptfn', fn_ret), ('twostructfn', fn_twostruct), ('deferredfn', fn_deferred), ('spsteploopfn', fn_spsteploop), ('floatstackfn', fn_floatstack), ('passdef', fn_passdef), ('defthunkfn', fn_defthunk)]
+         ('fptrdef', fn_fptrdef), ('fptrcallerfn', fn_fptrcaller), ('onefn', fn_ret), ('twofn', fn_ret), ('twocallfn', fn_twocall), ('fivefn', fn_ret), ('fivecallfn', fn_fivecall), ('fivepassfn', fn_fivepass), ('printfn', fn_ret), ('varcallfn', fn_varcall), ('varcall4fn', fn_varcall4), ('voidfn', fn_ret), ('floatretfn', fn_floatret), ('ptfn', fn_ret), ('structargfn', fn_structarg), ('stackreadfn', fn_stackread), ('retvalfn', fn_retval), ('phantomfn', fn_phantom), ('stackpassfn', fn_stackpass), ('stackindfn', fn_stackind), ('stackspillfn', fn_stackspill), ('stackclobberfn', fn_stackclobber), ('switchfn', fn_switch), ('brafcompfn', fn_brafcomputed), ('stk4fn', fn_ret), ('stackframefn', fn_stackframe), ('stackframeintfn', fn_stackframeint), ('stackframeint2fn', fn_stackframeint2), ('readstack2', fn_readstack2), ('readstack1', fn_readstack1), ('readframe3', fn_readframe3), ('readframe3p', fn_readframe3p), ('structreusefn', fn_structreuse), ('stackonly1', fn_stackonly1), ('copyinfn', fn_copyin), ('sretfn', fn_sret), ('sretdef', fn_sret), ('sretcallfn', fn_sretcall), ('sretcallpfn', fn_sretcallp), ('argupdatefn', fn_argupdate), ('argnarrowfn', fn_argnarrow), ('fmergefn', fn_fmerge), ('fcarryfn', fn_fcarry), ('fslotfn', fn_fslot), ('fspillfn', fn_fspill), ('stkreads2', fn_stkreads2), ('framestkfn', fn_framestk), ('varpdef', fn_varreads1), ('varpush3fn', fn_varpush3), ('constfirstfn', fn_constfirst), ('twoptfn', fn_ret), ('twostructfn', fn_twostruct), ('deferredfn', fn_deferred), ('spsteploopfn', fn_spsteploop), ('floatstackfn', fn_floatstack), ('passdef', fn_passdef), ('defthunkfn', fn_defthunk)]
 
 
 def main():
@@ -967,6 +982,8 @@ def main():
             ('varpush3fn', ["not:SKIPPED", r"re:varpdef\([^;]*,[^;]*,[^;]*\)"]),
             ('twostructfn', ["not:SKIPPED", r"re:twoptfn\(\*\(Stk3 \*\)\([^;]*\), \*\(Stk3 \*\)\("]),
             ('argupdatefn', ["not:SKIPPED", r"re:\*\(float \*\)\(\(\(int\)stk \+ \d+\)\) = ", "ptfn(0x5, "]),
+            # a short stored into its own argument area (cameraExec cases 5, 6, 9): read back as the short, copied as the merged word
+            ('argnarrowfn', ["not:SKIPPED", r"re:\*\(unsigned short \*\)\(\(\(int\)stk \+ \d+\)\) = ", r"re:ptfn\(\(?\(short\)"]),
             ('copyinfn', ["not:SKIPPED", "int a8, int a9, int a10)", "not:a11"]),
             # a structure returned by value (vecMake, Virtua Tennis): written as one, not as a structure argument whose first word is the
             # destination; its callers assign the result and pass no register integers
