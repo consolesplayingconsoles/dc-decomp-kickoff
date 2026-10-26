@@ -10,6 +10,9 @@ game data and no compiler: the generator modules and the checker are stand-ins. 
                     definition a function defined in the batch (e(int a4, float f4)) and a caller that declares it otherwise (int e(int))
                               go to separate files: in one, the head declares the definition and the call has too few arguments
                               (Zombie Revenge FUN_0c0de230: "Scalar required" on return FUN_0c0de850(a4))
+                    linkfail  a batch that fails as a whole (a link error: one function's C needs a helper the repo does not name) is
+                              split until the failing function is found: it is dropped with the error, every other one gets its verdict
+                              (Zombie Revenge: 456 functions in 15 batches got no verdict at all, "undefined _quick_evn_mvn")
                     groups    the passed functions are written in groups whose prototypes agree, one file each: written together, a
                               head declaring the callee one way broke the file for the function proven against the other (Virtua Tennis
                               gen_ek.c: motionRootFirst against the old vecMake, 15 proven functions in a file that did not compile)
@@ -41,6 +44,8 @@ DIFFER = set()
 
 def fake_run(cmd, capture_output=True, text=True):
     t = open(cmd[-1]).read()
+    if 'int linkbad(void)' in t:
+        return types.SimpleNamespace(stdout='[ERROR] link: undefined _quick_evn_mvn (name them in functions.txt)\n', stderr='', returncode=1)
     names = re.findall(r'^int (\w+)\(void\)\n\{', t, re.M)
     out = ''.join('%-28s %s\n' % (n, 'DIFFERS     case 1: out' if n in DIFFER else 'EQUIVALENT  1 case') for n in names)
     return types.SimpleNamespace(stdout=out, stderr='', returncode=0)
@@ -73,6 +78,13 @@ def main():
         dg = gen_pipe.compatible_groups([e, f])
         if len(dg) != 2:
             bad.append('definition: %s; want e and its caller f in separate groups' % [[i[0] for i in g] for g in dg])
+        DIFFER.clear()
+        lk = [item('l%d' % k, {}) for k in range(5)] + [item('linkbad', {})] + [item('m%d' % k, {}) for k in range(4)]
+        passed, failed, deferred, dropped, err = gen_pipe.run_file_robust('gen_tmp0', lk)
+        if sorted(passed) != sorted(['l%d' % k for k in range(5)] + ['m%d' % k for k in range(4)]) or dropped != ['linkbad']:
+            bad.append('linkfail: passed %s dropped %s; want the nine others passed and linkbad dropped' % (sorted(passed), dropped))
+        elif 'undefined' not in gen_pipe.LAST.get('why', {}).get('linkbad', ''):
+            bad.append('linkfail: linkbad dropped without its error: %r' % gen_pipe.LAST.get('why', {}).get('linkbad'))
         gs = gen_pipe.compatible_groups(items)
         if sorted(sorted(i[0] for i in g) for g in gs) != [['a', 'c'], ['b'], ['d']]:
             bad.append('groups: %s; want a+c, b, d' % [[i[0] for i in g] for g in gs])

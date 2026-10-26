@@ -633,3 +633,14 @@ Mistakes worth not repeating:
   real save run in the simulator: buAnalyzeBackupFileImage, buCalcCRC (11,312 bytes) and SetTotalRecords give the same memory in
   the original and the build. Flycast GDB software breakpoints never fired (0 hits, placed before or after the game loads, both
   address forms, dynarec on or off): not a tool to rely on here.
+- A local buffer handed to a call was never compared (Virtua Tennis, 2026-10-26): a call argument pointing into the stack was
+  compared as "the stack" and stack writes are not effects, so cursorBoxPut's whole output (four vertices built at sp+588 for
+  nlDispStripTexOfsTrnsl) was checked on nothing; C that took one word of its 3-float position (passed on the stack) passed 9 of 9
+  cases, 331 of 331 instructions. Now sh4sim records, at each call, the words after an argument that points into the frame up to
+  the caller's stack that the body stored (pushes left out), and equiv compares them by offset: the frame layout, the saved
+  registers and a self-copy of an unset word still agree (tests/stackbuf). The buffer is the run of words the body stored from
+  the pointer on, without a gap, since the last call, compared up to the shorter run: a fixed window reached the next local,
+  which the C keeps elsewhere (shadowVolBuildPoint: after the vector it passes, the next vector in the C, the callee's output
+  slot in the original). The one-word C now differs on the position's second
+  word. No recheck of earlier passes: the checker as it was is kept in state/proof-key-frozen/ and its passes still count
+  (tests/proofkey); about a third of the proven functions (899 of 2,974 in VT) pass a frame address to a call.
