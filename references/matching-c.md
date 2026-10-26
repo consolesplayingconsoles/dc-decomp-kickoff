@@ -113,10 +113,8 @@ name and a C unit calling them links without `symbols.txt` entries.
 
 ## Pitfalls
 
-- How many Ghidra jobs fit depends on the machine: read it, never assume it. `docker_check.sh`
-  prints Docker's memory and CPUs (`docker info`) and runs Ghidra steps one at a time under
-  3.5 GB. Docker Desktop and colima start at 2 GB; many setups have raised it. The compiler loop
-  runs in its own container either way.
+- Ghidra steps run one at a time when Docker has under 3.5 GB of memory (`docker_low_memory` in
+  `docker_check.sh` reads it from `docker info`). The compiler loop runs in its own container either way.
 - Mount only folders under your home directory into containers (`/private/tmp` arrives empty).
 - The compiler's temp folder (`SHC_TMP`) must exist inside the container.
 - `SHC_LIB`, `SHC_INC` and `SHC_TMP` are Windows paths for `wibo`: `Z:\` is the container's `/`.

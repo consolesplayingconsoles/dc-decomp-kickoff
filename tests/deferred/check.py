@@ -7,6 +7,9 @@ game data and no compiler: the generator modules and the checker are stand-ins. 
                               checked or recorded: no C, no result row (Virtua Tennis --regen: 13 of 92 functions drawn were never
                               checked, and got their old C back). Each one must come back passed or failed
                     verdicts  a deferred function that differs is failed, not passed
+                    definition a function defined in the batch (e(int a4, float f4)) and a caller that declares it otherwise (int e(int))
+                              go to separate files: in one, the head declares the definition and the call has too few arguments
+                              (Zombie Revenge FUN_0c0de230: "Scalar required" on return FUN_0c0de850(a4))
                     groups    the passed functions are written in groups whose prototypes agree, one file each: written together, a
                               head declaring the callee one way broke the file for the function proven against the other (Virtua Tennis
                               gen_ek.c: motionRootFirst against the old vecMake, 15 proven functions in a file that did not compile)
@@ -65,6 +68,11 @@ def main():
         passed, failed, deferred, dropped, err = gen_pipe.run_file_robust('gen_tmp0', items)
         if failed != ['b'] or sorted(passed) != ['a', 'c', 'd']:
             bad.append('verdicts: passed %s failed %s; want b failed, a c d passed' % (sorted(passed), failed))
+        e = ('e', 'int e(int a4, float f4)\n{\n    return a4;\n}', [{'r4': 0}], {})
+        f = item('f', {'e': ('int',)})
+        dg = gen_pipe.compatible_groups([e, f])
+        if len(dg) != 2:
+            bad.append('definition: %s; want e and its caller f in separate groups' % [[i[0] for i in g] for g in dg])
         gs = gen_pipe.compatible_groups(items)
         if sorted(sorted(i[0] for i in g) for g in gs) != [['a', 'c'], ['b'], ['d']]:
             bad.append('groups: %s; want a+c, b, d' % [[i[0] for i in g] for g in gs])
