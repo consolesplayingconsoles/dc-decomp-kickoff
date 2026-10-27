@@ -14,6 +14,9 @@ No game data, no compiler: a synthetic executable of four 16-byte functions. Std
                              declared float, it is not reported
                     callers  a file that declares the float function as int and uses the value is listed by --callers, not an error
                     fixed    with the int function declared int, exit 0
+                    cache    build/retcheck.json keeps the original's register per function: the second run reads nothing of it, a wrong declaration
+                             is still caught, a corrupt file or a changed functions.txt is read again, and so is an executable of the same
+                             size with other bytes (the key held its size only)
 """
 import os
 import shutil
@@ -100,6 +103,7 @@ def main():
         open('src/b.c', 'w').write(CALLER)
         bad = []
         rc, out = run()
+        first = out
         if rc == 0:
             bad.append('int: a float-declared function that ends `sts fpul,r0` was accepted')
         if 'f_int: declared float' not in out or 'returns in r0' not in out:
@@ -116,6 +120,32 @@ def main():
         rc, out = run()
         if rc != 0:
             bad.append('fixed: with f_int declared int the check still fails: %s' % out.strip())
+        # the cache: the original's registers are read once; the C is still checked every run
+        if '(6 function(s) of the original read, 0 from' not in first:
+            bad.append('cache: the first run did not read the six functions of the original: %s' % first.strip())
+        rc, out = run()
+        if rc != 0 or '(0 function(s) of the original read, 6 from build/retcheck.json)' not in out:
+            bad.append('cache: the second run read the original again: %s' % out.strip())
+        open('src/a.c', 'w').write(A)                       # the wrong declaration comes back: still caught, from the cache
+        rc, out = run()
+        if rc == 0 or 'f_int: declared float' not in out or '(0 function(s) of the original read' not in out:
+            bad.append('cache: a wrong declaration is not caught with the original read from the cache: %s' % out.strip())
+        open('src/a.c', 'w').write(A.replace('float f_int(void)\n{\n    return 1.0f;', 'int f_int(void)\n{\n    return 1;'))
+        open('build/retcheck.json', 'w').write('not json')
+        rc, out = run()
+        if rc != 0 or '(6 function(s) of the original read, 0 from' not in out:
+            bad.append('cache: an unreadable cache was not read again from the original: %s' % out.strip())
+        open('functions.txt', 'a').write('F %08x 16 f_extra\n' % (BASE + 0x70))
+        rc, out = run()
+        if '(0 function(s) of the original read, 6 from' in out:
+            bad.append('cache: a changed functions.txt kept the old cache: %s' % out.strip())
+        rc, out = run()                                     # settled on the new functions.txt
+        exe = bytearray(open('1ST_READ.BIN', 'rb').read())
+        exe[-1] ^= 0xFF
+        open('1ST_READ.BIN', 'wb').write(bytes(exe))       # same size, other bytes
+        rc, out = run()
+        if '(0 function(s) of the original read' in out:
+            bad.append('cache: an executable of the same size with other bytes kept the old cache: %s' % out.strip())
         if not bad:
             print('[retcheck] ok: an int in r0 declared float is refused; right declarations and callee results pass; callers listed on request')
             return
