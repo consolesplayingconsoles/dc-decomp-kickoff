@@ -74,6 +74,17 @@ def main():
         bad.append('perpart: %s' % fit.room([1000, 2000], [1020, 2000], [1000, 2000], 1.0))
     if fit.fatal('** 1170 ADDRESS SPACE DUPLICATE\n** 0220 SAME_CODE OPTIMIZE:u188._com_opt1 IS CREATED\n'):
         bad.append('firstpass: %s' % fit.fatal('** 1170 ADDRESS SPACE DUPLICATE\n'))
+    import tempfile
+    sf = os.path.join(tempfile.mkdtemp(), 'sub', 'fit.json')
+    if fit.load_ratios(sf) is not None:
+        bad.append('seed: a file that is not there gave ratios')
+    fit.save_ratios(sf, ([49920, 341324], [49366, 337278]))
+    if fit.load_ratios(sf) != ([49920.0, 341324.0], [49366.0, 337278.0]):
+        bad.append('seed: %s' % (fit.load_ratios(sf),))
+    for junk in ('{', '{"plain": [1, 2]}', '{"plain": [1], "linked": [1, 2]}', '{"plain": [0, 2], "linked": [1, 2]}', '[]'):
+        open(sf, 'w').write(junk)
+        if fit.load_ratios(sf) is not None:
+            bad.append('seed: unusable file read as ratios: %s' % junk)
     import struct
 
     def elf(segs):
@@ -89,7 +100,7 @@ def main():
     if bad:
         sys.exit('[ERROR] fit check failed:\n' + '\n'.join(bad))
     print('[fit] ok: section extents from the map, parts inside their places, an overflow fails, room by the optimizer ratio, '
-          'unreached short branches found')
+          'unreached short branches found, the measured ratios kept for the next build')
 
 
 if __name__ == '__main__':
