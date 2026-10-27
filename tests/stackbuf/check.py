@@ -12,6 +12,8 @@
                               store (an output): they agree (Virtua Tennis shadowVolBuildPoint: after the vector it passes, the C
                               keeps another vector, the original the callee's output)
                     earlier   a word stored before an earlier call is not part of the buffer the next call gets
+                    stackaddr a word holding an address in the stack is compared as the stack, as an argument is: the frames are
+                              laid out differently (Virtua Tennis nlSetBackColorZ -> kmSetBackGroundPlane: 0DFFFE98 against 0DFFFE90)
 """
 import os
 import struct
@@ -47,10 +49,11 @@ def run(words):
                        'end': '%08X' % (BASE + CALLEE - BASE)}, d)
 
 
-def fn(value, at=0, save_r8=False, selfcopy=False, neighbour=False, adjacent=None, earlier=None):
+def fn(value, at=0, save_r8=False, selfcopy=False, neighbour=False, adjacent=None, earlier=None, ptr=None):
     """sts.l pr,@-r15 [mov.l r8,@-r15] / add #-16,r15 / mov #value,r0 / mov r15,r4 / add #at,r4 / mov.l r0,@r4
     [mov.l @(12,r15),r2 / mov.l r2,@(12,r15)] / mov.l @(pool),r1 / jsr @r1 / nop / add #16,r15 [mov.l @r15+,r8] / lds.l @r15+,pr / rts / nop"""
-    w = [0x4F22] + ([0x2F86] if save_r8 else []) + [0x7FF0, 0xE000 | value, 0x64F3, 0x7400 | at, 0x2402]
+    first = [0xE000 | value] if ptr is None else [0x60F3, 0x7000 | ptr]          # mov #value,r0, or mov r15,r0 / add #ptr,r0: a stack address
+    w = [0x4F22] + ([0x2F86] if save_r8 else []) + [0x7FF0] + first + [0x64F3, 0x7400 | at, 0x2402]
     if selfcopy:
         w += [0x52F3, 0x1F23]
     if neighbour:
@@ -81,6 +84,9 @@ def main():
     ok, why = agree(fn(7, earlier=3), fn(7, earlier=4))
     if ok is not True:
         bad.append('earlier: a word stored before an earlier call counts as the buffer: %s' % why)
+    ok, why = agree(fn(0, ptr=4), fn(0, ptr=12))
+    if ok is not True:
+        bad.append('stackaddr: two stack addresses in the buffer do not agree: %s' % why)
     for name, other in (('layout', fn(7, at=8)), ('saves', fn(7, save_r8=True)), ('selfcopy', fn(7, selfcopy=True)), ('neighbour', fn(7, neighbour=True))):
         ok, why = agree(fn(7), other)
         if ok is not True:

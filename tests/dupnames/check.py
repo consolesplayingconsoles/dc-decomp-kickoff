@@ -8,6 +8,11 @@
                     copies    two bodies with one name (a library function linked twice): the second gets its address as a suffix
                     sameaddr  two entries at one address are reported, not changed (which size is right needs a decision)
                     dryrun    without --apply nothing is written
+                    source    src/ follows: a call to the name (or through a cast of it) in a function whose original calls one of
+                              the copies goes to that copy's final name (Zombie Revenge: eleven kmSet* functions call the real
+                              kmiWriteRegister, the C linked to its stub); a definition under the name keeps it, with its cases: the
+                              first copy is renamed only when it is a stub, which runs into the body the C was written for (Virtua
+                              Tennis mwRnaErrEntryFunc, proven at the stub's address)
 """
 import os
 import shutil
@@ -52,11 +57,47 @@ def main():
             bad.append('copies: the second body is not libcopy_<address>: %s' % got)
         if sum(1 for l in got if l.endswith(' twice')) != 2 or 'twice' not in dry:
             bad.append('sameaddr: two entries at one address were changed or not reported: %s / %s' % (got, dry))
+        bad += source_case()
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     if bad:
         sys.exit('[ERROR] dupnames check failed:\n' + '\n'.join(bad))
     print('[dupnames] ok: a stub sharing its target\'s name becomes thunk_<name>, a second copy gets its address, two entries at one address are reported')
+
+
+def source_case():
+    """A stub first (the copy a name lookup finds), the body after it, one caller of each, a definition of the name, its cases."""
+    bad = []
+    tmp = tempfile.mkdtemp()
+    try:
+        shutil.copytree(os.path.join(SKILL, 'scripts', 'tools'), os.path.join(tmp, 'tools'), ignore=shutil.ignore_patterns('__pycache__'))
+        stub, body, ca, cb = BASE, BASE + 12, BASE + 20, BASE + 40
+        call = lambda tgt: words([0x4F22, 0xD103, 0x410B, 0x0009, 0x4F26, 0x000B, 0x0009, 0x0009]) + struct.pack('<I', tgt) + words([0x0009, 0x0009])
+        data = (words([0xD301, 0x432B, 0x0009, 0x0009]) + struct.pack('<I', body)      # the stub: jumps to the body
+                + words([0xE001, 0x000B, 0x0009, 0x0009])                           # the body
+                + call(stub) + call(body))
+        open(os.path.join(tmp, '1ST_READ.BIN'), 'wb').write(data)
+        open(os.path.join(tmp, 'BASE'), 'w').write('%08X\n' % BASE)
+        open(os.path.join(tmp, 'functions.txt'), 'w').write('F %08x 6 wr\nF %08x 8 wr\nF %08x 16 callA\nF %08x 16 callB\n' % (stub, body, ca, cb))
+        os.makedirs(os.path.join(tmp, 'src')); os.makedirs(os.path.join(tmp, 'tests', 'gen_d'))
+        open(os.path.join(tmp, 'src', 'gen_c.c'), 'w').write('int wr(int);\n\nint callA(void)\n{\n    return ((int (*)(int))(wr))(1);\n}\n\nint callB(void)\n{\n    return wr(2);\n}\n')
+        open(os.path.join(tmp, 'src', 'gen_d.c'), 'w').write('int wr(int a4);\n\nint wr(int a4)\n{\n    return a4;\n}\n')
+        open(os.path.join(tmp, 'tests', 'gen_d', 'wr.json'), 'w').write('{"dev": []}')
+        open(os.path.join(tmp, 'tests', 'equivalent.txt'), 'w').write('callA\nwr\n')
+        subprocess.run([sys.executable, 'tools/1-2-baseline/dupnames.py', '--apply'], cwd=tmp, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        c = open(os.path.join(tmp, 'src', 'gen_c.c')).read(); d = open(os.path.join(tmp, 'src', 'gen_d.c')).read()
+        if 'return ((int (*)(int))(thunk_wr))(1);' not in c or 'return wr(2);' not in c:      # a call through a cast too (FUN_0c220360)
+            bad.append('source: the callers do not call the copy their original calls:\n' + c)
+        if 'int thunk_wr(int);' not in c:
+            bad.append('source: no prototype for thunk_wr where it is now called:\n' + c)
+        if 'int wr(int a4)\n{' not in d or not os.path.exists(os.path.join(tmp, 'tests', 'gen_d', 'wr.json')):
+            bad.append('source: the definition of the body lost its name: %s %s' % (d, os.listdir(os.path.join(tmp, 'tests', 'gen_d'))))
+        eq = open(os.path.join(tmp, 'tests', 'equivalent.txt')).read().split()
+        if 'wr' not in eq or 'thunk_wr' in eq:
+            bad.append('source: tests/equivalent.txt lost the body: %s' % eq)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    return bad
 
 
 if __name__ == '__main__':

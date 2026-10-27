@@ -658,6 +658,39 @@ def fn_retptrpush2():
     return a
 
 
+def fn_intstackmix():
+    # bodyfn(1, 2, 3, 4, a8..a11) with fr4 set: its four stack words, taken as plain ints past a7, are a pointer pushed in the call's
+    # delay slot below a point copied to SP (miniTargetInit -> bodyCreate, Virtua Tennis: the C passed the pointer alone and
+    # left the other words to chance, since the frame path refused a call with a word pushed, a copy to SP or a float register set)
+    a = Asm()
+    a.op(STS_PR); a.op(0x7FE8)                                                  # sts.l pr,@-r15 / add #-24,r15: a point at sp+12
+    a.op(0x62F3); a.op(0x720C); a.op(0xE00C); a.op(0x3F08)                      # r2 = the point / mov #12,r0 / sub r0,r15
+    a.load(3, 'm'); a.op(jsr(3)); a.op(0x61F3)                                  # _quick_odd_mvn(12, sp, the point)
+    a.op(mov_i(4, 1)); a.op(mov_i(5, 2)); a.op(mov_i(6, 3)); a.op(mov_i(7, 4))  # r4-r7 = 1, 2, 3, 4
+    a.op(0xF48D)                                                                # fldi0 fr4
+    a.op(0x6EF3); a.op(0x7E0C)                                                  # mov r15,r14 / add #12,r14
+    a.load(1, 'f'); a.op(jsr(1)); a.op(0x2FE6)                                  # bodyfn(...) with mov.l r14,@-r15 in the delay slot
+    a.op(0x7F10); a.op(0x7F18); a.op(LDS_PR); a.op(RTS); a.op(NOP)
+    a.pool('m', ADDR['_quick_odd_mvn']); a.pool('f', ADDR['bodyfn'])
+    return a
+
+
+def fn_intstackshort():
+    # body3fn(1, 2, 3, 4, a8, a9, a10): a pointer pushed in the delay slot below three shorts copied to SP with the byte mover (6
+    # bytes, 8 reserved: r0 = 8 - 2), miniTargetInit -> bodyCreate. A copy of less than 8 bytes, or of part of a word, was not taken
+    # for a structure at SP, so the words at SP did not add up to what the definition takes and the C passed the pointer alone
+    a = Asm()
+    a.op(STS_PR); a.op(0x7FF8)                                                  # sts.l pr,@-r15 / add #-8,r15: the shorts at sp
+    a.op(0x62F3); a.op(0xE008); a.op(0x3F08)                                    # mov r15,r2 / mov #8,r0 / sub r0,r15
+    a.load(3, 's'); a.op(0x70FE); a.op(jsr(3)); a.op(0x61F3)                    # add #-2,r0 / _slow_mvn(6, sp, the shorts)
+    a.op(mov_i(4, 1)); a.op(mov_i(5, 2)); a.op(mov_i(6, 3)); a.op(mov_i(7, 4))  # r4-r7 = 1, 2, 3, 4
+    a.op(0x6EF3); a.op(0x7E08)                                                  # mov r15,r14 / add #8,r14
+    a.load(1, 'f'); a.op(jsr(1)); a.op(0x2FE6)                                  # body3fn(...) with mov.l r14,@-r15 in the delay slot
+    a.op(0x7F0C); a.op(0x7F08); a.op(LDS_PR); a.op(RTS); a.op(NOP)
+    a.pool('s', ADDR['_slow_mvn']); a.pool('f', ADDR['body3fn'])
+    return a
+
+
 def fn_varreads1():
     # a variadic print's body: reads only its first stack word (the format) directly, the rest through a pointer
     a = Asm()
@@ -896,6 +929,9 @@ DEFS_C = ("typedef struct { int w[4]; } Stk4;\nint stk4fn(Stk4 s)\n{\n    return
           "int twoptfn(Stk3 a, Stk3 b)\n{\n    return a.w[0] + b.w[0];\n}\n"
           "int ptintfn(int a4, int a5, int a6, int a7, Stk3 a, int b)\n{\n    return a4 + a.w[0] + b;\n}\n"
           "void retvecfn(Stk4 s)\n{\n    *(int *)s.w[0] = s.w[1];\n}\n"
+          "int bodyfn(int a4, int a5, int a6, int a7, int a8, int a9, int a10, int a11)\n{\n    return a8 + a11;\n}\n"
+          "int body3fn(int a4, int a5, int a6, int a7, int a8, int a9, int a10)\n{\n    return a8 + a10;\n}\n"
+
           "typedef struct { int w[3]; } Stk3;\nStk3 sretdef(float f4, float f5, float f6)\n{\n    Stk3 v;\n    *(float *)&v.w[0] = f4;\n    return v;\n}\n")
 
 
@@ -904,7 +940,7 @@ FUNCS = [('storefn', fn_store), ('ifelsefn', fn_ifelse), ('earlyfn', fn_early), 
          ('twoargfn', fn_twoarg), ('thunkfn', fn_thunk), ('passfn', fn_pass), ('callerfn', fn_caller),
          ('_slow_mvn', fn_slowmvn_helper), ('_quick_odd_mvn', fn_slowmvn_helper), ('copyfn', fn_copy), ('threearg', fn_onereg), ('defcallerfn', fn_defcaller),
          ('vecmk', fn_structret), ('vsetfn', fn_structret), ('structfn', fn_struct),
-         ('fptrdef', fn_fptrdef), ('fptrcallerfn', fn_fptrcaller), ('onefn', fn_ret), ('twofn', fn_ret), ('twocallfn', fn_twocall), ('fivefn', fn_ret), ('fivecallfn', fn_fivecall), ('fivepassfn', fn_fivepass), ('printfn', fn_ret), ('varcallfn', fn_varcall), ('varcall4fn', fn_varcall4), ('voidfn', fn_ret), ('floatretfn', fn_floatret), ('ptfn', fn_ret), ('structargfn', fn_structarg), ('stackreadfn', fn_stackread), ('retvalfn', fn_retval), ('phantomfn', fn_phantom), ('stackpassfn', fn_stackpass), ('stackindfn', fn_stackind), ('stackspillfn', fn_stackspill), ('stackclobberfn', fn_stackclobber), ('switchfn', fn_switch), ('brafcompfn', fn_brafcomputed), ('stk4fn', fn_ret), ('stackframefn', fn_stackframe), ('stackframeintfn', fn_stackframeint), ('stackframeint2fn', fn_stackframeint2), ('readstack2', fn_readstack2), ('readstack1', fn_readstack1), ('readframe3', fn_readframe3), ('readframe3p', fn_readframe3p), ('structreusefn', fn_structreuse), ('stackonly1', fn_stackonly1), ('copyinfn', fn_copyin), ('sretfn', fn_sret), ('sretdef', fn_sret), ('sretcallfn', fn_sretcall), ('sretcallpfn', fn_sretcallp), ('argupdatefn', fn_argupdate), ('argnarrowfn', fn_argnarrow), ('fmergefn', fn_fmerge), ('fcarryfn', fn_fcarry), ('fslotfn', fn_fslot), ('fspillfn', fn_fspill), ('stkreads2', fn_stkreads2), ('framestkfn', fn_framestk), ('varpdef', fn_varreads1), ('varpush3fn', fn_varpush3), ('constfirstfn', fn_constfirst), ('twoptfn', fn_ret), ('twostructfn', fn_twostruct), ('ptintfn', fn_ret), ('pushstructfn', fn_pushstruct), ('retvecfn', fn_ret), ('retptrpushfn', fn_retptrpush), ('retptrpush2fn', fn_retptrpush2), ('deferredfn', fn_deferred), ('spsteploopfn', fn_spsteploop), ('floatstackfn', fn_floatstack), ('passdef', fn_passdef), ('defthunkfn', fn_defthunk)]
+         ('fptrdef', fn_fptrdef), ('fptrcallerfn', fn_fptrcaller), ('onefn', fn_ret), ('twofn', fn_ret), ('twocallfn', fn_twocall), ('fivefn', fn_ret), ('fivecallfn', fn_fivecall), ('fivepassfn', fn_fivepass), ('printfn', fn_ret), ('varcallfn', fn_varcall), ('varcall4fn', fn_varcall4), ('voidfn', fn_ret), ('floatretfn', fn_floatret), ('ptfn', fn_ret), ('structargfn', fn_structarg), ('stackreadfn', fn_stackread), ('retvalfn', fn_retval), ('phantomfn', fn_phantom), ('stackpassfn', fn_stackpass), ('stackindfn', fn_stackind), ('stackspillfn', fn_stackspill), ('stackclobberfn', fn_stackclobber), ('switchfn', fn_switch), ('brafcompfn', fn_brafcomputed), ('stk4fn', fn_ret), ('stackframefn', fn_stackframe), ('stackframeintfn', fn_stackframeint), ('stackframeint2fn', fn_stackframeint2), ('readstack2', fn_readstack2), ('readstack1', fn_readstack1), ('readframe3', fn_readframe3), ('readframe3p', fn_readframe3p), ('structreusefn', fn_structreuse), ('stackonly1', fn_stackonly1), ('copyinfn', fn_copyin), ('sretfn', fn_sret), ('sretdef', fn_sret), ('sretcallfn', fn_sretcall), ('sretcallpfn', fn_sretcallp), ('argupdatefn', fn_argupdate), ('argnarrowfn', fn_argnarrow), ('fmergefn', fn_fmerge), ('fcarryfn', fn_fcarry), ('fslotfn', fn_fslot), ('fspillfn', fn_fspill), ('stkreads2', fn_stkreads2), ('framestkfn', fn_framestk), ('varpdef', fn_varreads1), ('varpush3fn', fn_varpush3), ('constfirstfn', fn_constfirst), ('twoptfn', fn_ret), ('twostructfn', fn_twostruct), ('ptintfn', fn_ret), ('pushstructfn', fn_pushstruct), ('retvecfn', fn_ret), ('retptrpushfn', fn_retptrpush), ('retptrpush2fn', fn_retptrpush2), ('bodyfn', fn_varreads1), ('intstackmixfn', fn_intstackmix), ('body3fn', fn_varreads1), ('intstackshortfn', fn_intstackshort), ('deferredfn', fn_deferred), ('spsteploopfn', fn_spsteploop), ('floatstackfn', fn_floatstack), ('passdef', fn_passdef), ('defthunkfn', fn_defthunk)]
 
 
 def main():
@@ -935,7 +971,7 @@ def main():
                   "        print('@@@@ ' + n); print(gen_drv.build(n, v[0], False)[0])\n"
                   "    except gen_core.Skip as e:\n"
                   "        print('@@@@ ' + n); print('SKIPPED ' + str(e))\n")
-        out = subprocess.run([sys.executable, "-c", script] + [n for n, _ in FUNCS if not n.startswith('_') and n not in ('threearg', 'vecmk', 'vsetfn', 'fptrdef', 'onefn', 'twofn', 'fivefn', 'printfn', 'voidfn', 'passdef', 'sretdef', 'twoptfn', 'ptintfn', 'retvecfn', 'varpdef', 'stkreads2')], cwd=tmp, stdout=subprocess.PIPE,
+        out = subprocess.run([sys.executable, "-c", script] + [n for n, _ in FUNCS if not n.startswith('_') and n not in ('threearg', 'vecmk', 'vsetfn', 'fptrdef', 'onefn', 'twofn', 'fivefn', 'printfn', 'voidfn', 'passdef', 'sretdef', 'twoptfn', 'ptintfn', 'retvecfn', 'bodyfn', 'body3fn', 'varpdef', 'stkreads2')], cwd=tmp, stdout=subprocess.PIPE,
                              stderr=subprocess.STDOUT, universal_newlines=True).stdout
         flat = subprocess.run([sys.executable, "-c", script, 'phantomfn', 'spsteploopfn', 'structreusefn'], cwd=tmp, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                               universal_newlines=True, env=dict(os.environ, GEN_FORM='flat')).stdout       # the flat form, where the bug was
@@ -1032,6 +1068,8 @@ def main():
             ('pushstructfn', ["not:SKIPPED", r"re:ptintfn\(0x1, 0x2, 0x3, 0x4, \*\(Stk3 \*\)\([^;]*\), 0x5\)"]),
             ('retptrpushfn', ["not:SKIPPED", r"re:\*\(int \*\)\(\(int\)stk \+ (\d+)\) = [^;]*;\s*return \(retvecfn\(\*\(Stk4 \*\)\(\(\(int\)stk \+ \1\)\)\)\)"]),
             ('retptrpush2fn', ["not:SKIPPED", r"re:\*\(int \*\)\(\(int\)stk \+ (\d+)\) = [^;]*;\s*return \(retvecfn\(\*\(Stk4 \*\)\(+\(int\)stk \+ \1\)+\)\)"]),
+            ('intstackmixfn', ["not:SKIPPED", r"re:bodyfn\(0x1, 0x2, 0x3, 0x4, \*\(int \*\)\(\(int\)stk \+ \d+(?: \+ \d+)?\), \*\(int \*\)\(\(int\)stk \+ \d+(?: \+ \d+)?\), \*\(int \*\)\(\(int\)stk \+ \d+(?: \+ \d+)?\), \*\(int \*\)\(\(int\)stk \+ \d+(?: \+ \d+)?\)"]),
+            ('intstackshortfn', ["not:SKIPPED", r"re:body3fn\(0x1, 0x2, 0x3, 0x4, \*\(int \*\)\(\(int\)stk \+ \d+(?: \+ \d+)?\), \*\(int \*\)\(\(int\)stk \+ \d+(?: \+ \d+)?\), \*\(int \*\)\(\(int\)stk \+ \d+(?: \+ \d+)?\)\)"]),
             ('twostructfn', ["not:SKIPPED", r"re:twoptfn\(\*\(Stk3 \*\)\([^;]*\), \*\(Stk3 \*\)\("]),
             ('argupdatefn', ["not:SKIPPED", r"re:\*\(float \*\)\(\(\(int\)stk \+ \d+\)\) = ", "ptfn(0x5, "]),
             # a short stored into its own argument area (cameraExec cases 5, 6, 9): read back as the short, copied as the merged word
