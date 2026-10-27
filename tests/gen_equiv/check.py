@@ -612,6 +612,22 @@ def fn_twostruct():
     return a
 
 
+def fn_pushstruct():
+    # ptintfn(1, 2, 3, 4, a point by value, 5): r4-r7 full, so the point and the int go on the stack; SHC pushes the int first, then
+    # copies the point below it (winDrawA -> winPartsPut, Virtua Tennis: the push was taken as a spill, a callee with four integer
+    # registers and no cleanup the reader saw, and dropped: the callee's fourth stack word was compared on a leftover)
+    a = Asm()
+    a.op(STS_PR); a.op(0x7FF4)                                                  # sts.l pr,@-r15 / add #-12,r15: a local point at sp
+    a.op(0x62F3); a.op(mov_i(1, 5)); a.op(0x2F16)                               # mov r15,r2 (the point) / mov #5,r1 / mov.l r1,@-r15
+    a.op(0xE00C); a.op(0x3F08)                                                  # mov #12,r0 / sub r0,r15
+    a.load(3, 'm'); a.op(jsr(3)); a.op(0x61F3)                                  # _quick_odd_mvn(12, sp, the point)
+    a.op(mov_i(4, 1)); a.op(mov_i(5, 2)); a.op(mov_i(6, 3)); a.op(mov_i(7, 4))  # r4-r7 = 1, 2, 3, 4
+    a.load(1, 'f'); a.op(jsr(1)); a.op(NOP)                                     # ptintfn(1, 2, 3, 4, the point, 5)
+    a.op(0x7F10); a.op(0x7F0C); a.op(LDS_PR); a.op(RTS); a.op(NOP)              # add #16,r15 / add #12,r15
+    a.pool('m', ADDR['_quick_odd_mvn']); a.pool('f', ADDR['ptintfn'])
+    return a
+
+
 def fn_varreads1():
     # a variadic print's body: reads only its first stack word (the format) directly, the rest through a pointer
     a = Asm()
@@ -848,6 +864,7 @@ DEFS_C = ("typedef struct { int w[4]; } Stk4;\nint stk4fn(Stk4 s)\n{\n    return
           "int passdef(int a4)\n{\n    return a4;\n}\n"
           "int varpdef(Stk3 s)\n{\n    return s.w[0];\n}\n"
           "int twoptfn(Stk3 a, Stk3 b)\n{\n    return a.w[0] + b.w[0];\n}\n"
+          "int ptintfn(int a4, int a5, int a6, int a7, Stk3 a, int b)\n{\n    return a4 + a.w[0] + b;\n}\n"
           "typedef struct { int w[3]; } Stk3;\nStk3 sretdef(float f4, float f5, float f6)\n{\n    Stk3 v;\n    *(float *)&v.w[0] = f4;\n    return v;\n}\n")
 
 
@@ -856,7 +873,7 @@ FUNCS = [('storefn', fn_store), ('ifelsefn', fn_ifelse), ('earlyfn', fn_early), 
          ('twoargfn', fn_twoarg), ('thunkfn', fn_thunk), ('passfn', fn_pass), ('callerfn', fn_caller),
          ('_slow_mvn', fn_slowmvn_helper), ('_quick_odd_mvn', fn_slowmvn_helper), ('copyfn', fn_copy), ('threearg', fn_onereg), ('defcallerfn', fn_defcaller),
          ('vecmk', fn_structret), ('vsetfn', fn_structret), ('structfn', fn_struct),
-         ('fptrdef', fn_fptrdef), ('fptrcallerfn', fn_fptrcaller), ('onefn', fn_ret), ('twofn', fn_ret), ('twocallfn', fn_twocall), ('fivefn', fn_ret), ('fivecallfn', fn_fivecall), ('fivepassfn', fn_fivepass), ('printfn', fn_ret), ('varcallfn', fn_varcall), ('varcall4fn', fn_varcall4), ('voidfn', fn_ret), ('floatretfn', fn_floatret), ('ptfn', fn_ret), ('structargfn', fn_structarg), ('stackreadfn', fn_stackread), ('retvalfn', fn_retval), ('phantomfn', fn_phantom), ('stackpassfn', fn_stackpass), ('stackindfn', fn_stackind), ('stackspillfn', fn_stackspill), ('stackclobberfn', fn_stackclobber), ('switchfn', fn_switch), ('brafcompfn', fn_brafcomputed), ('stk4fn', fn_ret), ('stackframefn', fn_stackframe), ('stackframeintfn', fn_stackframeint), ('stackframeint2fn', fn_stackframeint2), ('readstack2', fn_readstack2), ('readstack1', fn_readstack1), ('readframe3', fn_readframe3), ('readframe3p', fn_readframe3p), ('structreusefn', fn_structreuse), ('stackonly1', fn_stackonly1), ('copyinfn', fn_copyin), ('sretfn', fn_sret), ('sretdef', fn_sret), ('sretcallfn', fn_sretcall), ('sretcallpfn', fn_sretcallp), ('argupdatefn', fn_argupdate), ('argnarrowfn', fn_argnarrow), ('fmergefn', fn_fmerge), ('fcarryfn', fn_fcarry), ('fslotfn', fn_fslot), ('fspillfn', fn_fspill), ('stkreads2', fn_stkreads2), ('framestkfn', fn_framestk), ('varpdef', fn_varreads1), ('varpush3fn', fn_varpush3), ('constfirstfn', fn_constfirst), ('twoptfn', fn_ret), ('twostructfn', fn_twostruct), ('deferredfn', fn_deferred), ('spsteploopfn', fn_spsteploop), ('floatstackfn', fn_floatstack), ('passdef', fn_passdef), ('defthunkfn', fn_defthunk)]
+         ('fptrdef', fn_fptrdef), ('fptrcallerfn', fn_fptrcaller), ('onefn', fn_ret), ('twofn', fn_ret), ('twocallfn', fn_twocall), ('fivefn', fn_ret), ('fivecallfn', fn_fivecall), ('fivepassfn', fn_fivepass), ('printfn', fn_ret), ('varcallfn', fn_varcall), ('varcall4fn', fn_varcall4), ('voidfn', fn_ret), ('floatretfn', fn_floatret), ('ptfn', fn_ret), ('structargfn', fn_structarg), ('stackreadfn', fn_stackread), ('retvalfn', fn_retval), ('phantomfn', fn_phantom), ('stackpassfn', fn_stackpass), ('stackindfn', fn_stackind), ('stackspillfn', fn_stackspill), ('stackclobberfn', fn_stackclobber), ('switchfn', fn_switch), ('brafcompfn', fn_brafcomputed), ('stk4fn', fn_ret), ('stackframefn', fn_stackframe), ('stackframeintfn', fn_stackframeint), ('stackframeint2fn', fn_stackframeint2), ('readstack2', fn_readstack2), ('readstack1', fn_readstack1), ('readframe3', fn_readframe3), ('readframe3p', fn_readframe3p), ('structreusefn', fn_structreuse), ('stackonly1', fn_stackonly1), ('copyinfn', fn_copyin), ('sretfn', fn_sret), ('sretdef', fn_sret), ('sretcallfn', fn_sretcall), ('sretcallpfn', fn_sretcallp), ('argupdatefn', fn_argupdate), ('argnarrowfn', fn_argnarrow), ('fmergefn', fn_fmerge), ('fcarryfn', fn_fcarry), ('fslotfn', fn_fslot), ('fspillfn', fn_fspill), ('stkreads2', fn_stkreads2), ('framestkfn', fn_framestk), ('varpdef', fn_varreads1), ('varpush3fn', fn_varpush3), ('constfirstfn', fn_constfirst), ('twoptfn', fn_ret), ('twostructfn', fn_twostruct), ('ptintfn', fn_ret), ('pushstructfn', fn_pushstruct), ('deferredfn', fn_deferred), ('spsteploopfn', fn_spsteploop), ('floatstackfn', fn_floatstack), ('passdef', fn_passdef), ('defthunkfn', fn_defthunk)]
 
 
 def main():
@@ -887,7 +904,7 @@ def main():
                   "        print('@@@@ ' + n); print(gen_drv.build(n, v[0], False)[0])\n"
                   "    except gen_core.Skip as e:\n"
                   "        print('@@@@ ' + n); print('SKIPPED ' + str(e))\n")
-        out = subprocess.run([sys.executable, "-c", script] + [n for n, _ in FUNCS if not n.startswith('_') and n not in ('threearg', 'vecmk', 'vsetfn', 'fptrdef', 'onefn', 'twofn', 'fivefn', 'printfn', 'voidfn', 'passdef', 'sretdef', 'twoptfn', 'varpdef', 'stkreads2')], cwd=tmp, stdout=subprocess.PIPE,
+        out = subprocess.run([sys.executable, "-c", script] + [n for n, _ in FUNCS if not n.startswith('_') and n not in ('threearg', 'vecmk', 'vsetfn', 'fptrdef', 'onefn', 'twofn', 'fivefn', 'printfn', 'voidfn', 'passdef', 'sretdef', 'twoptfn', 'ptintfn', 'varpdef', 'stkreads2')], cwd=tmp, stdout=subprocess.PIPE,
                              stderr=subprocess.STDOUT, universal_newlines=True).stdout
         flat = subprocess.run([sys.executable, "-c", script, 'phantomfn', 'spsteploopfn', 'structreusefn'], cwd=tmp, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                               universal_newlines=True, env=dict(os.environ, GEN_FORM='flat')).stdout       # the flat form, where the bug was
@@ -980,6 +997,8 @@ def main():
             ('fcarryfn', ["not:SKIPPED", r"re:float u\d+;"]),
             ('fmergefn', ["not:SKIPPED", r"re:float u\d+;", "1.0f"]),
             ('varpush3fn', ["not:SKIPPED", r"re:varpdef\([^;]*,[^;]*,[^;]*\)"]),
+            # an int pushed before a structure copied for the same call: an argument after the structure (winDrawA -> winPartsPut)
+            ('pushstructfn', ["not:SKIPPED", r"re:ptintfn\(0x1, 0x2, 0x3, 0x4, \*\(Stk3 \*\)\([^;]*\), 0x5\)"]),
             ('twostructfn', ["not:SKIPPED", r"re:twoptfn\(\*\(Stk3 \*\)\([^;]*\), \*\(Stk3 \*\)\("]),
             ('argupdatefn', ["not:SKIPPED", r"re:\*\(float \*\)\(\(\(int\)stk \+ \d+\)\) = ", "ptfn(0x5, "]),
             # a short stored into its own argument area (cameraExec cases 5, 6, 9): read back as the short, copied as the merged word
