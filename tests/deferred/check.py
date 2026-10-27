@@ -16,6 +16,9 @@ game data and no compiler: the generator modules and the checker are stand-ins. 
                     groups    the passed functions are written in groups whose prototypes agree, one file each: written together, a
                               head declaring the callee one way broke the file for the function proven against the other (Virtua Tennis
                               gen_ek.c: motionRootFirst against the old vecMake, 15 proven functions in a file that did not compile)
+                    empty     a batch whose only function does not compile is dropped with the error and the batch returns: dropping
+                              it left nothing to check and the runner crashed (IndexError on gs[0]; Virtua Tennis and Zombie Revenge
+                              --regen: cpuSglHitCheck alone in batch 4, 127 functions never drawn; ZR's last 24 never checked)
 """
 import os
 import re
@@ -44,6 +47,9 @@ DIFFER = set()
 
 def fake_run(cmd, capture_output=True, text=True):
     t = open(cmd[-1]).read()
+    if 'int cbad(void)' in t:
+        ln = t.split('\n').index('int cbad(void)') + 2
+        return types.SimpleNamespace(stdout='compile failed\nsrc/gen_tmp0.c(%d) : Undeclared name "q"\n' % ln, stderr='', returncode=1)
     if 'int linkbad(void)' in t:
         return types.SimpleNamespace(stdout='[ERROR] link: undefined _quick_evn_mvn (name them in functions.txt)\n', stderr='', returncode=1)
     names = re.findall(r'^int (\w+)\(void\)\n\{', t, re.M)
@@ -85,6 +91,14 @@ def main():
             bad.append('linkfail: passed %s dropped %s; want the nine others passed and linkbad dropped' % (sorted(passed), dropped))
         elif 'undefined' not in gen_pipe.LAST.get('why', {}).get('linkbad', ''):
             bad.append('linkfail: linkbad dropped without its error: %r' % gen_pipe.LAST.get('why', {}).get('linkbad'))
+        try:
+            r = gen_pipe.run_file_robust('gen_tmp0', [item('cbad', {})])
+            if r[0] or r[1] or r[2] or r[3] != ['cbad']:
+                bad.append('empty: %s; want cbad dropped and nothing else' % (r[:4],))
+            elif 'Undeclared' not in gen_pipe.LAST.get('why', {}).get('cbad', ''):
+                bad.append('empty: cbad dropped without its error: %r' % gen_pipe.LAST.get('why', {}).get('cbad'))
+        except IndexError as e:
+            bad.append('empty: the batch crashed once its only function was dropped (IndexError: %s)' % e)
         gs = gen_pipe.compatible_groups(items)
         if sorted(sorted(i[0] for i in g) for g in gs) != [['a', 'c'], ['b'], ['d']]:
             bad.append('groups: %s; want a+c, b, d' % [[i[0] for i in g] for g in gs])
