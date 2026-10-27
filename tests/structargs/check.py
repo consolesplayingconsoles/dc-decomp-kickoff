@@ -13,6 +13,10 @@ Taxi kmiInitPAL / kmiInitNTSC -> kmiSetVideoTimings(KmVideoTimings) and missed t
                     shorts     q(int, int, AngleR, float, int *) with AngleR { short x, y, z; }: 6 bytes = 2 stack words, three
                                integer registers (the pointer is the third) and one float; w(CS) with { char; short } is 1 word
                     defs       definitions() of the same functions in src/ agree (its integer count is not capped)
+                    leftovers  a call is compared on the registers the callee's definition takes, whatever the caller's file declares:
+                               more there (f(int, int, int, int)) or no prototype at all (g) compared registers the callee never reads,
+                               leftovers (Virtua Tennis effFootDust -> vecSub(Stk5), screenSegVisible -> camWorldToView(Stk4): r4 a
+                               stack pointer in the original, 0 in the C); fewer there (m(int, int)) is still raised to the definition
 """
 import os
 import shutil
@@ -74,6 +78,14 @@ def main():
                 bad.append('%s definition registers: %r, want %r' % (n, de.get(n), WANT_DEFS[n]))
             if len(de.get(n, ())) > 2 and min(de[n][2], 4) != WANT_STACK[n]:
                 bad.append('%s definition stack words: %r, want %r' % (n, de[n][2], WANT_STACK[n]))
+        caller = os.path.join(tmp, 'src', 'caller.c')
+        open(caller, 'w').write('int f(int, int, int, int);\nint m(int, int);\nint use(void) { return f(1, 2, 3, 4) + m(1, 2); }\n')
+        table = {n: 0x8C010000 + 0x100 * i for i, n in enumerate(sorted(WANT_REGS))}
+        ar, _ = equiv.compared_arity(caller, table)
+        for n, want in (('f', (0, 0)), ('g', (1, 1)), ('m', (4, 0))):
+            got = ar.get(0x0C000000 | (table[n] & 0x1FFFFFFF))
+            if got != want:
+                bad.append('leftovers: %s compared on %r registers, want %r (its definition)' % (n, got, want))
     finally:
         os.chdir(cwd)
         shutil.rmtree(tmp)

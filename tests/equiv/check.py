@@ -27,6 +27,10 @@
                     leftover  a stack word the caller did not write since its last call is a leftover, not an argument: a call is
                               compared on it only when the caller stored it (ADXF_AddPartition -> ADXERR_CallErrFunc: the original
                               passes its arguments in registers, the callee reads a stack word neither side set)
+                    extra     a caller's file that declares more than the definition takes (whole(int, int) for whole(int a4)), or no
+                              prototype at all (noproto), is compared on the definition's registers: the rest are leftovers the
+                              callee never reads (Virtua Tennis effFootDust -> vecSub(Stk5): r4 a stack pointer in the original, 0 in
+                              the C; it was compared on the caller's count, or on every register)
                     key       a function the checker change cannot affect keeps the proof key of the checker saved in
                               state/proof-key-equiv.py, so its earlier pass still counts; one it can affect has a new key
 """
@@ -71,8 +75,8 @@ def main():
         out = subprocess.run([sys.executable, "-c", script], cwd=tmp, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                              universal_newlines=True).stdout
         got = dict(l.split(' ', 1) for l in out.strip().split('\n') if ' ' in l)
-        want = {'threearg': '(3, 0) 0', 'fptrs': '(2, 0) 0', 'five': '(4, 0) 1', 'whole': '(2, 0) 0',
-                'noproto': 'None 2', 'varproto': '(0, 0) 1', 'varused': '(4, 0) 1'}
+        want = {'threearg': '(3, 0) 0', 'fptrs': '(2, 0) 0', 'five': '(4, 0) 1', 'whole': '(1, 0) 0',
+                'noproto': '(4, 0) 2', 'varproto': '(0, 0) 1', 'varused': '(4, 0) 1'}
         bad = ['%s: compared on %s, want %s' % (n, got.get(n, 'nothing'), w) for n, w in want.items() if got.get(n) != w]
         script = ("import sys; sys.path.insert(0, 'tools'); import toolpath, equiv\n"
                   "orig = equiv.callview('0C010100', ['00000001', '00000002', 'AAAA', 'BBBB'], [], {}, None, [True, True, False, False], 1)\n"
@@ -132,7 +136,7 @@ def main():
             bad.append('pointer: identical pointer calls differ (%s)' % out2.strip()[-200:])
         if not bad:
             print("[equiv] ok: a call is compared on every argument its callee's definition takes (registers and stack), a float "
-                  "pointer is an integer argument, a call through a pointer keeps every argument register set, proof keys keep earlier passes of unaffected functions, and a prototype naming more than the definition keeps its own count")
+                  "pointer is an integer argument, a call through a pointer keeps every argument register set, proof keys keep earlier passes of unaffected functions, and registers past the definition's are leftovers, not compared")
             return
         sys.exit("[ERROR] equiv check failed:\n" + "\n".join(bad) + "\n--- output ---\n" + out)
     finally:
