@@ -107,6 +107,8 @@ def main():
                  'nocomp                       did not compile\n1 EQUIVALENT, 1 DIFFERS, 0 without cases or not compiled\n')
         if sorted(gen_pipe.failed_in(out_w, ['ok1', 'badfn', 'nocomp', 'absent'])) != ['absent', 'badfn', 'nocomp']:
             bad.append('written: failed_in names %s; want absent, badfn, nocomp' % sorted(gen_pipe.failed_in(out_w, ['ok1', 'badfn', 'nocomp', 'absent'])))
+        if "functions written, %d EQUIVALENT, %d not'" not in open(os.path.join(TOOLS, '5-generated', 'gen_equiv', '__main__.py')).read():
+            bad.append('written: the log line of a written file does not count its results (it showed one function line instead)')
         if 'gen_pipe.failed_in(' not in open(os.path.join(TOOLS, '5-generated', 'gen_equiv', '__main__.py')).read():
             bad.append('written: write_batch does not remove what fails the check of the file it wrote')
         gs = gen_pipe.compatible_groups(items)

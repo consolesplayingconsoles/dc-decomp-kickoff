@@ -1009,9 +1009,9 @@ def main():
                   "        print('@@@@ ' + n); print('SKIPPED ' + str(e))\n")
         out = subprocess.run([sys.executable, "-c", script] + [n for n, _ in FUNCS if not n.startswith('_') and n not in ('threearg', 'vecmk', 'vsetfn', 'fptrdef', 'onefn', 'twofn', 'fivefn', 'printfn', 'voidfn', 'passdef', 'sretdef', 'twoptfn', 'ptintfn', 'retvecfn', 'bodyfn', 'body3fn', 'varpdef', 'stkreads2')], cwd=tmp, stdout=subprocess.PIPE,
                              stderr=subprocess.STDOUT, universal_newlines=True).stdout
-        flat = subprocess.run([sys.executable, "-c", script, 'phantomfn', 'spsteploopfn', 'structreusefn'], cwd=tmp, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        flat = subprocess.run([sys.executable, "-c", script, 'phantomfn', 'spsteploopfn', 'structreusefn', 'ifelsefn'], cwd=tmp, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                               universal_newlines=True, env=dict(os.environ, GEN_FORM='flat')).stdout       # the flat form, where the bug was
-        out += flat.replace('@@@@ phantomfn', '@@@@ phantomfn_flat').replace('@@@@ spsteploopfn', '@@@@ spsteploopfn_flat').replace('@@@@ structreusefn', '@@@@ structreusefn_flat')
+        out += flat.replace('@@@@ phantomfn', '@@@@ phantomfn_flat').replace('@@@@ spsteploopfn', '@@@@ spsteploopfn_flat').replace('@@@@ structreusefn', '@@@@ structreusefn_flat').replace('@@@@ ifelsefn', '@@@@ ifelsefn_flat')
         parts = {}
         for chunk in out.split('@@@@ ')[1:]:
             name, _, text = chunk.partition('\n')
@@ -1107,6 +1107,10 @@ def main():
             ('intstackmixfn', ["not:SKIPPED", r"re:bodyfn\(0x1, 0x2, 0x3, 0x4, \*\(int \*\)\(\(int\)stk \+ \d+(?: \+ \d+)?\), \*\(int \*\)\(\(int\)stk \+ \d+(?: \+ \d+)?\), \*\(int \*\)\(\(int\)stk \+ \d+(?: \+ \d+)?\), \*\(int \*\)\(\(int\)stk \+ \d+(?: \+ \d+)?\)"]),
             ('intstackshortfn', ["not:SKIPPED", r"re:body3fn\(0x1, 0x2, 0x3, 0x4, \*\(int \*\)\(\(int\)stk \+ \d+(?: \+ \d+)?\), \*\(int \*\)\(\(int\)stk \+ \d+(?: \+ \d+)?\), \*\(int \*\)\(\(int\)stk \+ \d+(?: \+ \d+)?\)\)"]),
             ('selfcallfn', ["not:SKIPPED", r"re:\(\(\w+ \(\*\)\([^)]*\)\)\(selfcallfn\)\)\("]),
+            # the flat form: a goto to the label right after it falls through, and a label nothing jumps to is not written: SHC takes
+            # about 512 labels in a function (cpuSglHitCheck, cpuChasePlan, cpuDblHitCheck, Virtua Tennis: "3018 overflow" past ~500,
+            # half of them only reached by the goto just above)
+            ('ifelsefn_flat', ["not:SKIPPED", r"not:re:goto (L_[0-9A-Fa-f]+);\s*\1:;", "not:L_C010010:;", "L_C010020:;"]),
             ('phantomstkfn', ["not:SKIPPED", "(int a4, Stk3 s)", "not:a5"]),
             ('phantomstkffn', ["not:SKIPPED", "(int a4, Stk3 s)", "not:a5"]),
             ('twostructfn', ["not:SKIPPED", r"re:twoptfn\(\*\(Stk3 \*\)\([^;]*\), \*\(Stk3 \*\)\("]),
