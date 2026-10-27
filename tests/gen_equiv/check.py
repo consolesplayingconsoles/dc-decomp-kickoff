@@ -469,7 +469,8 @@ def fn_readstack1():
 
 def fn_readframe3():
     # a callee with a frame of its own (r14 and PR pushed, a 4-byte local) that takes r4 and reads three words the caller left above it,
-    # at @(12,r15), @(16,r15), @(20,r15) (sprPutAtAlpha reads the 12-byte point passed by value that way)
+    # at @(12,r15), @(16,r15), @(20,r15) (sprPutAtAlpha reads the 12-byte point passed by value that way): (int a4, Stk3 s), not a8-a10
+    # after phantom a5-a7
     a = Asm()
     a.op(0x2FE6); a.op(STS_PR); a.op(0x7FFC)                                   # mov.l r14,@-r15 / sts.l pr,@-r15 / add #-4,r15
     a.load(3, 'p'); a.op(movl_st(4, 3))
@@ -688,6 +689,41 @@ def fn_intstackshort():
     a.load(1, 'f'); a.op(jsr(1)); a.op(0x2FE6)                                  # body3fn(...) with mov.l r14,@-r15 in the delay slot
     a.op(0x7F0C); a.op(0x7F08); a.op(LDS_PR); a.op(RTS); a.op(NOP)
     a.pool('s', ADDR['_slow_mvn']); a.pool('f', ADDR['body3fn'])
+    return a
+
+
+def fn_selfcall():
+    # selfcallfn(p, a, b) calls voidfn, then itself with p->next only (fr4 and fr5 are the earlier call's leftovers): the definition
+    # (int, float, float) is the call's prototype in the same file, so the shorter call did not compile ("Scalar required", Virtua
+    # Tennis sklDrawNodeTrnsl, playerSolveArmReach, playerDrawNodeFacing). The call goes through a cast with the arguments it set, as
+    # for a callee declared two ways
+    a = Asm()
+    a.op(STS_PR); a.op(0x6E43); a.op(0xF450); a.op(0x2448); a.op(0x8906)       # sts.l pr / mov r4,r14 / fadd fr5,fr4 / tst r4,r4 / bt end
+    a.load(3, 'v'); a.op(jsr(3)); a.op(NOP)                                     # voidfn()
+    a.op(0x54E1)                                                                # mov.l @(4,r14),r4
+    a.load(1, 'f'); a.op(jsr(1)); a.op(NOP)                                     # selfcallfn(p->next)
+    a.op(LDS_PR); a.op(RTS); a.op(NOP)                                          # end
+    a.pool('v', ADDR['voidfn']); a.pool('f', ADDR['selfcallfn'])
+    return a
+
+def fn_phantomstk():
+    # a callee that reads r4 and three words its caller left on the stack, and not r5-r7 (sprPutAtAlpha, Virtua Tennis: a sprite and a
+    # point by value). Declared int a4, a5, a6, a7, a8, a9, a10, its callers were compared on phantom r5-r7 and had to set them (decoNumDraw
+    # was never drawn: "arg gap"). The stack words are one structure by value after the registers read: (int a4, Stk3 s)
+    a = Asm()
+    a.load(3, 'p'); a.op(movl_st(4, 3))                                         # *p = a4
+    a.op(0x62F2); a.op(movl_st(2, 3)); a.op(0x52F1); a.op(movl_st(2, 3))        # the stack words at @r15, @(4,r15), @(8,r15)
+    a.op(0x52F2); a.op(movl_st(2, 3)); a.op(RTS); a.op(NOP); a.pool('p', STORE)
+    return a
+
+
+def fn_phantomstkf():
+    # the same in a frame of its own (sts.l pr, add #-4): the words are read above the frame
+    a = Asm()
+    a.op(STS_PR); a.op(0x7FFC)                                                  # sts.l pr,@-r15 / add #-4,r15
+    a.load(3, 'p'); a.op(movl_st(4, 3))
+    a.op(0x52F2); a.op(movl_st(2, 3)); a.op(0x52F3); a.op(movl_st(2, 3)); a.op(0x52F4); a.op(movl_st(2, 3))   # @(8..16,r15): the caller's words
+    a.op(0x7F04); a.op(LDS_PR); a.op(RTS); a.op(NOP); a.pool('p', STORE)
     return a
 
 
@@ -940,7 +976,7 @@ FUNCS = [('storefn', fn_store), ('ifelsefn', fn_ifelse), ('earlyfn', fn_early), 
          ('twoargfn', fn_twoarg), ('thunkfn', fn_thunk), ('passfn', fn_pass), ('callerfn', fn_caller),
          ('_slow_mvn', fn_slowmvn_helper), ('_quick_odd_mvn', fn_slowmvn_helper), ('copyfn', fn_copy), ('threearg', fn_onereg), ('defcallerfn', fn_defcaller),
          ('vecmk', fn_structret), ('vsetfn', fn_structret), ('structfn', fn_struct),
-         ('fptrdef', fn_fptrdef), ('fptrcallerfn', fn_fptrcaller), ('onefn', fn_ret), ('twofn', fn_ret), ('twocallfn', fn_twocall), ('fivefn', fn_ret), ('fivecallfn', fn_fivecall), ('fivepassfn', fn_fivepass), ('printfn', fn_ret), ('varcallfn', fn_varcall), ('varcall4fn', fn_varcall4), ('voidfn', fn_ret), ('floatretfn', fn_floatret), ('ptfn', fn_ret), ('structargfn', fn_structarg), ('stackreadfn', fn_stackread), ('retvalfn', fn_retval), ('phantomfn', fn_phantom), ('stackpassfn', fn_stackpass), ('stackindfn', fn_stackind), ('stackspillfn', fn_stackspill), ('stackclobberfn', fn_stackclobber), ('switchfn', fn_switch), ('brafcompfn', fn_brafcomputed), ('stk4fn', fn_ret), ('stackframefn', fn_stackframe), ('stackframeintfn', fn_stackframeint), ('stackframeint2fn', fn_stackframeint2), ('readstack2', fn_readstack2), ('readstack1', fn_readstack1), ('readframe3', fn_readframe3), ('readframe3p', fn_readframe3p), ('structreusefn', fn_structreuse), ('stackonly1', fn_stackonly1), ('copyinfn', fn_copyin), ('sretfn', fn_sret), ('sretdef', fn_sret), ('sretcallfn', fn_sretcall), ('sretcallpfn', fn_sretcallp), ('argupdatefn', fn_argupdate), ('argnarrowfn', fn_argnarrow), ('fmergefn', fn_fmerge), ('fcarryfn', fn_fcarry), ('fslotfn', fn_fslot), ('fspillfn', fn_fspill), ('stkreads2', fn_stkreads2), ('framestkfn', fn_framestk), ('varpdef', fn_varreads1), ('varpush3fn', fn_varpush3), ('constfirstfn', fn_constfirst), ('twoptfn', fn_ret), ('twostructfn', fn_twostruct), ('ptintfn', fn_ret), ('pushstructfn', fn_pushstruct), ('retvecfn', fn_ret), ('retptrpushfn', fn_retptrpush), ('retptrpush2fn', fn_retptrpush2), ('bodyfn', fn_varreads1), ('intstackmixfn', fn_intstackmix), ('body3fn', fn_varreads1), ('intstackshortfn', fn_intstackshort), ('deferredfn', fn_deferred), ('spsteploopfn', fn_spsteploop), ('floatstackfn', fn_floatstack), ('passdef', fn_passdef), ('defthunkfn', fn_defthunk)]
+         ('fptrdef', fn_fptrdef), ('fptrcallerfn', fn_fptrcaller), ('onefn', fn_ret), ('twofn', fn_ret), ('twocallfn', fn_twocall), ('fivefn', fn_ret), ('fivecallfn', fn_fivecall), ('fivepassfn', fn_fivepass), ('printfn', fn_ret), ('varcallfn', fn_varcall), ('varcall4fn', fn_varcall4), ('voidfn', fn_ret), ('floatretfn', fn_floatret), ('ptfn', fn_ret), ('structargfn', fn_structarg), ('stackreadfn', fn_stackread), ('retvalfn', fn_retval), ('phantomfn', fn_phantom), ('stackpassfn', fn_stackpass), ('stackindfn', fn_stackind), ('stackspillfn', fn_stackspill), ('stackclobberfn', fn_stackclobber), ('switchfn', fn_switch), ('brafcompfn', fn_brafcomputed), ('stk4fn', fn_ret), ('stackframefn', fn_stackframe), ('stackframeintfn', fn_stackframeint), ('stackframeint2fn', fn_stackframeint2), ('readstack2', fn_readstack2), ('readstack1', fn_readstack1), ('readframe3', fn_readframe3), ('readframe3p', fn_readframe3p), ('structreusefn', fn_structreuse), ('stackonly1', fn_stackonly1), ('copyinfn', fn_copyin), ('sretfn', fn_sret), ('sretdef', fn_sret), ('sretcallfn', fn_sretcall), ('sretcallpfn', fn_sretcallp), ('argupdatefn', fn_argupdate), ('argnarrowfn', fn_argnarrow), ('fmergefn', fn_fmerge), ('fcarryfn', fn_fcarry), ('fslotfn', fn_fslot), ('fspillfn', fn_fspill), ('stkreads2', fn_stkreads2), ('framestkfn', fn_framestk), ('varpdef', fn_varreads1), ('varpush3fn', fn_varpush3), ('constfirstfn', fn_constfirst), ('twoptfn', fn_ret), ('twostructfn', fn_twostruct), ('ptintfn', fn_ret), ('pushstructfn', fn_pushstruct), ('retvecfn', fn_ret), ('retptrpushfn', fn_retptrpush), ('retptrpush2fn', fn_retptrpush2), ('bodyfn', fn_varreads1), ('intstackmixfn', fn_intstackmix), ('body3fn', fn_varreads1), ('intstackshortfn', fn_intstackshort), ('selfcallfn', fn_selfcall), ('phantomstkfn', fn_phantomstk), ('phantomstkffn', fn_phantomstkf), ('deferredfn', fn_deferred), ('spsteploopfn', fn_spsteploop), ('floatstackfn', fn_floatstack), ('passdef', fn_passdef), ('defthunkfn', fn_defthunk)]
 
 
 def main():
@@ -1051,8 +1087,8 @@ def main():
             # a callee declares the stack words it reads and no more: the generator padded them to four, so a function reading one,
             # two or three words had phantom stack parameters (a8..a11), and the checker compared a caller's own local at the next
             # word as an argument (sprPutAtAlpha reads three words, declared four: 34 Virtua Tennis callers differed on a leftover)
-            ('readframe3', ["int a8, int a9, int a10)", "not:a11"]),
-            ('readframe3p', ["not:SKIPPED", "int a8, int a9, int a10)", "not:a11"]),
+            ('readframe3', ["(int a4, Stk3 s)", "not:a11"]),
+            ('readframe3p', ["not:SKIPPED", "(int a4, Stk3 s)", "not:a11"]),
             ('stackonly1', ["not:SKIPPED", "Stk4 s"]),
             # the words a block copy reads from the caller's area count, not only its first address (hudFontNumPut, Virtua Tennis: declared
             # one stack word once the padding to four went, its point's other two words came out as zeros)
@@ -1070,11 +1106,14 @@ def main():
             ('retptrpush2fn', ["not:SKIPPED", r"re:\*\(int \*\)\(\(int\)stk \+ (\d+)\) = [^;]*;\s*return \(retvecfn\(\*\(Stk4 \*\)\(+\(int\)stk \+ \1\)+\)\)"]),
             ('intstackmixfn', ["not:SKIPPED", r"re:bodyfn\(0x1, 0x2, 0x3, 0x4, \*\(int \*\)\(\(int\)stk \+ \d+(?: \+ \d+)?\), \*\(int \*\)\(\(int\)stk \+ \d+(?: \+ \d+)?\), \*\(int \*\)\(\(int\)stk \+ \d+(?: \+ \d+)?\), \*\(int \*\)\(\(int\)stk \+ \d+(?: \+ \d+)?\)"]),
             ('intstackshortfn', ["not:SKIPPED", r"re:body3fn\(0x1, 0x2, 0x3, 0x4, \*\(int \*\)\(\(int\)stk \+ \d+(?: \+ \d+)?\), \*\(int \*\)\(\(int\)stk \+ \d+(?: \+ \d+)?\), \*\(int \*\)\(\(int\)stk \+ \d+(?: \+ \d+)?\)\)"]),
+            ('selfcallfn', ["not:SKIPPED", r"re:\(\(\w+ \(\*\)\([^)]*\)\)\(selfcallfn\)\)\("]),
+            ('phantomstkfn', ["not:SKIPPED", "(int a4, Stk3 s)", "not:a5"]),
+            ('phantomstkffn', ["not:SKIPPED", "(int a4, Stk3 s)", "not:a5"]),
             ('twostructfn', ["not:SKIPPED", r"re:twoptfn\(\*\(Stk3 \*\)\([^;]*\), \*\(Stk3 \*\)\("]),
             ('argupdatefn', ["not:SKIPPED", r"re:\*\(float \*\)\(\(\(int\)stk \+ \d+\)\) = ", "ptfn(0x5, "]),
             # a short stored into its own argument area (cameraExec cases 5, 6, 9): read back as the short, copied as the merged word
             ('argnarrowfn', ["not:SKIPPED", r"re:\*\(unsigned short \*\)\(\(\(int\)stk \+ \d+\)\) = ", r"re:ptfn\(\(?\(short\)"]),
-            ('copyinfn', ["not:SKIPPED", "int a8, int a9, int a10)", "not:a11"]),
+            ('copyinfn', ["not:SKIPPED", "(int a4, Stk3 s)", "not:a11"]),
             # a structure returned by value (vecMake, Virtua Tennis): written as one, not as a structure argument whose first word is the
             # destination; its callers assign the result and pass no register integers
             ('sretfn', ["not:SKIPPED", "Stk3 sretfn(float f4, float f5, float f6)", r"re:return \*\(Stk3 \*\)", "not:Stk4"]),
