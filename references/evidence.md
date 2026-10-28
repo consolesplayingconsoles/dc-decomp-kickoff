@@ -806,3 +806,22 @@ More from the Virtua Tennis reruns (2026-10-28), each a rule with a test:
   so the temporary is not folded back) SHC keeps the fneg (tests/gen_equiv fnegsubfn). Equivalent.
 - The after-call scramble now covers every call the original makes, also when the case gives no answers (tests/unsetregs "no answers"):
   entryGridDrawCursors Equivalent. VT 99.3%.
+
+The biggest left on Virtua Tennis (entryCharaSelExec, 8,230 B, 2026-10-28), four causes in turn:
+- Reading: gen_cfg.ijoin's search for the first common node of two arms called reach() for every pair (56 of 60 s of the read, over
+  90 s in all). reach is now kept per node, and the first nodes come from one pass over the strongly connected components (the same
+  answers as the pairwise rule on 1,500 random sets; tests/cfgdom reach). Read in 4 s.
+- Drawing: every case spun in `for (i = 0; i < *(int *)0x8C287ADC; i++)` with a drawn count (cmp/ge, a backward bf). Repair now flips
+  the ordered compares (cmp/ge, gt, hs, hi) from the loop's first pass: the count is set so the loop ends (tests/repair count).
+- The long-cap retry (gen_drv.tests calling itself) reset the drawing deadline: 1,214 s against an alarm of 1,029 (tests/alarm retry).
+- The unset-register check ran on the whole surviving pool (hundreds of a big function's cases, two runs each); it now stops at the 18
+  holdout cases it needs.
+Then Equivalent, drawn in 692 s. The same rules made entryPickRandomChara (150 B) Equivalent: a random index retried while the table
+entry is 0 (no counter: repair takes the loop's own exit test), the index from nlRandom's float answer (followed through sts / ftrc to
+the call's fr0, set to 0).
+- rankNameEntryExec (4,938 B): "farg gap" at a call to fadeScreenStart(int a4..a7, int a8), fr6 set before it. The trim of argument
+  registers to the callee's arity was skipped whenever words were pushed (they make r4-r7 positional), so a leftover float counted as
+  an argument. Pushed words never make the float registers positional: floats are always trimmed to a known arity (tests/gen_equiv
+  fivecallffn; hiddenregfn's expectation corrected: readstack1 takes no float, its fr4-fr7 were leftovers passed). Then Equivalent;
+  directed rounds took it from 534 of 1,996 instructions to 1,988 of 2,014 (99%), Equivalent every round. The farg gap message now
+  names the call (callee, float registers set, arity).

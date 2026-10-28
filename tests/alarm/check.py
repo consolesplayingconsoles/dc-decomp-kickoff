@@ -7,6 +7,8 @@ Tennis) drew for 106 minutes against an alarm of 38.
 
     check.py      swallow   the alarm firing inside an `except Exception` still stops the work, within a second of the limit
                   caught    _read and _draw catch Timeout and report it ('timeout', 'Timeout')
+                  retry     drawing's retry at the long step cap (gen_drv.tests calling itself) keeps the deadline it was given:
+                            it reset it, and entryCharaSelExec (Virtua Tennis) drew for 1,214 s against an alarm of 1,029
 """
 import os
 import re
@@ -43,6 +45,11 @@ def main():
         body = re.search(r'^def %s\(.*?(?=^\S)' % fn, src, re.M | re.S)
         if not body or not re.search(want, body.group(0)):
             bad.append('caught: %s does not catch Timeout' % fn)
+    drv = open(os.path.join(os.path.dirname(MAIN), 'gen_drv.py')).read()
+    body = re.search(r'^def tests\(.*?\n(.*?)^def ', drv, re.M | re.S)
+    first = body and next((l for l in body.group(1).split('\n') if 'DEADLINE[0]=' in l), '')
+    if not first or 'STEPS[0] is None' not in first:
+        bad.append('retry: gen_drv.tests sets DEADLINE on every call (%r)' % first.strip())
     if bad:
         sys.exit('[ERROR] alarm check failed:\n' + '\n'.join(bad))
     print('[alarm] ok: the step-5 alarm stops work through the tools\' own except Exception, and is reported')

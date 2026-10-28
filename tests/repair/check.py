@@ -18,6 +18,9 @@ sets that source (directed.apply): a dt counter to 2, a pointer that read or wro
                   spin: loop: r3 = *G; tst r3,r3; bt loop (entryPickRandomChara, Virtua Tennis: retries a random index while the
                   table entry is 0, with no counter):
                     repaired  repair sets the word the loop's own test reads so the loop ends
+                  count: for (i = 1; i < G; i++) with cmp/ge and G drawn as 0x7FFFFFFF (entryCharaSelExec, Virtua Tennis: a loop
+                  over the players up to a global count):
+                    repaired  repair sets G from the loop's first pass so the cmp/ge goes the other way and the loop ends at once
                   findex: r0 = (int)fr0 from a call, shll2 r0, *(sp + r0) (entryPickRandomChara: nlRandom's answer times the table
                   length, drawn as 100000.0, read far above the stack):
                     repaired  repair follows the index through sts / ftrc to the call's float answer and sets it to 0
@@ -168,6 +171,25 @@ def main():
         r7 = run6(fixed or {})
         if not fixed or r7['error']:
             bad.append('spin repaired: no case the original finishes on: %s / %s' % (fixed, r7['error']))
+        cnt = [0xE400,               # mov #0,r4
+               0x7401,               # loop: add #1,r4
+               0xD102,               # mov.l @(pool),r1     ; = &G
+               0x6212,               # mov.l @r1,r2
+               0x3423,               # cmp/ge r2,r4
+               0x8BFA,               # bf loop
+               0x000B, 0x0009]       # rts / nop
+        body = b''.join(struct.pack('<H', w) for w in cnt) + struct.pack('<I', BASE + 0x100)
+        open(os.path.join(d, 'cnt.bin'), 'wb').write(body + b'\x00' * (0x200 - len(body)))
+        def run8(case, trace=True):
+            return sh4sim.run(dict(case, exe='cnt.bin', base='%08X' % BASE, entry='%08X' % BASE, end='%08X' % (BASE + 0x10), steps=20000,
+                                   trace=trace), d)
+        drawn = {'poke': {'%08X' % (BASE + 0x100): 'ffffff7f'}}
+        if not run8(drawn)['error']:
+            bad.append('count plain: the drawn count finished: the test does not show it')
+        fixed = directed.repair(drawn, run8, (0x0C000000 | (BASE & 0x1FFFFFFF), 0x0C000000 | ((BASE + 0x10) & 0x1FFFFFFF)), hw=False)
+        r9 = run8(fixed or drawn)
+        if not fixed or r9['error'] or r9['steps'] > 100:
+            bad.append('count repaired: %s / %s / %s steps' % (fixed, r9['error'], r9['steps']))
         fi = [0x4F22,                # sts.l pr,@-r15
               0xB008, 0x0009,        # bsr f / nop
               0xF03D,                # ftrc fr0,fpul
