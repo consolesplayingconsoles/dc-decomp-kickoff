@@ -29,7 +29,9 @@
                                a jump table the structured form cannot take is written by the flat form; a braf that is no table stays skipped
                       stackframe  a callee whose definition takes stack words, called with nothing pushed, gets the caller's frame at SP
                       deferred    the stack adjustment deferred past the next call: each call takes the words its callee reads from the stack
-                      copyframe   a structure copied to SP gives fewer words than the callee's definition takes: the rest from the frame above it
+                      copyframe   a structure copied to SP gives fewer words than the callee's definition takes: the rest from the frame above it,
+                                  as a structure too (an int there goes in a free r4-r7: hudCallAdvDraw -> hudBarDrawAlt(Stk4, float, float))
+                      fnegsub     a negated difference goes through a temporary (inline, SHC folds -(a - b) to b - a and loses -0.0)
                       hiddenreg   a local's address pushed alone with register arguments: plain ints (r6, r7 as 0, the address fifth), no `...`
 """
 import os
@@ -828,6 +830,14 @@ def fn_copyframe():
     return a
 
 
+def fn_fnegsub():
+    # fsub fr5,fr4 / fneg fr4 / fmov fr4,fr0 / rts: a negated difference (vecAnglesTo, Virtua Tennis: -(dz) to nlArcTan2). Written
+    # inline, -(f4 - f5), SHC folds it to f5 - f4: +0.0 where the original's fsub then fneg gives -0.0. A temporary keeps the fneg
+    a = Asm()
+    a.op(0xF451); a.op(0xF44D); a.op(0xF04C); a.op(RTS); a.op(NOP)             # fsub fr5,fr4 / fneg fr4 / fmov fr4,fr0 / rts / nop
+    return a
+
+
 def fn_stkreads2():
     # a callee that reads only two words from the stack, no r4-r7 (courtDrawStageModels)
     a = Asm()
@@ -1009,7 +1019,7 @@ FUNCS = [('storefn', fn_store), ('ifelsefn', fn_ifelse), ('earlyfn', fn_early), 
          ('twoargfn', fn_twoarg), ('thunkfn', fn_thunk), ('passfn', fn_pass), ('callerfn', fn_caller),
          ('_slow_mvn', fn_slowmvn_helper), ('_quick_odd_mvn', fn_slowmvn_helper), ('copyfn', fn_copy), ('threearg', fn_onereg), ('defcallerfn', fn_defcaller),
          ('vecmk', fn_structret), ('vsetfn', fn_structret), ('structfn', fn_struct),
-         ('fptrdef', fn_fptrdef), ('fptrcallerfn', fn_fptrcaller), ('onefn', fn_ret), ('twofn', fn_ret), ('twocallfn', fn_twocall), ('fivefn', fn_ret), ('fivecallfn', fn_fivecall), ('fivepassfn', fn_fivepass), ('printfn', fn_ret), ('varcallfn', fn_varcall), ('varcall4fn', fn_varcall4), ('voidfn', fn_ret), ('floatretfn', fn_floatret), ('ptfn', fn_ret), ('structargfn', fn_structarg), ('stackreadfn', fn_stackread), ('retvalfn', fn_retval), ('phantomfn', fn_phantom), ('stackpassfn', fn_stackpass), ('stackindfn', fn_stackind), ('stackspillfn', fn_stackspill), ('stackclobberfn', fn_stackclobber), ('switchfn', fn_switch), ('brafcompfn', fn_brafcomputed), ('stk4fn', fn_ret), ('stackframefn', fn_stackframe), ('stackframeintfn', fn_stackframeint), ('stackframeint2fn', fn_stackframeint2), ('readstack2', fn_readstack2), ('readstack1', fn_readstack1), ('readframe3', fn_readframe3), ('readframe3p', fn_readframe3p), ('structreusefn', fn_structreuse), ('stackonly1', fn_stackonly1), ('copyinfn', fn_copyin), ('sretfn', fn_sret), ('sretdef', fn_sret), ('sretcallfn', fn_sretcall), ('sretcallpfn', fn_sretcallp), ('argupdatefn', fn_argupdate), ('argnarrowfn', fn_argnarrow), ('fmergefn', fn_fmerge), ('fcarryfn', fn_fcarry), ('fslotfn', fn_fslot), ('fspillfn', fn_fspill), ('hiddenregfn', fn_hiddenreg), ('stkreads2', fn_stkreads2), ('framestkfn', fn_framestk), ('varpdef', fn_varreads1), ('varpush3fn', fn_varpush3), ('constfirstfn', fn_constfirst), ('twoptfn', fn_ret), ('twostructfn', fn_twostruct), ('ptintfn', fn_ret), ('pushstructfn', fn_pushstruct), ('retvecfn', fn_ret), ('retptrpushfn', fn_retptrpush), ('retptrpush2fn', fn_retptrpush2), ('bodyfn', fn_varreads1), ('intstackmixfn', fn_intstackmix), ('copyframefn', fn_copyframe), ('body3fn', fn_varreads1), ('intstackshortfn', fn_intstackshort), ('selfcallfn', fn_selfcall), ('phantomstkfn', fn_phantomstk), ('phantomstkffn', fn_phantomstkf), ('deferredfn', fn_deferred), ('spsteploopfn', fn_spsteploop), ('floatstackfn', fn_floatstack), ('passdef', fn_passdef), ('defthunkfn', fn_defthunk)]
+         ('fptrdef', fn_fptrdef), ('fptrcallerfn', fn_fptrcaller), ('onefn', fn_ret), ('twofn', fn_ret), ('twocallfn', fn_twocall), ('fivefn', fn_ret), ('fivecallfn', fn_fivecall), ('fivepassfn', fn_fivepass), ('printfn', fn_ret), ('varcallfn', fn_varcall), ('varcall4fn', fn_varcall4), ('voidfn', fn_ret), ('floatretfn', fn_floatret), ('ptfn', fn_ret), ('structargfn', fn_structarg), ('stackreadfn', fn_stackread), ('retvalfn', fn_retval), ('phantomfn', fn_phantom), ('stackpassfn', fn_stackpass), ('stackindfn', fn_stackind), ('stackspillfn', fn_stackspill), ('stackclobberfn', fn_stackclobber), ('switchfn', fn_switch), ('brafcompfn', fn_brafcomputed), ('stk4fn', fn_ret), ('stackframefn', fn_stackframe), ('stackframeintfn', fn_stackframeint), ('stackframeint2fn', fn_stackframeint2), ('readstack2', fn_readstack2), ('readstack1', fn_readstack1), ('readframe3', fn_readframe3), ('readframe3p', fn_readframe3p), ('structreusefn', fn_structreuse), ('stackonly1', fn_stackonly1), ('copyinfn', fn_copyin), ('sretfn', fn_sret), ('sretdef', fn_sret), ('sretcallfn', fn_sretcall), ('sretcallpfn', fn_sretcallp), ('argupdatefn', fn_argupdate), ('argnarrowfn', fn_argnarrow), ('fmergefn', fn_fmerge), ('fcarryfn', fn_fcarry), ('fslotfn', fn_fslot), ('fspillfn', fn_fspill), ('hiddenregfn', fn_hiddenreg), ('fnegsubfn', fn_fnegsub), ('stkreads2', fn_stkreads2), ('framestkfn', fn_framestk), ('varpdef', fn_varreads1), ('varpush3fn', fn_varpush3), ('constfirstfn', fn_constfirst), ('twoptfn', fn_ret), ('twostructfn', fn_twostruct), ('ptintfn', fn_ret), ('pushstructfn', fn_pushstruct), ('retvecfn', fn_ret), ('retptrpushfn', fn_retptrpush), ('retptrpush2fn', fn_retptrpush2), ('bodyfn', fn_varreads1), ('intstackmixfn', fn_intstackmix), ('copyframefn', fn_copyframe), ('body3fn', fn_varreads1), ('intstackshortfn', fn_intstackshort), ('selfcallfn', fn_selfcall), ('phantomstkfn', fn_phantomstk), ('phantomstkffn', fn_phantomstkf), ('deferredfn', fn_deferred), ('spsteploopfn', fn_spsteploop), ('floatstackfn', fn_floatstack), ('passdef', fn_passdef), ('defthunkfn', fn_defthunk)]
 
 
 def main():
@@ -1128,7 +1138,8 @@ def main():
             # a store into the function's own argument area reaches the frame array a later copy of that area reads (hudSignFirstPut)
             ('constfirstfn', ["not:SKIPPED", "int a8"]),
             ('framestkfn', ["not:SKIPPED", "stkreads2(0x5, 0x6, "]),
-            ('copyframefn', ["not:SKIPPED", r"re:bodyfn\(0x1, 0x2, 0x3, 0x4, \*\(Stk3 \*\)\(.*?\), \*\(int \*\)\(\(int\)stk \+ \d+(?: \+ \d+)?\)\)"]),
+            ('copyframefn', ["not:SKIPPED", r"re:bodyfn\(0x1, 0x2, 0x3, 0x4, \*\(Stk3 \*\)\(.*?\), \*\(Stk1 \*\)\(\(int\)stk \+ \d+(?: \+ \d+)?\)\)"]),
+            ('fnegsubfn', ["not:SKIPPED", r"re:(u\d+) = \(f4 - f5\);\s*\1 = -\1;"]),
             ('hiddenregfn', ["not:SKIPPED", r"not:re:\.\.\.\)\)", r"re:readstack1\(0x1, 0x2, 0x0, 0x0, \(\(int\)stk \+ 8\), 1\.0f"]),
             ('fspillfn', ["not:SKIPPED", r"re:= \(?\*\(float \*\)\(+\(int\)stk", r"not:re:float u\d+;"]),
             ('fslotfn', ["not:SKIPPED", "1.0f", "a8"]),

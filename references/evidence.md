@@ -762,3 +762,47 @@ The reader now passes the remaining words from the frame above the copy, as many
 directly; tests/gen_equiv copyframefn): Equivalent. Also found (playerPut, not fixed): the check fills memory through every call's
 frame-pointing argument register, including ones a definition has only as placeholders (mtxGetWorldPos(int a4..a7, int a8) reads only
 a8); the original's leftover r4 (sp+252) got the fill, the C's 0 did not, and the matrix read after differs.
+
+The check's fills from mocked calls (Virtua Tennis playerPut, 2026-10-28): a case answers a call with words the callee "writes" through
+an argument register (poke_arg) or through the word at SP (poke_stack, a structure returned by value). Four ways the fill landed on one
+side of a check only, all found on playerPut (7,898 B), each now a rule in the simulator or the checker with a test:
+1. through a register the definition only has as a placeholder (mtxGetWorldPos(int a4..a7, int a8) reads a7 and a8): fills go only
+   through the registers whose parameters the definition's body reads (equiv.fill_regs; tests/equiv fill);
+2. through a register holding a value, not an address (angDiff(0, ...)): only RAM / stack addresses get a fill (tests/fill value);
+3. through the word at SP for a callee that takes no stack word and returns no structure (angDiff: the word at SP was the caller's own
+   local, the address of the field it then read): no fill (equiv.no_stack_fill; tests/fill nostack); and for a callee with no
+   definition, only when its code reads a stack word (nlScale(float, float, float); equiv.stack_fills);
+4. through a word at SP that is a value (page 0 filled on the C's side): only RAM addresses (tests/fill stackvalue).
+Found by running both sides of the failing case with a trace (the check's own runs, hooked) and following the first value that
+differed back to the write that made it. playerPut then Equivalent. These change equiv.py and sh4sim.py, so every cached pass is
+rechecked at its next check (deferred: nothing rechecked yet).
+
+Two more from the same calls (Virtua Tennis, 2026-10-28), after the fill rules:
+- Frame words above a copy to SP (the copyframe rule above) passed as an int went in a free r4 when no integer register was used
+  (hudCallAdvDraw -> hudBarDrawAlt(Stk4, float, float): the caller's r4, stored at SP before a 12-byte copy, is the fourth stack word).
+  Passed as a structure (Stk1), they always go on the stack: hudCallAdvDraw, hudCallGameDraw Equivalent.
+- A fill through a register the caller did not set for the call (a leftover from an earlier one): the original's leftover r5 was an
+  object pointer at circuitDrawMatchInfo -> sprSheetPut, the C's leftover pointer was in r6, the fill reached the object on one side.
+  Fills now go only through registers set for the call, as the comparison already does (tests/fill leftover/set): Equivalent.
+VT 98.8% (39 left) after the reruns of the 34 that differed: 17 proven.
+
+More from the Virtua Tennis reruns (2026-10-28), each a rule with a test:
+- A drawn case whose outcome depends on registers the function never set (callee-saved r8-r14, fr12-fr15 coming in): shopDrawCatPanel
+  indexes with the caller's r10 for an a4 outside its compare chain; endingSceneDraw passes the caller's fr12 on a path that never sets
+  it. No input the game makes, and the C has an uninitialised variable there. Drawing runs the original twice with other incoming values
+  and drops the case when its calls (integer and float arguments), writes or result change (directed.unset_dependent; tests/unsetregs).
+- A fill through a word at SP the caller did not store for the call (a leftover; endingSceneDraw: 8C125E09, odd, filled one byte into a
+  table of the game's own data): fills go through the word at SP only when it was stored for the call and is aligned (tests/fill
+  stackleft).
+- Register liveness took a call to a block mover (_quick_odd_mvn) or a division helper as clobbering r0-r7: r6 set in one arm before a
+  structure copy and passed after it was dead there, the flat form dropped the arm's store (stageSelNameDraw). They clobber r0-r3
+  (tests/jmplive mover).
+- A case that reads a caller-saved register after a call on a path that never sets it again (entryGridDrawCursors: a colour from r5
+  after mathLerp, the check's answered call having left the caller's r5 in place): unset_dependent also scrambles r2-r7 / fr2-fr11
+  after each answered call (r0/fr0, r1/fr1 carry results); such a case is dropped (tests/unsetregs aftercall/result). Five of the ten
+  still differing then Equivalent.
+- A negated difference: the reader wrote -(a - b) inline, SHC folds it to b - a (one fsub, no fneg): +0.0 where the original's fsub then
+  fneg gives -0.0, passed to nlArcTan2 (vecAnglesTo). Compiled both ways to check: through a variable (t = a - b; t = -t, two statements
+  so the temporary is not folded back) SHC keeps the fneg (tests/gen_equiv fnegsubfn). Equivalent.
+- The after-call scramble now covers every call the original makes, also when the case gives no answers (tests/unsetregs "no answers"):
+  entryGridDrawCursors Equivalent. VT 99.3%.

@@ -11,6 +11,10 @@ tests the same r0 against 2; the C folded the load into the first test and the s
                     without   with no jump edges r0 is dead at the jmp (as it was)
                     with      with the jmp's edge to T, r0 is live at the jmp and at the cmp/eq #4 (it must be kept)
                     wired     gen_core passes the flat form's jump edges (GOTO) to both liveness passes
+                  mov.l @(pool),r6 / jsr _quick_odd_mvn / mov r6,r7: the block mover writes r0-r3 only, so r6 stays live across it
+                  (stageSelNameDraw, Virtua Tennis: r6 set in one arm before a structure copy and passed after it; the C dropped the
+                  arm's store and passed a stale R6):
+                    mover     r6 is live at the jsr
 """
 import os
 import re
@@ -43,6 +47,12 @@ def main():
         bad.append('without: r0 live at the jmp with no edges (the case the fix is for no longer shows)')
     if 'r0' not in withj.get(4, set()) or 'r0' not in withj.get(2, set()):
         bad.append('with: r0 not live at the jmp (%s) or the bt (%s) with the jmp edge' % (sorted(withj.get(4, set())), sorted(withj.get(2, set()))))
+    ins2 = [('mov.l', '@(0x8c000020,pc),r6 ; =00808000', 0x8C000000), ('mov.l', '@(0x8c000024,pc),r3 ; =8c0f7dac _quick_odd_mvn', 0x8C000002),
+            ('jsr', '@r3', 0x8C000004), ('mov', 'r15,r1', 0x8C000006), ('mov', 'r6,r7', 0x8C000008), ('rts', '', 0x8C00000A),
+            ('nop', '', 0x8C00000C)]
+    live2 = gen_core.reg_liveness(ins2, {pc: i for i, (_, _, pc) in enumerate(ins2)})
+    if 'r6' not in live2.get(2, set()):
+        bad.append('mover: r6 not live at the jsr to _quick_odd_mvn (%s)' % sorted(live2.get(2, set())))
     src = open(os.path.join(GEN, 'gen_core.py')).read()
     if len(re.findall(r'reg_liveness\(ins,addr2idx,GOTO\)', src)) < 2:
         bad.append('wired: gen_core does not pass GOTO to both liveness passes')

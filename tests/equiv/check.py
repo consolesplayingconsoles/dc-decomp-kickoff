@@ -31,6 +31,10 @@
                               prototype at all (noproto), is compared on the definition's registers: the rest are leftovers the
                               callee never reads (Virtua Tennis effFootDust -> vecSub(Stk5): r4 a stack pointer in the original, 0 in
                               the C; it was compared on the caller's count, or on every register)
+                    fill      what a mocked call writes through an argument register goes only through the registers the callee's
+                              definition READS: a definition with placeholder r4-r7 that reads only its stack word gets no fill
+                              through r4 (Virtua Tennis playerPut -> mtxGetWorldPos(int a4..a7, int a8): the original's leftover r4
+                              pointed at a matrix in the frame and was filled, the C's 0 was not, and the matrix read after differed)
                     key       a function the checker change cannot affect keeps the proof key of the checker saved in
                               state/proof-key-equiv.py, so its earlier pass still counts; one it can affect has a new key
 """
@@ -53,8 +57,10 @@ DEFS_C = ("int threearg(int a4, int a5, int a6)\n{\n    return a4 + a5 + a6;\n}\
           "int whole(int a4)\n{\n    return a4;\n}\n\n"
           "int noproto(int a4, int a5, int a6, int a7, int a8, int a9)\n{\n    return a8 + a9;\n}\n\n"
           "int varproto(int a4, int a5, int a6, int a7, int a8)\n{\n    return a8;\n}\n\n"
-          "int varused(int a4, int a5, int a6, int a7, int a8)\n{\n    return a4 + a5 + a6 + a7 + a8;\n}\n")
-FUNCS = ['threearg', 'fptrs', 'five', 'whole', 'noproto', 'varproto', 'varused', 'caller']
+          "int varused(int a4, int a5, int a6, int a7, int a8)\n{\n    return a4 + a5 + a6 + a7 + a8;\n}\n\n"
+          "int lastreg(int a4, int a5, int a6, int a7, int a8)\n{\n    return a7 + a8;\n}\n\n"
+          "typedef struct { int w[3]; } V3;\nV3 mkv(int a4)\n{\n    V3 v; v.w[0] = a4; v.w[1] = a4; v.w[2] = a4;\n    return v;\n}\n")
+FUNCS = ['threearg', 'fptrs', 'five', 'whole', 'noproto', 'varproto', 'varused', 'lastreg', 'mkv', 'caller']
 
 
 def main():
@@ -66,7 +72,8 @@ def main():
         open(os.path.join(tmp, "src", "caller.c"), "w").write(CALLER_C)
         open(os.path.join(tmp, "src", "defs.c"), "w").write(DEFS_C)
         open(os.path.join(tmp, "functions.txt"), "w").write(
-            "".join("F %08x 4 %s\n" % (0x0C010000 + 4 * i, n) for i, n in enumerate(FUNCS)))
+            "".join("F %08x 4 %s\n" % (0x0C010000 + 4 * i, n) for i, n in enumerate(FUNCS))
+            + "F 0c0100f0 4 undefread\nF 0c0100f4 4 undefnone\n")
         script = ("import sys; sys.path.insert(0, 'tools'); import toolpath, equiv\n"
                   "table = equiv.names()\n"
                   "arity, stackn = equiv.compared_arity('src/caller.c', table)\n"
@@ -104,7 +111,8 @@ def main():
             if got3.get(k_) != want_:
                 bad.append('proof key (%s): %s' % (k_, out3.strip()[-200:]))
         open(os.path.join(tmp, "functions.txt"), "w").write(
-            "".join("F %08x 4 %s\n" % (0x8C010000 + 4 * i, n) for i, n in enumerate(FUNCS)))
+            "".join("F %08x 4 %s\n" % (0x8C010000 + 4 * i, n) for i, n in enumerate(FUNCS))
+            + "F 8c0100f0 4 undefread\nF 8c0100f4 4 undefnone\n")
         script = ("import sys; sys.path.insert(0, 'tools'); import toolpath, equiv\n"
                   "table = equiv.names()\n"
                   "arity, stackn = equiv.compared_arity('src/caller.c', table)\n"
@@ -132,6 +140,27 @@ def main():
         for k_, want_ in (('leftover', 'True'), ('written', 'False'), ('unknown', 'False')):
             if got5.get(k_) != want_:
                 bad.append('leftover (%s): %s' % (k_, out5.strip()[-300:]))
+        script = ("import sys; sys.path.insert(0, 'tools'); import toolpath, equiv\n"
+                  "table = equiv.names()\n"
+                  "fill = equiv.fill_regs(table)\n"
+                  "nostack = equiv.no_stack_fill(table)\n"
+                  "sf = equiv.stack_fills(table, reads=lambda n: {'undefread': 1}.get(n, 0))\n"
+                  "print('sf_undefread', sf(0x0C0100F0))\nprint('sf_undefnone', sf(0x0C0100F4))\n"
+                  "print('sf_five', sf(0x0C000000 | (table['five'] & 0x1FFFFFFF)))\nprint('sf_threearg', sf(0x0C000000 | (table['threearg'] & 0x1FFFFFFF)))\n"
+                  "for n in ('threearg', 'five', 'mkv'):\n"
+                  "    print('ns_' + n, (0x0C000000 | (table[n] & 0x1FFFFFFF)) in nostack)\n"
+                  "for n in ('varproto', 'five', 'threearg', 'varused', 'lastreg'):\n"
+                  "    print(n, sorted(fill.get(0x0C000000 | (table[n] & 0x1FFFFFFF), ())))\n")
+        out6 = subprocess.run([sys.executable, "-c", script], cwd=tmp, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                              universal_newlines=True).stdout
+        got6 = dict(l.split(' ', 1) for l in out6.strip().split('\n') if ' ' in l)
+        for n_, want_ in (('ns_threearg', 'True'), ('ns_five', 'False'), ('ns_mkv', 'False'), ('sf_undefread', 'True'), ('sf_undefnone', 'False'),
+                          ('sf_five', 'True'), ('sf_threearg', 'False')):
+            if got6.get(n_) != want_:
+                bad.append('stack fill: %s %s, want %s (%s)' % (n_, got6.get(n_), want_, out6.strip()[-200:]))
+        for n_, want_ in (('varproto', '[]'), ('five', '[4]'), ('threearg', '[4, 5, 6]'), ('varused', '[4, 5, 6, 7]'), ('lastreg', '[7]')):
+            if got6.get(n_) != want_:
+                bad.append('fill: %s gets fills through %s registers, want %s (%s)' % (n_, got6.get(n_), want_, out6.strip()[-200:]))
         if got2.get('kept') != 'True':
             bad.append('pointer: identical pointer calls differ (%s)' % out2.strip()[-200:])
         if not bad:
