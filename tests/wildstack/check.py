@@ -13,6 +13,9 @@ at 1FFFFE08: a difference no game input makes. Run again with the stack lower, s
                     above     an access just above the stack's top (0E000040: a table read past its end) that the lower run makes as an
                               ordinary read inside the stack (0DFFFD40, in its reads): True (kmProcessVertexRenderState, ndbEditShowEntry)
                     other     an access that moved by another amount: False (not this case; nothing is dropped)
+                    mirror    an access in a mirror of main RAM (0D000000-0FFFFFFF, the simulator's stack aside) is a stray pointer the
+                              game never makes (its pointers are 8C...): cpuSglAimTable read 0E6E76C4 and 0E6E7610, which the C read in
+                              the other order, and those accesses are compared in order as a device's
                     wired     original_runs asks it before keeping a case with accesses outside RAM
 """
 import os
@@ -42,6 +45,20 @@ def main():
         bad.append('above: an access above the stack that the lower run reads inside it is not seen')
     if f([['r', '1FFFFE3C', 4, '00000000']], [], 0x300, [0x0C800000]) is not False:
         bad.append('other: an access the lower run does not make anywhere is taken for a stack address')
+    try:
+        ns2 = {}
+        exec(compile(src[src.index('def ram_mirror('):src.index('\ndef ', src.index('def ram_mirror(') + 5)], 'gen_drv.py', 'exec'), ns2)
+        rm = ns2['ram_mirror']
+        if rm([['r', '0E6E7610', 4, '00000000']], 0x0E000000) is not True:
+            bad.append('mirror: a read in a RAM mirror is not seen')
+        if rm([['w', '005F8040', 4, '00000001'], ['r', '1FFFFE3C', 4, '0']], 0x0E000000) is not False:
+            bad.append('mirror: a hardware register is taken for a RAM mirror')
+        if rm([['r', '0DFFFF40', 4, '0']], 0x0E000000) is not False:
+            bad.append('mirror: the simulator\'s stack is taken for a RAM mirror')
+    except ValueError:
+        bad.append('mirror: gen_drv.py has no ram_mirror()')
+    if 'ram_mirror(' not in src[src.index('def original_runs('):src.index('def grow(')]:
+        bad.append('wired: original_runs does not ask ram_mirror')
     if 'stack_moved(' not in src[src.index('def original_runs('):src.index('def grow(')]:
         bad.append('wired: original_runs does not ask stack_moved')
     if bad:

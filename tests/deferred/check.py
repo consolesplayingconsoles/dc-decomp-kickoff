@@ -19,6 +19,8 @@ game data and no compiler: the generator modules and the checker are stand-ins. 
                     written   a function that fails the check of the file it was just written to is named for removal (Virtua
                               Tennis hudFadeNearPlayers: passed in its batch while --regen had its callee's definition out, then
                               differed in gen_ic.c against the new one, and stayed there), and write_batch removes it
+                    retkind   a function that differs in its return value alone is checked again with each other return kind (r0,
+                              fr0, void), not only void (cpuSglAimTable, Virtua Tennis: returns 100.0 in r0, the retry tried void only)
                     empty     a batch whose only function does not compile is dropped with the error and the batch returns: dropping
                               it left nothing to check and the runner crashed (IndexError on gs[0]; Virtua Tennis and Zombie Revenge
                               --regen: cpuSglHitCheck alone in batch 4, 127 functions never drawn; ZR's last 24 never checked); the
@@ -109,6 +111,9 @@ def main():
             bad.append('written: failed_in names %s; want absent, badfn, nocomp' % sorted(gen_pipe.failed_in(out_w, ['ok1', 'badfn', 'nocomp', 'absent'])))
         if "functions written, %d EQUIVALENT, %d not'" not in open(os.path.join(TOOLS, '5-generated', 'gen_equiv', '__main__.py')).read():
             bad.append('written: the log line of a written file does not count its results (it showed one function line instead)')
+        main_ = open(os.path.join(TOOLS, '5-generated', 'gen_equiv', '__main__.py')).read()
+        if "for kind_ in ('r0','fr0','void')" not in main_:
+            bad.append('retkind: a return value difference is retried as void only')
         if 'gen_pipe.failed_in(' not in open(os.path.join(TOOLS, '5-generated', 'gen_equiv', '__main__.py')).read():
             bad.append('written: write_batch does not remove what fails the check of the file it wrote')
         gs = gen_pipe.compatible_groups(items)

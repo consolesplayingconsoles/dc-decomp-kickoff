@@ -644,3 +644,65 @@ Mistakes worth not repeating:
   slot in the original). The one-word C now differs on the position's second
   word. No recheck of earlier passes: the checker as it was is kept in state/proof-key-frozen/ and its passes still count
   (tests/proofkey); about a third of the proven functions (899 of 2,974 in VT) pass a frame address to a call.
+
+### The last few percent: what blocked the remaining functions (Virtua Tennis, Zombie Revenge; 2026-10-27 to 2026-10-28)
+
+VT went from 95.5% to 97.5% of functions (148 to 76 left), ZR from 94.6% to 96.3% (221 to 150). Almost every blocker was a gap in a
+tool, fixed with a test and ported to every decomp; only two functions were patched by hand, and both causes are now in the tools.
+
+Findings, each with its test:
+- Leftover registers compared (equiv compared_arity): a call was compared on the registers the caller's file declared, or all of
+  r4-r7 with no prototype; a callee taking only a stack structure (vecSub(Stk5), camWorldToView(Stk4)) was compared on leftovers.
+  Now a defined callee is compared on exactly its definition's registers. tests/structargs "leftovers", tests/equiv "extra".
+- Words pushed below a structure copied to SP (gen_core do_call): the result pointer pushed in a jsr delay slot is word 0 of the
+  callee's structure; it was taken for a spill and word 0 was never set. Integer pushes are now also stored in the frame (as float
+  pushes were), and words pushed below a copy join the structure. 10 VT functions (effFootDust, screenSegVisible...).
+  tests/gen_equiv retptrpushfn, retptrpush2fn.
+- Plain-int stack words (bodyCreate(int a4..a12)): words pushed and copied to SP are passed from the frame, every word the definition
+  takes, not only those its code reads directly; byte-mover copies of any size count as structures (three shorts, 6 bytes).
+  tests/gen_equiv intstackmixfn, intstackshortfn.
+- Phantom parameters (gen_drv): registers read up to below r7 plus two or more stack words are declared (int a4.., StkN s), not with
+  phantom a5-a7 that callers were then compared on (sprPutAtAlpha, screenProject, cpuInFan). One stack word stays a8: a one-word
+  structure goes in a register and padding it compares callers on their own locals. tests/gen_equiv phantomstkfn.
+- A call to the function itself: its own definition is the prototype in the file and took more than the call set; the call goes
+  through a cast now. tests/gen_equiv selfcallfn.
+- Duplicate and C++ names (dupnames.py): a 6-byte stub with its target's name became thunk_<name>; callers follow to the copy their
+  original calls (kmiWriteRegister: 11 ZR functions linked to the stub); a definition keeps the name (the stub runs into the body it
+  was written for); C++ signatures (restart_t404(void)) become the name up to the bracket; of two entries at one address the one
+  running into the next function is dropped. tests/dupnames.
+- Stack addresses inside a buffer handed to a call are compared as the stack (nlSetBackColorZ). tests/stackbuf stackaddr.
+- Drawn cases that read outside RAM through the stack (a local table at a huge index, wrapped; or just past its top) are dropped:
+  the original runs again with the stack 0x300 lower and an access that moved with it is no game input; hardware registers do not
+  move, so the checker stays as strict. tests/wildstack. Likewise a case whose original reaches a mirror of main RAM (0D000000-
+  0FFFFFFF, the simulator's stack aside) through a stray pointer: the simulator takes it for a device and compares those accesses in
+  order, and the compiler reorders loads (cpuSglAimTable: 0E6E76C4 and 0E6E7610). 14 of its 36 drawn cases were of that kind.
+- The label limit: SHC stops at about 512 labels in a function ("3018 overflow", with or without -optimize). The flat form drops
+  gotos to the next label and labels nothing jumps to (cpuSglHitCheck 581 to 314), and a function still over 480 is written as a main
+  function and parts sharing one int array of state (splitflat.py): cpuChasePlan split by force at 150 labels stayed Equivalent on
+  its 108 cases; cpuSglAimTable (865 labels) compiles, returning r0 (not fr0), and is Equivalent on 127 cases, 4,994 of 8,252
+  instructions after six directed passes (a pass takes seconds once the function compiles). tests/gen_equiv ifelsefn_flat, tests/splitflat.
+- Liveness across a jmp to a constant inside the function: the flat form wrote a register back only where live, and a jmp's delay
+  slot had no successor, so a load folded into a test was never written for the test after the jump (cpuChasePlan: cmp/eq #4, jmp,
+  cmp/eq #2 on a stale R0). tests/jmplive.
+- Directed cases: the second operand of a compare was flipped the wrong way (1.0 > Ball+48 got -1.0); a function that then differs in
+  its return value alone is written again with the other return kinds, and step 5's own retry tries r0 and fr0, not only void.
+  cpuSglHitCheck went from 28 to 1,208 instructions covered, and was wrong (returned nothing) until then. tests/directed, deferred.
+- Reasons kept whole (ledger, compile errors, read refusals cut to 40-600 characters or one word) and differences that name the first
+  differing call, write or access instead of cutting each list at 200 characters. tests/ledger, tests/diffmsg.
+- Build: the object cache's key needs the file's name (SHC writes it into the object: u019.c, a copy of gen_xx.c, got gen_xx's object
+  and the fit crashed), the headers a file includes, and the compiler. tests/ccache.
+
+Passes that did not hold: a checker change makes cached passes recheck only when their file is checked again. 6 VT and 17 ZR
+functions passed under the old checker and differed under the new one; written again with the current reader (--regen) all came back
+Equivalent. Expect more of these as files are touched.
+
+Method that worked on the hard ones:
+- Directed cases (--direct) before trusting a pass on a big function: 1% coverage passes hid wrong C in three of them.
+- Where the C and the original part ways: write the function in the flat form (a label per block of the original) and run a copy of
+  the C that stores each label's address as it passes; the first block where the two lists differ is the wrong branch
+  (cpuChasePlan, found in minutes).
+- Cut points (the instructions every path passes) show whether a big function splits along its code; playerControl (21 KB) and
+  cpuSglAimTable (18 KB) do not (one 18 KB region each, shared blocks), hence splitting the C instead.
+- Costs that did not fit the estimates: reading playerControl ran 26+ minutes without finishing; drawing cpuSglAimTable took 106
+  minutes against an alarm of 38 (the drawing alarm does not bound it as stated: open), its check 55 minutes. Long silent runs on an
+  outlier tell little; read the code first.
