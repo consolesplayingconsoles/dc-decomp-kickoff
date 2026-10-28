@@ -745,3 +745,20 @@ were drawn and differ (argument placement, a wrong pointer, an unaligned read on
   trace, and mend sets the inline-call test). A call inside a loop has every answer from that call site set at once, and what a
   repair set in registers and call answers is reused by the next candidates (only memory words were before).
 Both Equivalent. 15 small ones (150 to 2,252 B) still time out with these rules: each has a cause of its own, not one group.
+
+A local's address pushed alone with register arguments (Virtua Tennis playerChooseSwing -> playerStartSwing, 2026-10-28): the reader
+declared the call `(int, int, float, float, float, float, ...)` with the address as the unnamed argument, on the rule that SHC puts a
+variadic argument on the stack. It does, but it also puts the last named argument there: compiled, `FMOV.S FR7,@-R15` went in the
+delay slot above the pointer, so SP held fr7's value, the case filled the callee's buffer at the wrong place and fr6/fr7 of a later
+vecDistXZf came out 0 (DIFFERS at call 5/55). A named int is no better: SHC puts it in the free r6. Written as plain ints instead (the
+integer registers not set as 0, the address as the fifth int, which SHC passes at SP; tests/gen_equiv hiddenregfn): Equivalent, 497 of
+1,026 instructions. Proven files still declaring that shape (VT vecSub(int, int, ...), vecMake(float, float, float, ...); 3 in Crazy
+Taxi) passed the check with it: not rechecked.
+
+A structure copied to SP gives fewer words than the callee takes (Virtua Tennis selCursorInputC -> windowFrameDraw, 2026-10-28): a
+12-byte copy to SP, then mov.l r5,@(12,r15) stores a pointer just above it; windowFrameDraw's definition takes four stack words. The C
+passed the copy alone (Stk3), so the callee's fourth word was whatever lay on the C's stack (8C185414 against the original's 8C343B54).
+The reader now passes the remaining words from the frame above the copy, as many as the definition declares (its code may read fewer
+directly; tests/gen_equiv copyframefn): Equivalent. Also found (playerPut, not fixed): the check fills memory through every call's
+frame-pointing argument register, including ones a definition has only as placeholders (mtxGetWorldPos(int a4..a7, int a8) reads only
+a8); the original's leftover r4 (sp+252) got the fill, the C's 0 did not, and the matrix read after differs.
