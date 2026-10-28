@@ -77,6 +77,21 @@ def main():
                 got = directed.unset_dependent(case, run)
                 if got != want:
                     bad.append('%s%s: dependent %s, want %s' % (name, '' if case else ' (no answers)', got, want))
+        # directed cases pass the same checks (directed.acceptable): a run reaching memory outside RAM is no input for a function whose
+        # own cases touch no hardware (playerStartReactions, Virtua Tennis: a directed r4 of 4E6E6B28 read wild addresses, the C's loads
+        # in another order); one that depends on registers never set is not either
+        run = lambda c, n='reads': sh4sim.run(dict(c, exe=n + '.bin', base='%08X' % BASE, entry='%08X' % BASE, end='%08X' % (BASE + 0xA),
+                                                   steps=2000), d)
+        try:
+            dev = {'devices': [['r', '016208F4', 4, '00000000']]}
+            sets_run = lambda c: run(c, 'sets')
+            for name_, args_, runner, want_ in (('wild', (dev, False), sets_run, False), ('hardware', (dev, True), sets_run, True),
+                                                ('dependent', ({}, False), run, False)):
+                got_ = directed.acceptable({}, args_[0], args_[1], runner)
+                if got_ != want_:
+                    bad.append('acceptable %s: %s, want %s' % (name_, got_, want_))
+        except AttributeError:
+            bad.append('acceptable: directed.py has no acceptable()')
     finally:
         shutil.rmtree(d, ignore_errors=True)
     if bad:
