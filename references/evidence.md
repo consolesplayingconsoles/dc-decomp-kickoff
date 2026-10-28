@@ -671,11 +671,19 @@ Findings, each with its test:
   was written for); C++ signatures (restart_t404(void)) become the name up to the bracket; of two entries at one address the one
   running into the next function is dropped. tests/dupnames.
 - Stack addresses inside a buffer handed to a call are compared as the stack (nlSetBackColorZ). tests/stackbuf stackaddr.
+- A register read and then only changed in place is an input of the routine's own convention (classify register_inputs): ZR's
+  FUN_0c0f1ef4 and three neighbours keep a vertex buffer pointer in r12 (add #28,r12, stores through it, return with it 32 bytes on);
+  `add #28,r12` had counted as a write, and the reader wrote C storing through an unset temp. Now in-place changes (add, sub, shifts,
+  dt) are uses, zeroing idioms (xor r1,r1) still writes. Newly "no C form": 35 VT and 99 ZR routines (Ninja's nl_objasm_* and
+  display*_nc_* senders, the compiler's copy helpers), none of them proven before. tests/regconv.
 - Drawn cases that read outside RAM through the stack (a local table at a huge index, wrapped; or just past its top) are dropped:
   the original runs again with the stack 0x300 lower and an access that moved with it is no game input; hardware registers do not
   move, so the checker stays as strict. tests/wildstack. Likewise a case whose original reaches a mirror of main RAM (0D000000-
   0FFFFFFF, the simulator's stack aside) through a stray pointer: the simulator takes it for a device and compares those accesses in
   order, and the compiler reorders loads (cpuSglAimTable: 0E6E76C4 and 0E6E7610). 14 of its 36 drawn cases were of that kind.
+  And a case whose original reaches outside RAM in a 16 MB region the function's code names no address in: a random word drawn as a
+  pointer (selCursorInput read 103C3B4C, its C 1E29B898). A function naming any hardware address had every such access compared;
+  now only the regions it names. 11 of 12 VT and 7 of 15 ZR functions failing on device accesses were proven at once.
 - The label limit: SHC stops at about 512 labels in a function ("3018 overflow", with or without -optimize). The flat form drops
   gotos to the next label and labels nothing jumps to (cpuSglHitCheck 581 to 314), and a function still over 480 is written as a main
   function and parts sharing one int array of state (splitflat.py): cpuChasePlan split by force at 150 labels stayed Equivalent on
@@ -706,3 +714,15 @@ Method that worked on the hard ones:
 - Costs that did not fit the estimates: reading playerControl ran 26+ minutes without finishing; drawing cpuSglAimTable took 106
   minutes against an alarm of 38 (the drawing alarm does not bound it as stated: open), its check 55 minutes. Long silent runs on an
   outlier tell little; read the code first.
+
+Drawing timeouts on loops over drawn data (Zombie Revenge, 2026-10-28). Random memory gives a loop a count of 0 (dt wraps it to 2^32)
+or garbage pointers, so every candidate runs to the step cap (0.35 s each, hundreds per function) and the 60 s alarm fires before a
+case is kept. directed.repair mends a failing case at the source of the bad value (provenance / apply), in rounds: a dt counter at
+the cap gets 2; a pointer that reached outside RAM gets a fresh zeroed block; a run ending on a branch to itself (the game's own stop
+on data it rejects) gets the word the last tst / cmp/eq compared changed so the test goes the other way (unhang). gen_drv.mend calls
+it at most 16 times per function and gives the words it set to the next candidates before their first run (without that reuse
+FUN_0c05265c still timed out: 16 repairs, the rest at the cap). Tests: tests/repair (wrapped count + null pointers; deliberate hang).
+- 10 unproven timeouts with a dt loop + FUN_0c05265c: 6 proven (FUN_0c05265c 34 B in 19 s, then FUN_0c0cac3a and FUN_0c0c9d34 after
+  the hang rule, 3 more on the first run).
+- Left: FUN_0c0be054 (the dt count is a stack local, computed: no drawn word to set), FUN_0c082cfa (the bad pointer is its own r4
+  argument), FUN_0c062034 (finishes on the zero case in 30 steps: the time goes elsewhere), FUN_0c0cbafc, FUN_0c0b6aa8 (not read).

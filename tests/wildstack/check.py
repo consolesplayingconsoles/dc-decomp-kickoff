@@ -16,6 +16,9 @@ at 1FFFFE08: a difference no game input makes. Run again with the stack lower, s
                     mirror    an access in a mirror of main RAM (0D000000-0FFFFFFF, the simulator's stack aside) is a stray pointer the
                               game never makes (its pointers are 8C...): cpuSglAimTable read 0E6E76C4 and 0E6E7610, which the C read in
                               the other order, and those accesses are compared in order as a device's
+                    unnamed   an access outside RAM in a 16 MB region the function's code names no address in is a stray pointer
+                              (selCursorInput: a random word as a pointer read 103C3B4C, the C 1E29B898; FUN_8c0f8590, 14F01FCA...):
+                              the case is dropped; one in a region it names (its hardware registers, VRAM) is kept
                     wired     original_runs asks it before keeping a case with accesses outside RAM
 """
 import os
@@ -59,6 +62,19 @@ def main():
         bad.append('mirror: gen_drv.py has no ram_mirror()')
     if 'ram_mirror(' not in src[src.index('def original_runs('):src.index('def grow(')]:
         bad.append('wired: original_runs does not ask ram_mirror')
+    try:
+        ns3 = {}
+        exec(compile(src[src.index('def unnamed_region('):src.index('\ndef ', src.index('def unnamed_region(') + 5)], 'gen_drv.py', 'exec'), ns3)
+        ur = ns3['unnamed_region']
+        named = {0xA05F8000 & 0x1FFFFFFF}
+        if ur([['r', '1CA369BC', 4, '0']], named) is not True:
+            bad.append('unnamed: an access in a region the function never names is kept')
+        if ur([['w', '005F8040', 4, '1'], ['r', '005F6900', 4, '0']], named) is not False:
+            bad.append('unnamed: an access in the region of a named register is dropped')
+    except ValueError:
+        bad.append('unnamed: gen_drv.py has no unnamed_region()')
+    if 'unnamed_region(' not in src[src.index('def original_runs('):src.index('def grow(')]:
+        bad.append('wired: original_runs does not ask unnamed_region')
     if 'stack_moved(' not in src[src.index('def original_runs('):src.index('def grow(')]:
         bad.append('wired: original_runs does not ask stack_moved')
     if bad:
