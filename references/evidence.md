@@ -726,3 +726,22 @@ FUN_0c05265c still timed out: 16 repairs, the rest at the cap). Tests: tests/rep
   the hang rule, 3 more on the first run).
 - Left: FUN_0c0be054 (the dt count is a stack local, computed: no drawn word to set), FUN_0c082cfa (the bad pointer is its own r4
   argument), FUN_0c062034 (finishes on the zero case in 30 steps: the time goes elsewhere), FUN_0c0cbafc, FUN_0c0b6aa8 (not read).
+
+playerControl (Virtua Tennis, 21,482 B, 2026-10-28): the reader ran 26+ minutes without finishing on it; a profile put 54 of 60 s in
+gen_cfg's dominator sets (a full set per instruction, about 10,000 of them, iterated to a fixpoint, post-dominators in the slow
+order). Dominator trees (Cooper, Harvey, Kennedy) with a preorder-interval test give the same answers (tests/cfgdom, 300 random
+functions against the set equations) and read it in 13 s. Step 5 then took 81 s: Equivalent on 61 of 9,031 instructions; five rounds of
+--direct (about 35 s each) took it to 4,768 of 9,108 (52%), Equivalent every round, the sixth found nothing new. Also found: the step-5
+alarm was an Exception, so the tools' own `except Exception` swallowed it and drawing ran on unbounded (cpuSglAimTable, 106 min against
+38); Timeout is now a BaseException (tests/alarm).
+
+Drawing timeouts on Virtua Tennis (2026-10-28), after the reader and alarm fixes: of 30 functions that were not drawn, emotKeysDefault
+(10.8 KB) and resultSideDraw were drawn at once (all instructions run); playerPut, playerChooseSwing, selCursorInputC and sysVideoSelect
+were drawn and differ (argument placement, a wrong pointer, an unaligned read on the C side). Repair rules added from two small ones:
+- nlSetPaletteData (44 B): an argument shifted into an index (shll2 r4, a store at gPaletteData + r4), drawn as a pointer: index_source
+  follows the address back through shifts and copies and sets the index to 0.
+- emotFaceReset (176 B): the index is a call's answer reaching the address through add r0,r14; and no call answer was ever found on
+  Virtua Tennis, because gen_drv.mend gave repair the range as 0C... while the code runs at 8C... (repair now takes the form from the
+  trace, and mend sets the inline-call test). A call inside a loop has every answer from that call site set at once, and what a
+  repair set in registers and call answers is reused by the next candidates (only memory words were before).
+Both Equivalent. 15 small ones (150 to 2,252 B) still time out with these rules: each has a cause of its own, not one group.

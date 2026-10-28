@@ -15,6 +15,14 @@ sets that source (directed.apply): a dt counter to 2, a pointer that read or wro
                   record whose flag bit is clear):
                     plain     the zero case spins to the step cap
                     repaired  repair sets the tested word so the test goes the other way, and the case finishes
+                  index: r0 = &T; shll2 r4; *(r0 + r4) = r1, r4 drawn as a pointer (Virtua Tennis nlSetPaletteData: an index into
+                  gPaletteData):
+                    repaired  repair traces the address back through the shift and sets the index to 0: no access outside RAM
+                  addindex: r4 = &T; shll2 r5; add r5,r4; *r4 = r1 (emotFaceReset: a table entry plus a call's answer times 4):
+                    repaired  the index is found through the register add and set to 0
+                  callindex: the same with the index a call's answer, the range given as 0C... while the code runs at 8C... (gen_drv.mend
+                  passes 0C..., Virtua Tennis runs at 8C...: no call answer was ever found there):
+                    repaired  the call's answer is set to 0
 """
 import os
 import shutil
@@ -82,6 +90,62 @@ def main():
         r3 = run2(fixed or {})
         if not fixed or r3['error']:
             bad.append('hang repaired: no case the original finishes on: %s / %s' % (fixed, r3['error']))
+        idx = [0xD002,               # mov.l @(pool),r0   ; = &T
+               0x4408,               # shll2 r4
+               0x0416,               # mov.l r1,@(r0,r4)
+               0x000B, 0x0009,       # rts / nop
+               0x0009]
+        body = b''.join(struct.pack('<H', w) for w in idx) + struct.pack('<I', BASE + 0x100)
+        open(os.path.join(d, 'idx.bin'), 'wb').write(body + b'\x00' * (0x200 - len(body)))
+        def run3(case, trace=True):
+            return sh4sim.run(dict(case, exe='idx.bin', base='%08X' % BASE, entry='%08X' % BASE, end='%08X' % (BASE + 0xA), steps=20000,
+                                   trace=trace), d)
+        drawn = {'regs': {'r4': '0C800000'}}
+        if not run3(drawn).get('devices'):
+            bad.append('index plain: the drawn index reached nothing outside RAM: the test does not show it')
+        fixed = directed.repair(drawn, run3, (0x0C000000 | (BASE & 0x1FFFFFFF), 0x0C000000 | ((BASE + 0xA) & 0x1FFFFFFF)), hw=False)
+        r4 = run3(fixed or drawn)
+        if not fixed or r4['error'] or r4.get('devices'):
+            bad.append('index repaired: %s / %s / devices %s' % (fixed, r4['error'], (r4.get('devices') or [])[:2]))
+        add = [0xD402,               # mov.l @(pool),r4   ; = &T
+               0x4508,               # shll2 r5
+               0x345C,               # add r5,r4
+               0x2412,               # mov.l r1,@r4
+               0x000B, 0x0009]       # rts / nop
+        body = b''.join(struct.pack('<H', w) for w in add) + struct.pack('<I', BASE + 0x100)
+        open(os.path.join(d, 'add.bin'), 'wb').write(body + b'\x00' * (0x200 - len(body)))
+        def run4(case, trace=True):
+            return sh4sim.run(dict(case, exe='add.bin', base='%08X' % BASE, entry='%08X' % BASE, end='%08X' % (BASE + 0xC), steps=20000,
+                                   trace=trace), d)
+        drawn = {'regs': {'r5': '0C800000'}}
+        if not run4(drawn).get('devices'):
+            bad.append('addindex plain: the drawn index reached nothing outside RAM: the test does not show it')
+        fixed = directed.repair(drawn, run4, (0x0C000000 | (BASE & 0x1FFFFFFF), 0x0C000000 | ((BASE + 0xC) & 0x1FFFFFFF)), hw=False)
+        r5 = run4(fixed or drawn)
+        if not fixed or r5['error'] or r5.get('devices'):
+            bad.append('addindex repaired: %s / %s / devices %s' % (fixed, r5['error'], (r5.get('devices') or [])[:2]))
+        cl = [0x4F22,                # sts.l pr,@-r15
+              0xD405,                # mov.l @(pool),r4   ; = &T
+              0xB006,                # bsr f (outside the function)
+              0x0009,                # nop
+              0x4008,                # shll2 r0
+              0x340C,                # add r0,r4
+              0x2412,                # mov.l r1,@r4
+              0x4F26,                # lds.l @r15+,pr
+              0x000B, 0x0009,        # rts / nop
+              0x000B, 0x0009]        # f: rts / nop
+        body = b''.join(struct.pack('<H', w) for w in cl) + struct.pack('<I', BASE + 0x100)
+        open(os.path.join(d, 'call.bin'), 'wb').write(body + b'\x00' * (0x200 - len(body)))
+        def run5(case, trace=True):
+            return sh4sim.run(dict(case, exe='call.bin', base='%08X' % BASE, entry='%08X' % BASE, end='%08X' % (BASE + 0x14), steps=20000,
+                                   trace=trace), d)
+        drawn = {'calls': [{'r0': '0C930100'}] * 3}
+        if not run5(drawn).get('devices'):
+            bad.append('callindex plain: the drawn answer reached nothing outside RAM: the test does not show it')
+        fixed = directed.repair(drawn, run5, (0x0C000000 | (BASE & 0x1FFFFFFF), 0x0C000000 | ((BASE + 0x14) & 0x1FFFFFFF)), hw=False)
+        r6 = run5(fixed or drawn)
+        if not fixed or r6['error'] or r6.get('devices'):
+            bad.append('callindex repaired: %s / %s / devices %s' % (fixed, r6['error'], (r6.get('devices') or [])[:2]))
     finally:
         shutil.rmtree(d, ignore_errors=True)
     if bad:
