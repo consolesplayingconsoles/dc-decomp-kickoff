@@ -52,6 +52,15 @@ def main():
             if got != w:
                 bad.append('%s: got %s, want %s' % (k, got, w))
         src = open(os.path.join(TOOLS, '7-reduction', 'shrink.py')).read()
+        # next: a smaller form that does not pass is followed by the next smaller one (Virtua Tennis nlCreateVertexBuffer_multi_pass: the flat form
+        # was the smallest and wrong, the structured form was smaller than the old C and proven; only the smallest was ever tried)
+        for needle in ("def shrink_one(", "cands.sort(", "for ci, (n_new, s, c) in enumerate(tried)"):
+            if needle not in src:
+                bad.append('next: shrink.py does not try the next form after a failure (missing %s)' % needle)
+        # file: a function that passes alone but differs in the file it was written into is restored, not logged as shrunk
+        for needle in ("the written file differs", "tools/equiv.py', 'src/%s.c' % ns, fn"):
+            if needle not in src:
+                bad.append('file: shrink.py does not check the written file (missing %s)' % needle)
         for needle in ("ledger.last_failure(fn, since)", "'shrink-failed'", "new C failed, old restored"):
             if needle not in src:
                 bad.append('source: shrink.py does not contain %s' % needle)
@@ -60,7 +69,7 @@ def main():
         shutil.rmtree(tmp, ignore_errors=True)
     if bad:
         sys.exit("[ERROR] shrink check failed:\n" + "\n".join(bad))
-    print("[shrink] ok: a restored function's log line carries the recheck's failing case and names the file with the new C")
+    print("[shrink] ok: a restored function's log line carries the recheck's failing case and names the file with the new C; a failed form is followed by the next smaller one")
 
 
 if __name__ == '__main__':

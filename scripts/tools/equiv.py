@@ -305,7 +305,11 @@ def definitions():
     callee as built reads. The integer count is not capped (compared_arity caps it)."""
     out = {}
     for path in sorted(glob.glob(os.path.join('src', '*.c'))):
-        text = re.sub(r'/\*.*?\*/|//[^\n]*', ' ', open(path, errors='replace').read(), flags=re.S)
+        try:
+            raw = open(path, errors='replace').read()
+        except OSError:
+            continue                    # another tool removed or moved the file since the listing
+        text = re.sub(r'/\*.*?\*/|//[^\n]*', ' ', raw, flags=re.S)
         structs = struct_words(text)
         for m in re.finditer(r'^(?:static\s+)?[A-Za-z_][\w \t\*]*?\b(\w+)\s*\(([^;{)]*)\)\s*\{', text, flags=re.M):
             if '...' in m.group(2) or not m.group(2).strip():
@@ -328,7 +332,11 @@ def used_definitions():
     if _USED:
         return _USED
     for path in sorted(glob.glob(os.path.join('src', '*.c'))):
-        text = re.sub(r'/\*.*?\*/|//[^\n]*', ' ', open(path, errors='replace').read(), flags=re.S)
+        try:
+            raw = open(path, errors='replace').read()
+        except OSError:
+            continue                    # another tool removed or moved the file since the listing
+        text = re.sub(r'/\*.*?\*/|//[^\n]*', ' ', raw, flags=re.S)
         structs = struct_words(text)
         for m in re.finditer(r'^(?:static\s+)?[A-Za-z_][\w \t\*]*?\b(\w+)\s*\(([^;{)]*)\)\s*\{', text, flags=re.M):
             if '...' in m.group(2) or not m.group(2).strip():

@@ -1091,9 +1091,9 @@ def main():
                   "    except gen_core.Skip as e:\n"
                   "        print('@@@@ ' + n); print('SKIPPED ' + str(e))\n")
         out = subprocess.run([sys.executable, "-c", script] + [n for n, _ in FUNCS if not n.startswith('_') and n not in ('threearg', 'vecmk', 'vsetfn', 'fptrdef', 'onefn', 'twofn', 'getfn', 'fivefn', 'printfn', 'voidfn', 'passdef', 'sretdef', 'twoptfn', 'ptintfn', 'retvecfn', 'bodyfn', 'body3fn', 'varpdef', 'stkreads2')], cwd=tmp, stdout=subprocess.PIPE,
-                             stderr=subprocess.STDOUT, universal_newlines=True).stdout
+                             stderr=subprocess.STDOUT, universal_newlines=True, env=dict(os.environ, GEN_FRAME='0')).stdout      # the frame pass has its own test (tests/frame)
         flat = subprocess.run([sys.executable, "-c", script, 'phantomfn', 'spsteploopfn', 'structreusefn', 'ifelsefn', 'pendstalefn'], cwd=tmp, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                              universal_newlines=True, env=dict(os.environ, GEN_FORM='flat')).stdout       # the flat form, where the bug was
+                              universal_newlines=True, env=dict(os.environ, GEN_FORM='flat', GEN_FRAME='0')).stdout       # the flat form, where the bug was
         out += flat.replace('@@@@ phantomfn', '@@@@ phantomfn_flat').replace('@@@@ spsteploopfn', '@@@@ spsteploopfn_flat').replace('@@@@ structreusefn', '@@@@ structreusefn_flat').replace('@@@@ pendstalefn', '@@@@ pendstalefn_flat').replace('@@@@ ifelsefn', '@@@@ ifelsefn_flat')
         parts = {}
         for chunk in out.split('@@@@ ')[1:]:
@@ -1170,8 +1170,8 @@ def main():
             ('stackframefn', [r"re:stk4fn\(\*\(Stk4 \*\)\(\(int\)stk \+ ", "not:@@F", "stk["]),
             # OPEN (adxf_read_sj32, adxf_SetFileInfo -> ADXERR_CallErrFunc, Crazy Taxi): the same with a definition that takes its stack word
             # as a plain fifth int (`int a8`), not a structure: r4-r7 are positional and the fifth word is read from the frame at SP
-            ('stackframeintfn', [r"re:fivefn\(0x33, a5, a6, a7, \*\(int \*\)\(\(int\)stk \+ ", "not:@@F", "stk["]),
-            ('stackframeint2fn', [r"re:fivefn\(0x33, 0x5, 0x0, 0x0, \*\(int \*\)\(\(int\)stk \+ ", "not:@@F"]),
+            ('stackframeintfn', [r"re:fivefn\(0x33, a5, a6, a7, (?:\*\(int \*\)\(\(int\)stk \+ |R\d+\))", "not:@@F", "stk["]),      # the fifth word is the frame slot, or the local that holds it (frame.py)
+            ('stackframeint2fn', [r"re:fivefn\(0x33, 0x5, 0x0, 0x0, (?:\*\(int \*\)\(\(int\)stk \+ |R\d+\))", "not:@@F"]),
             # FIXED, kept as a regression (motionSet then motionRootFirst in playerInit, Virtua Tennis): the stack adjustment is deferred past the next call. Each call
             # takes the words its callee reads from the stack (two, then one), the earlier ones are not the later call's arguments
             ('deferredfn', ["readstack2(0x1, 0x2, 0x3, 0x4, 0x8, 0x9)", "readstack1(0x5, 0x6, 0x7, 0x8, 0x7)"]),

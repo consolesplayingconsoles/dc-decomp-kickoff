@@ -10,6 +10,7 @@ No game data, no compiler. Stdlib only.
                     far        mova, six instructions that leave r0 alone, fmov.s @r0,fr8: accepted, with a local copy of the word
                     touched    mova, then an instruction that writes r0, then the load: refused (the load reads something else)
                     branch     mova, a branch before any use of r0: refused
+                    delay      the load in the delay slot of a jsr is the load: accepted; a slot that is no load: refused
 """
 import os
 import shutil
@@ -65,6 +66,13 @@ def main():
         text, err = run([mova, 0x8901, 0x0009] + fill + [load] + end)     # bt +1 before any use
         if text is not None:
             bad.append('branch: accepted although a branch comes before the load')
+        # delay: the load in the delay slot of a call (sysVideoSelect, Virtua Tennis: `mova ...,r0 / jsr @r3 / fmov.s @r0,fr4`) is the load
+        text, err = run([mova, 0x430B, load] + end)                      # mova / jsr @r3 / fmov.s @r0,fr8
+        if text is None:
+            bad.append('delay: a load in the delay slot of a jsr was refused: %s' % err)
+        text, err = run([mova, 0x430B, 0xE001] + end)                    # mova / jsr @r3 / mov #1,r0: the slot overwrites r0, no load
+        if text is not None:
+            bad.append('delay: accepted although the delay slot does not load through r0')
         if not bad:
             print('[relocmova] ok: a mova whose load comes later through code that leaves r0 alone is accepted; an overwritten r0 or a branch refuses it')
             return

@@ -130,6 +130,9 @@ def _r0_loaded_once(x, nxt):
         if re.match(r'^(fmov\.s|mov\.l) @r0,', text):
             return True
         if m in ('bt', 'bf', 'bra', 'bsr', 'jmp', 'jsr', 'rts', 'bt/s', 'bf/s', 'braf', 'bsrf', 'rte', 'trapa') or m.startswith('.word'):
+            if m in ('bra', 'bsr', 'jmp', 'jsr', 'rts', 'bt/s', 'bf/s', 'braf', 'bsrf', 'rte') and y + 2 < nxt:
+                slot = shdis.decode(B.word(y + 2), y + 2)[0] or ''      # a delay slot runs before the branch: `jsr @r3 / fmov.s @r0,fr4` loads through r0
+                return bool(re.match(r'^(fmov\.s|mov\.l) @r0,', slot))
             return False
         if re.search(r'\br0\b|\(r0,|@\(r0', text):
             return False

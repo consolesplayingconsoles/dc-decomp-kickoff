@@ -45,10 +45,24 @@ _SPARE = layout.region('spare')
 P3 = _SPARE[0] if _SPARE else None                         # unused RAM for what does not fit, test builds only
 
 
+def obj_addr(name):
+    """The address an objects.txt line starts with, in the 0C mirror the regions are in: objects.txt names the files as the game lists
+    its functions (8c for a game at 8C), layout.txt gives 0C. Compared as written, every file of a game at 8C was past the game block,
+    so the link took all the old code again beside the C (Virtua Tennis: 3,310 duplicate symbols, the first time the C fitted)."""
+    return layout_txt.mirror(int(name[:8], 16))
+
+
+def obj_addr_of(name):
+    """A game function's address in the 0C mirror, from functions.txt."""
+    if not hasattr(obj_addr_of, 'table'):
+        obj_addr_of.table = {n: a for a, _, n in functions()}
+    return obj_addr_of.table[name]
+
+
 def boot_split():
     """(start, name) of the asm file that runs into the fill block: its head stays, its fill part is given up; None when
     the fill block starts on a file boundary (or there is none)."""
-    files = sorted((int(l[:8], 16), l.strip()[9:-4]) for l in open('objects.txt') if l.strip())
+    files = sorted((obj_addr(l), l.strip()[9:-4]) for l in open('objects.txt') if l.strip())
     for (a, n), nxt in zip(files, files[1:] + [(1 << 32, None)]):
         if a < FILL0 < nxt[0]:
             return a, n
@@ -79,6 +93,8 @@ def game_set():
             for d in glob.glob('tests/*/%s.json' % n):
                 out[n] = d.split('/')[1]
                 break
+    if os.path.exists(OUT + '/near.json'):               # functions prep moved to a build file of their own (split_near)
+        out.update(json.load(open(OUT + '/near.json')))
     return out
 
 
@@ -252,6 +268,60 @@ def pieces():
     print('%d table pieces, %d second copies, %d literals rewritten' % (len(cl), len(alt), nrep))
 
 
+NEAR = re.compile(r'\b(?:BSR|BRA)\s+_(\w+)')
+
+
+def split_near():
+    """A kept asm piece calls with bsr/bra (4 KB reach) and so must lie next to what it calls, as in the original. When that is a C
+    function inside a file with other functions, the file can be kilobytes long and no layout puts the piece within reach of it
+    (Virtua Tennis: nlObjPutMVAsm calls nl_objput_mv_send_p0, 9 KB into gen_z; 72 short branches in 10 pieces did not reach). Each such
+    function goes to a build file of its own, nb_<name>.c (build/cbuild/src only; src/ is not touched): the file's declarations, the
+    static functions it uses, and its definition. build/cbuild/near.json maps it to its file for game_set()."""
+    gs = game_set()
+    want = {}
+    for f in glob.glob(OUT + '/asm/*.src'):
+        for tgt in NEAR.findall(open(f, errors='replace').read()):
+            if tgt in gs:
+                want.setdefault(gs[tgt], set()).add(tgt)
+    near = {}
+    for stem, names in sorted(want.items()):
+        path = '%s/src/%s.c' % (OUT, stem)
+        if not os.path.exists(path):
+            continue
+        t = open(path, errors='replace').read()
+        bare = re.sub(r'/\*.*?\*/', lambda m: ' ' * len(m.group(0)), t, flags=re.S)
+        defs = [m.group(1) for m in DEF.finditer(bare)]
+        if not [n for n in defs if n in gs and n not in names]:
+            continue                                        # the file holds nothing else of the game: it is small already
+        statics = [m.group(1) for m in DEF.finditer(bare) if re.match(r'\s*static\b', bare[m.start():m.end()])]
+        rest = t
+        for n in sorted(names):
+            b = consistency.block(t, n)
+            if not b:
+                continue
+            body, need = t[b[0]:b[1]], []
+            grow = True
+            while grow:                                     # the statics it uses, and the ones those use
+                grow = False
+                for x in statics:
+                    if x not in need and re.search(r'\b%s\b' % re.escape(x), body + ''.join(t[slice(*consistency.block(t, y))] for y in need)):
+                        need.append(x)
+                        grow = True
+            own = t
+            for x in defs:                                  # every other definition goes; the declarations stay
+                if x != n and x not in need:
+                    bb = consistency.block(own, x)
+                    if bb:
+                        own = own[:bb[0]] + own[bb[1]:]
+            open('%s/src/nb_%s.c' % (OUT, n), 'w').write(own)
+            bb = consistency.block(rest, n)
+            rest = rest[:bb[0]] + rest[bb[1]:]
+            near[n] = 'nb_' + n
+        open(path, 'w').write(rest)
+    json.dump(near, open(OUT + '/near.json', 'w'))
+    print('%d functions a kept piece reaches by bsr/bra moved to build files of their own' % len(near))
+
+
 def extern_head(names, funcs, t):
     """The declarations at the top of a rewritten C file: `extern char name[]` for each table or function the rewritten numbers are
     based on, `int name();` for each game function whose address the C names. A name the file already declares or defines as a function
@@ -263,8 +333,9 @@ def extern_head(names, funcs, t):
 
 
 def prep_sources():
-    if os.path.exists(OUT + '/units.json'):
-        os.remove(OUT + '/units.json')
+    for f in ('units.json', 'near.json'):
+        if os.path.exists('%s/%s' % (OUT, f)):
+            os.remove('%s/%s' % (OUT, f))
     gs = game_set()
     os.makedirs(OUT + '/src', exist_ok=True)
     for f in glob.glob(OUT + '/src/*.c'):
@@ -554,10 +625,18 @@ def layout(margin=1.0, soft=False, ratios=None):
                 u = unit_of[pc] + [x for x in unit_of[other] if x not in unit_of[pc]]
                 for x in u:
                     unit_of[x] = u
+    F = {n: obj_addr_of(n) for n in gs}
+    first = {}
+    for n, st in gs.items():
+        first[st] = min(first.get(st, 1 << 40), F[n])
+    if os.path.exists(OUT + '/units.json'):
+        for u_, m in json.load(open(OUT + '/units.json')).items():
+            first[u_] = min([first.get(x, 1 << 40) for x in m] + [first.get(u_, 1 << 40)])
+    at = lambda o: obj_addr(o) if re.match(r'[0-9a-f]{8}_', o) else first.get(o, 1 << 40)
     units, seen = [], set()
     for o in sorted(unit_of):
         if o not in seen:
-            u = unit_of[o]
+            u = sorted(unit_of[o], key=at)       # a piece and what it reaches by bsr/bra, in the original's order: as close as there
             seen.update(u)
             units.append(u)
     usize = lambda u: sum(r4(sizes[x]) for x in u)
@@ -661,7 +740,7 @@ def link():
     order = [l.strip() for l in open('objects.txt') if l.strip()]
     ptr = {os.path.basename(f) for f in glob.glob(OUT + '/ptr/*.src')}
     for f in order:
-        if int(f[:8], 16) >= G1:
+        if obj_addr(f) >= G1:
             src = '%s/ptr/%s' % (OUT, f) if f in ptr else 'asm/%s' % f
             dst = '%s/asm_t/%s' % (OUT, f)
             if not os.path.exists(dst) or open(dst).read() != re.sub(r'(\.SECTION\s+)P(\s*,)', lambda m: m.group(1) + 'PT' + m.group(2), open(src).read()):
@@ -673,14 +752,14 @@ def link():
             jobs.append(('%s/asm/%s.src' % (OUT, n), '%s/obj/%s.obj' % (OUT, n)))
     assemble(jobs)
     lo = b[0] if b else FILL0
-    ins = ['build/obj/%s.obj' % f[:-4] for f in order if int(f[:8], 16) < lo]
+    ins = ['build/obj/%s.obj' % f[:-4] for f in order if obj_addr(f) < lo]
     if b:
         ins.append(OUT + '/obj/boot_tail.obj')
     ins += ['%s/obj1/%s.obj' % (OUT, x) for x in parts[0]] + (['%s/obj1/pad1.obj' % OUT] if pad[0] else [])
     if FILL1 < G0:
         ins.append(OUT + '/obj/boot_stub.obj')
     ins += ['%s/obj2/%s.obj' % (OUT, x) for x in parts[1]] + (['%s/obj2/pad2.obj' % OUT] if pad[1] else [])
-    ins += ['%s/obj_t/%s.obj' % (OUT, f[:-4]) for f in order if int(f[:8], 16) >= G1]
+    ins += ['%s/obj_t/%s.obj' % (OUT, f[:-4]) for f in order if obj_addr(f) >= G1]
     ins += ['%s/obj3/%s.obj' % (OUT, x) for x in parts[2]]
     used = set()
     for f in glob.glob(OUT + '/src/*.c') + glob.glob(OUT + '/asm/*.src') + glob.glob(OUT + '/ptr/*.src'):
@@ -710,6 +789,13 @@ def link():
     print(open(OUT + '/game.e2b.log', errors='replace').read()[-300:])
 
 
+def part_regions():
+    """{section: (start, end)} of the parts the build fills: PB2 in the old game code, and PB1 only when layout.txt gives a fill block.
+    A game with none (Virtua Tennis) has no PB1 in its map: asking for one failed every fit, a link with 11,404 bytes spare included,
+    and the next try at a smaller margin left code out and reported it as over."""
+    return dict([('PB1', (FILL0, FILL1))] if FILL1 > FILL0 else [], PB2=(G0, G1))
+
+
 def fit_build():
     """layout, link, and read the fit from the linked map: every part inside its place, nothing left for P3, and no short branch the
     linker could not reach. With the optimizer each part shrinks by its own ratio, so a part that comes out over is filled less."""
@@ -730,6 +816,11 @@ def fit_build():
                 break
         if not layout(margin, soft=True, ratios=ratios):
             break
+        now = open(OUT + '/layout.json').read()
+        if attempt and now == last:
+            print('margin %.3f: the same layout as the link before; linking it again changes nothing' % margin)
+            break
+        last = now
         link()
         log = ''.join(open(OUT + f, errors='replace').read() for f in ('/game.lnk.log', '/game.e2b.log') if os.path.exists(OUT + f))
         bad = fitmod.fatal(log)
@@ -738,19 +829,19 @@ def fit_build():
             if not any('address space duplicate' in b.lower() for b in bad):
                 continue                                 # nothing to measure: the next margin changes the input
         secs = fitmod.sections(open(OUT + '/game.map', errors='replace').read())
-        ok, lines = fitmod.check(secs, {'PB1': (FILL0, FILL1), 'PB2': (G0, G1)}, ('P3',))
+        ok, lines = fitmod.check(secs, part_regions(), ('P3',))
         miss = fitmod.unreached(log)
         print('margin %.3f: %s%s' % (margin, '; '.join(lines), ('; short branches that do not reach: ' + ', '.join(miss)) if miss else ''))
         ov = fitmod.overlaps(open(OUT + '/game.elf', 'rb').read()) if os.path.exists(OUT + '/game.elf') else [('no ELF', '')]
         if ov:
             print('  overlapping segments in the linked file: %s' % ov[:3])
-        if 'PB1' in secs and 'PB2' in secs:           # each part's own ratio, from what this link made of it, for the next layout
+        if all(n in secs for n in part_regions()):     # each part's own ratio, from what this link made of it, for the next layout
             sizes = module_sizes(OUT + '/prelim.map')
             parts = json.load(open(OUT + '/layout.json'))['parts']
             plain = [sum(r4(sizes.get(x, 0)) for x in parts[k]) for k in (0, 1)]
-            measured = (plain, [secs['PB1'][2], secs['PB2'][2]])
+            measured = (plain, [secs[n][2] if n in secs else 0 for n in ('PB1', 'PB2')])
             print('  measured: part 1 %d plain -> %d, part 2 %d plain -> %d' % (plain[0], measured[1][0], plain[1], measured[1][1]))
-            if min(plain + measured[1]) > 0:
+            if all(plain[k] > 0 and measured[1][k] > 0 for k, n in enumerate(('PB1', 'PB2')) if n in part_regions()):
                 ratios = measured
                 if ok and not miss and not bad and not ov:
                     fitmod.save_ratios(seed, measured)    # only a fit that held is worth starting from
@@ -766,6 +857,7 @@ def main(argv):
     if argv[1] == 'prep':
         prep_sources()
         pieces()
+        split_near()
     elif argv[1] == 'tables':
         cl, lab = tables(OUT + '/src')
         for s, e, n, v in cl:

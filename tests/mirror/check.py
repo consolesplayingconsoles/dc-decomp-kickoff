@@ -11,6 +11,11 @@ the functions through layout.functions(), which maps an address to the 0C mirror
                     relocasm  functions() gives the 0C addresses
                     zero      0c-form functions.txt (CT, ZR) gives the same
                     boundaries  BASE, entries() and word() work in the 0C mirror, and word() takes either mirror of an address
+                    objects   cbuild reads objects.txt (8c names) in the 0C mirror: a file inside the game block is not past it,
+                              a file past it is, and boot_split() finds the file that runs into the block (the link took every old
+                              file of Virtua Tennis again beside the C: 3,310 duplicate symbols, the first time its C fitted)
+                    parts     with no fill block in layout.txt the fit asks only for PB2 (Virtua Tennis has none: asking for PB1
+                              failed a link that fitted), and with one it asks for both
 """
 import os
 import shutil
@@ -62,8 +67,28 @@ def main():
             bad.append('boundaries: entries() gives %X, not the 0C mirror' % boundaries.entries()[0][0])
         if boundaries.BASE != 0x0C020000:
             bad.append('boundaries: BASE is %X, not the 0C mirror' % boundaries.BASE)
+        # objects: objects.txt in 8c form against the 0C regions (no fill block: the game code starts the block)
+        open('objects.txt', 'w').write('8c01ff00_a.src\n8c020100_g.src\n8c030000_t.src\n')
+        if not hasattr(cbuild, 'obj_addr'):
+            bad.append('objects: cbuild has no obj_addr(), objects.txt is compared as written')
+        else:
+            if cbuild.obj_addr('8c020100_g.src') >= cbuild.G1:
+                bad.append('objects: 8c020100 (inside the game block) is counted past it')
+            if cbuild.obj_addr('8c030000_t.src') < cbuild.G1:
+                bad.append('objects: 8c030000 (past the game block) is counted inside it')
+        if cbuild.boot_split() != (0x0C01FF00, 'a'):
+            bad.append('objects: boot_split() is %s, not the file at 0C01FF00 that runs into the block' % (cbuild.boot_split(),))
+        # parts: no fill block here; a fill block in a second layout.txt (the module reads it at import)
+        if cbuild.part_regions() != {'PB2': (0x0C020000, 0x0C030000)} if hasattr(cbuild, 'part_regions') else True:
+            bad.append('parts: with no fill block the fit asks for %s, not PB2 alone' % (getattr(cbuild, 'part_regions', lambda: 'PB1 and PB2')(),))
+        open('layout.txt', 'w').write('game 0C020000 0C030000\nfill 0C010000 0C018000\n')
+        sys.modules.pop('cbuild')
+        import cbuild as cb2
+        if not hasattr(cb2, 'part_regions') or cb2.part_regions() != {'PB1': (0x0C010000, 0x0C018000), 'PB2': (0x0C020000, 0x0C030000)}:
+            bad.append('parts: with a fill block the fit does not ask for PB1 and PB2')
         if not bad:
-            print('[mirror] ok: 8c and 0c functions.txt both give the 0C addresses to layout, cbuild, relocasm and boundaries')
+            print('[mirror] ok: 8c and 0c functions.txt both give the 0C addresses to layout, cbuild, relocasm and boundaries; '
+                  'cbuild reads 8c objects.txt in the 0C mirror')
             return
         sys.exit('[ERROR] mirror check failed:\n' + '\n'.join(bad))
     finally:
