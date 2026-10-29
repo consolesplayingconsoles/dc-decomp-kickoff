@@ -383,7 +383,7 @@ def fn_stackclobber():
     a.op(STS_PR); a.load(1, 'one'); a.op(jsr(1)); a.op(NOP)
     a.load(1, 'five'); a.op(mov_i(4, 1)); a.op(mov_i(3, 9)); a.op(jsr(1)); a.op(0x2F36)
     a.op(0x7F04); a.op(LDS_PR); a.op(RTS); a.op(NOP)
-    a.pool('one', ADDR['onefn']); a.pool('five', ADDR['fivefn'])
+    a.pool('one', ADDR['twoargfn']); a.pool('five', ADDR['fivefn'])
     return a
 
 
@@ -1027,12 +1027,30 @@ DEFS_C = ("typedef struct { int w[4]; } Stk4;\nint stk4fn(Stk4 s)\n{\n    return
           "typedef struct { int w[3]; } Stk3;\nStk3 sretdef(float f4, float f5, float f6)\n{\n    Stk3 v;\n    *(float *)&v.w[0] = f4;\n    return v;\n}\n")
 
 
+def fn_pendstale():
+    # (x + n) % (m + 1) with x kept on the stack across blocks and calls, then used as a table index (selPortsExec, Virtua Tennis): a word
+    # pushed, popped after a call, added to the call's result, pushed again and popped in the delay slot of the _modls call. The carried push was
+    # read from its frame cell where it was used, so after the re-push stored the sum into that same cell, the use read the cell again and
+    # added n a second time
+    a = Asm()
+    a.op(STS_PR); a.op(0x2F46)                                                  # mov.l r4,@-r15 (a value that is not a constant)
+    a.op(tst(4, 4)); a.jump('bt', 'j'); a.op(NOP); a.label('j')                 # a block boundary: the push is carried
+    a.load(3, 'get'); a.op(jsr(3)); a.op(NOP)
+    a.op(0x61F6); a.op(add(0, 1))                                               # mov.l @r15+,r1 / add r0,r1
+    a.load(3, 'get'); a.op(jsr(3)); a.op(0x2F16)                                # jsr get / mov.l r1,@-r15
+    a.load(3, 'mod'); a.op(add_i(0, 1)); a.op(jsr(3)); a.op(0x61F6)             # jsr _modls / mov.l @r15+,r1
+    a.load(1, 'tab'); a.op(0x4008); a.op(0x021E)                                # shll2 r0 / mov.l @(r0,r1),r2
+    a.load(5, 'p'); a.op(movl_st(2, 5)); a.op(LDS_PR); a.op(RTS); a.op(NOP)
+    a.pool('get', ADDR['getfn']); a.pool('mod', ADDR['_modls']); a.pool('tab', 0x0C2B0000); a.pool('p', STORE)
+    return a
+
+
 FUNCS = [('storefn', fn_store), ('ifelsefn', fn_ifelse), ('earlyfn', fn_early), ('loopfn', fn_loop),
          ('whilefn', fn_whileloop), ('nestfn', fn_nest), ('nocondfn', fn_nocond), ('foreverfn', fn_forever),
          ('twoargfn', fn_twoarg), ('thunkfn', fn_thunk), ('passfn', fn_pass), ('callerfn', fn_caller),
          ('_slow_mvn', fn_slowmvn_helper), ('_quick_odd_mvn', fn_slowmvn_helper), ('copyfn', fn_copy), ('threearg', fn_onereg), ('defcallerfn', fn_defcaller),
          ('vecmk', fn_structret), ('vsetfn', fn_structret), ('structfn', fn_struct),
-         ('fptrdef', fn_fptrdef), ('fptrcallerfn', fn_fptrcaller), ('onefn', fn_ret), ('twofn', fn_ret), ('twocallfn', fn_twocall), ('fivefn', fn_ret), ('fivecallfn', fn_fivecall), ('fivecallffn', fn_fivecallf), ('fivepassfn', fn_fivepass), ('printfn', fn_ret), ('varcallfn', fn_varcall), ('varcall4fn', fn_varcall4), ('voidfn', fn_ret), ('floatretfn', fn_floatret), ('ptfn', fn_ret), ('structargfn', fn_structarg), ('stackreadfn', fn_stackread), ('retvalfn', fn_retval), ('phantomfn', fn_phantom), ('stackpassfn', fn_stackpass), ('stackindfn', fn_stackind), ('stackspillfn', fn_stackspill), ('stackclobberfn', fn_stackclobber), ('switchfn', fn_switch), ('brafcompfn', fn_brafcomputed), ('stk4fn', fn_ret), ('stackframefn', fn_stackframe), ('stackframeintfn', fn_stackframeint), ('stackframeint2fn', fn_stackframeint2), ('readstack2', fn_readstack2), ('readstack1', fn_readstack1), ('readframe3', fn_readframe3), ('readframe3p', fn_readframe3p), ('structreusefn', fn_structreuse), ('stackonly1', fn_stackonly1), ('copyinfn', fn_copyin), ('sretfn', fn_sret), ('sretdef', fn_sret), ('sretcallfn', fn_sretcall), ('sretcallpfn', fn_sretcallp), ('argupdatefn', fn_argupdate), ('argnarrowfn', fn_argnarrow), ('fmergefn', fn_fmerge), ('fcarryfn', fn_fcarry), ('fslotfn', fn_fslot), ('fspillfn', fn_fspill), ('hiddenregfn', fn_hiddenreg), ('fnegsubfn', fn_fnegsub), ('stkreads2', fn_stkreads2), ('framestkfn', fn_framestk), ('varpdef', fn_varreads1), ('varpush3fn', fn_varpush3), ('constfirstfn', fn_constfirst), ('twoptfn', fn_ret), ('twostructfn', fn_twostruct), ('ptintfn', fn_ret), ('pushstructfn', fn_pushstruct), ('retvecfn', fn_ret), ('retptrpushfn', fn_retptrpush), ('retptrpush2fn', fn_retptrpush2), ('bodyfn', fn_varreads1), ('intstackmixfn', fn_intstackmix), ('copyframefn', fn_copyframe), ('body3fn', fn_varreads1), ('intstackshortfn', fn_intstackshort), ('selfcallfn', fn_selfcall), ('phantomstkfn', fn_phantomstk), ('phantomstkffn', fn_phantomstkf), ('deferredfn', fn_deferred), ('spsteploopfn', fn_spsteploop), ('floatstackfn', fn_floatstack), ('passdef', fn_passdef), ('defthunkfn', fn_defthunk)]
+         ('fptrdef', fn_fptrdef), ('fptrcallerfn', fn_fptrcaller), ('onefn', fn_ret), ('twofn', fn_ret), ('getfn', fn_ret), ('_modls', fn_ret), ('twocallfn', fn_twocall), ('fivefn', fn_ret), ('fivecallfn', fn_fivecall), ('pendstalefn', fn_pendstale), ('fivecallffn', fn_fivecallf), ('fivepassfn', fn_fivepass), ('printfn', fn_ret), ('varcallfn', fn_varcall), ('varcall4fn', fn_varcall4), ('voidfn', fn_ret), ('floatretfn', fn_floatret), ('ptfn', fn_ret), ('structargfn', fn_structarg), ('stackreadfn', fn_stackread), ('retvalfn', fn_retval), ('phantomfn', fn_phantom), ('stackpassfn', fn_stackpass), ('stackindfn', fn_stackind), ('stackspillfn', fn_stackspill), ('stackclobberfn', fn_stackclobber), ('switchfn', fn_switch), ('brafcompfn', fn_brafcomputed), ('stk4fn', fn_ret), ('stackframefn', fn_stackframe), ('stackframeintfn', fn_stackframeint), ('stackframeint2fn', fn_stackframeint2), ('readstack2', fn_readstack2), ('readstack1', fn_readstack1), ('readframe3', fn_readframe3), ('readframe3p', fn_readframe3p), ('structreusefn', fn_structreuse), ('stackonly1', fn_stackonly1), ('copyinfn', fn_copyin), ('sretfn', fn_sret), ('sretdef', fn_sret), ('sretcallfn', fn_sretcall), ('sretcallpfn', fn_sretcallp), ('argupdatefn', fn_argupdate), ('argnarrowfn', fn_argnarrow), ('fmergefn', fn_fmerge), ('fcarryfn', fn_fcarry), ('fslotfn', fn_fslot), ('fspillfn', fn_fspill), ('hiddenregfn', fn_hiddenreg), ('fnegsubfn', fn_fnegsub), ('stkreads2', fn_stkreads2), ('framestkfn', fn_framestk), ('varpdef', fn_varreads1), ('varpush3fn', fn_varpush3), ('constfirstfn', fn_constfirst), ('twoptfn', fn_ret), ('twostructfn', fn_twostruct), ('ptintfn', fn_ret), ('pushstructfn', fn_pushstruct), ('retvecfn', fn_ret), ('retptrpushfn', fn_retptrpush), ('retptrpush2fn', fn_retptrpush2), ('bodyfn', fn_varreads1), ('intstackmixfn', fn_intstackmix), ('copyframefn', fn_copyframe), ('body3fn', fn_varreads1), ('intstackshortfn', fn_intstackshort), ('selfcallfn', fn_selfcall), ('phantomstkfn', fn_phantomstk), ('phantomstkffn', fn_phantomstkf), ('deferredfn', fn_deferred), ('spsteploopfn', fn_spsteploop), ('floatstackfn', fn_floatstack), ('passdef', fn_passdef), ('defthunkfn', fn_defthunk)]
 
 
 def main():
@@ -1063,15 +1081,17 @@ def main():
                   "        print('@@@@ ' + n); print(gen_drv.build(n, v[0], False)[0])\n"
                   "    except gen_core.Skip as e:\n"
                   "        print('@@@@ ' + n); print('SKIPPED ' + str(e))\n")
-        out = subprocess.run([sys.executable, "-c", script] + [n for n, _ in FUNCS if not n.startswith('_') and n not in ('threearg', 'vecmk', 'vsetfn', 'fptrdef', 'onefn', 'twofn', 'fivefn', 'printfn', 'voidfn', 'passdef', 'sretdef', 'twoptfn', 'ptintfn', 'retvecfn', 'bodyfn', 'body3fn', 'varpdef', 'stkreads2')], cwd=tmp, stdout=subprocess.PIPE,
+        out = subprocess.run([sys.executable, "-c", script] + [n for n, _ in FUNCS if not n.startswith('_') and n not in ('threearg', 'vecmk', 'vsetfn', 'fptrdef', 'onefn', 'twofn', 'getfn', 'fivefn', 'printfn', 'voidfn', 'passdef', 'sretdef', 'twoptfn', 'ptintfn', 'retvecfn', 'bodyfn', 'body3fn', 'varpdef', 'stkreads2')], cwd=tmp, stdout=subprocess.PIPE,
                              stderr=subprocess.STDOUT, universal_newlines=True).stdout
-        flat = subprocess.run([sys.executable, "-c", script, 'phantomfn', 'spsteploopfn', 'structreusefn', 'ifelsefn'], cwd=tmp, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        flat = subprocess.run([sys.executable, "-c", script, 'phantomfn', 'spsteploopfn', 'structreusefn', 'ifelsefn', 'pendstalefn'], cwd=tmp, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                               universal_newlines=True, env=dict(os.environ, GEN_FORM='flat')).stdout       # the flat form, where the bug was
-        out += flat.replace('@@@@ phantomfn', '@@@@ phantomfn_flat').replace('@@@@ spsteploopfn', '@@@@ spsteploopfn_flat').replace('@@@@ structreusefn', '@@@@ structreusefn_flat').replace('@@@@ ifelsefn', '@@@@ ifelsefn_flat')
+        out += flat.replace('@@@@ phantomfn', '@@@@ phantomfn_flat').replace('@@@@ spsteploopfn', '@@@@ spsteploopfn_flat').replace('@@@@ structreusefn', '@@@@ structreusefn_flat').replace('@@@@ pendstalefn', '@@@@ pendstalefn_flat').replace('@@@@ ifelsefn', '@@@@ ifelsefn_flat')
         parts = {}
         for chunk in out.split('@@@@ ')[1:]:
             name, _, text = chunk.partition('\n')
             parts[name] = text
+        if os.environ.get('SHOW'):
+            print(parts.get(os.environ['SHOW'], 'no such function'))
         want = [
             ('storefn', ["*(unsigned int *)0xC2A0000 = 0x1;"]),
             ('ifelsefn', ["if (", "} else {", "= 0x1;", "= 0x2;"]),
@@ -1097,6 +1117,9 @@ def main():
             # a register the function never set is its own incoming argument passed on (the generator must keep doing both when it learns
             # to read stack-only calls)
             ('fivecallfn', ["fivefn(0x1, 0x2, 0x3, 0x4, 0x9)"]),
+            # FIXED when this passes (selPortsExec, Virtua Tennis): a carried pushed word is read once, where it is popped; a sum stored back into
+            # its cell is not read from the cell again with the addend added a second time
+            ('pendstalefn_flat', [r"not:re:\(\*\(int \*\)\(\(int\)stk \+ \d+\) \+ t\d+\)"]),
             ('fivepassfn', ["(int a4, int a5, int a6)", "fivefn(a4, 0x2, a6, 0x4, 0x9)"]),
             # FIXED, kept as a regression (replayChangeControl, gdc_CoursePointChk: "arg gap" / "stack arguments without four in registers"): a variadic call
             # with every argument on the stack is one call with the format first, then the values in order

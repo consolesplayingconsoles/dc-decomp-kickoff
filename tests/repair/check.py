@@ -21,6 +21,16 @@ sets that source (directed.apply): a dt counter to 2, a pointer that read or wro
                   count: for (i = 1; i < G; i++) with cmp/ge and G drawn as 0x7FFFFFFF (entryCharaSelExec, Virtua Tennis: a loop
                   over the players up to a global count):
                     repaired  repair sets G from the loop's first pass so the cmp/ge goes the other way and the loop ends at once
+                  clobber: an 8-byte local table, mov r4,r0 / shll2 r0 / store r5 at sp + r0, r4 drawn as 2: the store lands on the
+                  saved return address and rts runs drawn data (Virtua Tennis _div64, kmyGenerateRegionArray: "unknown instruction at
+                  0C930100"):
+                    repaired  repair finds the store that overwrote the return address and sets its index to 0
+                  poll: loop: r3 = *G; cmp/hs 21,r3; bf out; bra loop (G drawn as 25): the exit is a forward branch and the loop closes
+                  with an unconditional one (Virtua Tennis vmsfs_c_dispatch: a state field of 21 or more sleeps and tries again):
+                    repaired  repair takes the conditional branch that always went one way and whose other way leaves the loop
+                  fillover: an 8-byte local buffer passed to a call whose drawn fill is 16 bytes: the fill runs onto the saved return
+                  address (Virtua Tennis _div64, no store of its own to find):
+                    repaired  repair cuts that call's fill to the bytes before the slot
                   findex: r0 = (int)fr0 from a call, shll2 r0, *(sp + r0) (entryPickRandomChara: nlRandom's answer times the table
                   length, drawn as 100000.0, read far above the stack):
                     repaired  repair follows the index through sts / ftrc to the call's float answer and sets it to 0
@@ -190,6 +200,72 @@ def main():
         r9 = run8(fixed or drawn)
         if not fixed or r9['error'] or r9['steps'] > 100:
             bad.append('count repaired: %s / %s / %s steps' % (fixed, r9['error'], r9['steps']))
+        clob = [0x4F22,              # sts.l pr,@-r15
+                0x7FF8,              # add #-8,r15          ; a local table sp+0..7, the saved pr at sp+8
+                0x6043,              # mov r4,r0
+                0x4008,              # shll2 r0
+                0x61F3,              # mov r15,r1
+                0x0156,              # mov.l r5,@(r0,r1)
+                0x7F08,              # add #8,r15
+                0x4F26,              # lds.l @r15+,pr
+                0x000B, 0x0009]      # rts / nop
+        body = b''.join(struct.pack('<H', w) for w in clob)
+        open(os.path.join(d, 'clob.bin'), 'wb').write(body + b'\x00' * (0x200 - len(body)))
+        def run9(case, trace=True):
+            return sh4sim.run(dict(case, exe='clob.bin', base='%08X' % BASE, entry='%08X' % BASE, end='%08X' % (BASE + 0x14), steps=2000,
+                                   trace=trace), d)
+        drawn = {'regs': {'r4': '00000002', 'r5': '0C930100'}}
+        if 'unknown instruction' not in str(run9(drawn)['error']):
+            bad.append('clobber plain: the drawn index did not run drawn data: the test does not show it (%s)' % run9(drawn)['error'])
+        fixed = directed.repair(drawn, run9, (0x0C000000 | (BASE & 0x1FFFFFFF), 0x0C000000 | ((BASE + 0x14) & 0x1FFFFFFF)), hw=False)
+        r10 = run9(fixed or drawn)
+        if not fixed or r10['error']:
+            bad.append('clobber repaired: %s / %s' % (fixed, r10['error']))
+        poll = [0xE115,              # mov #21,r1
+                0xD205,              # mov.l @(pool),r2     ; = &G
+                0x6322,              # loop: mov.l @r2,r3
+                0x3312,              # cmp/hs r1,r3
+                0x8B01,              # bf out
+                0xAFFB,              # bra loop
+                0x0009,              # nop
+                0x000B, 0x0009,      # out: rts / nop
+                0x0009, 0x0009, 0x0009]
+        body = b''.join(struct.pack('<H', w) for w in poll) + struct.pack('<I', BASE + 0x100)
+        open(os.path.join(d, 'poll.bin'), 'wb').write(body + b'\x00' * (0x200 - len(body)))
+        def run10(case, trace=True):
+            return sh4sim.run(dict(case, exe='poll.bin', base='%08X' % BASE, entry='%08X' % BASE, end='%08X' % (BASE + 0x12), steps=2000,
+                                   trace=trace), d)
+        drawn = {'poke': {'%08X' % (BASE + 0x100): '19000000'}}
+        if not run10(drawn)['error']:
+            bad.append('poll plain: the drawn state finished: the test does not show the poll')
+        fixed = directed.repair(drawn, run10, (0x0C000000 | (BASE & 0x1FFFFFFF), 0x0C000000 | ((BASE + 0x12) & 0x1FFFFFFF)), hw=False)
+        r11 = run10(fixed or drawn)
+        if not fixed or r11['error']:
+            bad.append('poll repaired: %s / %s' % (fixed, r11['error']))
+        fo = [0x4F22,                # sts.l pr,@-r15
+              0x7FF8,                # add #-8,r15          ; an 8-byte buffer at sp, the saved pr at sp+8
+              0xE804,                # mov #4,r8
+              0xB006, 0x64F3,        # loop: bsr f / mov r15,r4 (the pointer set in the delay slot); four passes, each with its own fill
+              0x4810,                # dt r8
+              0x8BFB,                # bf loop
+              0x7F08,                # add #8,r15
+              0x4F26,                # lds.l @r15+,pr
+              0x000B, 0x0009,        # rts / nop
+              0x000B, 0x0009]        # f: rts / nop
+        body = b''.join(struct.pack('<H', w) for w in fo)
+        open(os.path.join(d, 'fo.bin'), 'wb').write(body + b'\x00' * (0x200 - len(body)))
+        def run11(case, trace=True):
+            return sh4sim.run(dict(case, exe='fo.bin', base='%08X' % BASE, entry='%08X' % BASE, end='%08X' % (BASE + 0x1A), steps=2000,
+                                   trace=trace), d)
+        over = {'r0': '00000000', 'poke_arg': {'r4': '00000000' '00000000' '0001930c' '00000000'}}
+        drawn = {'calls': [dict(over)] + [{'r0': '00000000'} for _ in range(3)]}      # only the first pass overruns, before r4 holds the pointer
+        if 'unknown instruction' not in str(run11(drawn)['error']):
+            bad.append('fillover plain: the fill did not reach the return address: the test does not show it (%s)' % run11(drawn)['error'])
+        fixed = directed.repair(drawn, run11, (0x0C000000 | (BASE & 0x1FFFFFFF), 0x0C000000 | ((BASE + 0x1A) & 0x1FFFFFFF)), hw=False,
+                                rounds=2)          # every overrunning fill of the run in one pass: the second round only checks
+        r12 = run11(fixed or drawn)
+        if not fixed or r12['error']:
+            bad.append('fillover repaired: %s / %s' % (fixed, r12['error']))
         fi = [0x4F22,                # sts.l pr,@-r15
               0xB008, 0x0009,        # bsr f / nop
               0xF03D,                # ftrc fr0,fpul

@@ -825,3 +825,66 @@ the call's fr0, set to 0).
   fivecallffn; hiddenregfn's expectation corrected: readstack1 takes no float, its fr4-fr7 were leftovers passed). Then Equivalent;
   directed rounds took it from 534 of 1,996 instructions to 1,988 of 2,014 (99%), Equivalent every round. The farg gap message now
   names the call (callee, float registers set, arity).
+
+Virtua Tennis, the last fifteen (2026-10-28), what each shape needed:
+- A return address overwritten by a stray store (_div64, kmyGenerateRegionArray, playerStartSwing, cpuBallPredict): a drawn index past
+  the end of a local table writes onto the saved pr, the rts runs drawn data ("unknown instruction at 0C930100"). Repair finds the last
+  mov store onto the slot pr was reloaded from (the prologue's sts.l is no mov store) and sets its index to 0 (directed.unclobber;
+  tests/repair clobber). 3 of the 4 then Equivalent; _div64 still never finishes.
+- A poll loop whose exit is a forward branch, closed by an unconditional one (vmsfs_c_dispatch): loop_exit now takes any conditional
+  branch that went one way every time in the end of the run and whose other way leaves the loop (tests/repair poll). Helps
+  colliObjResolve, kmiFLWCTRLStartDMAEntry, cpuPadHistory, sysVideoSelect through the same rule: Equivalent (coverage 31%, 40%, 13%, 72%).
+- A state machine that dispatches on a field and goes round again (vmsfs_c_dispatch), a game loop (main) and a deliberate `bra .`
+  after a test on a global the function itself set from a constant, decided by an earlier compare (kmyInitializeHardware): the exit
+  branch goes both ways or its input is a constant the function stored, so no single flip ends them. They never end in the simulator
+  because the environment never changes. Not fixed: needs a decision on "endless" cases (compared up to the step limit).
+- directed.acceptable: a directed case is dropped like a drawn one when it reaches memory outside RAM or depends on registers never set.
+  A directed round that finds a difference makes the check drop the function from tests/equivalent.txt; playerStartReactions was
+  reported as proven for a while while it was not in the list. Re-checked: Equivalent again.
+
+Functions that never end in the simulator (Virtua Tennis main, vmsfs_c_dispatch, kmyInitializeHardware, 2026-10-28). Crazy Taxi had
+settled this with hand-written endless cases (bootMain, MainLoop, kmiInitializeDevice, gdc_CourseSetupAll, kmFlipFrameBuffer, the SJ*
+traps, vmsfs_c_dispatch): both sides run to the step limit and the check compares what they did so far. VT's tool only produced those
+for a function with no rts / jmp / braf at all. Now:
+- A drawn case that runs to the cap is probed with directed.steady_state (the same pc and registers two cycles in a row, the same
+  stores between): twelve such cases are returned as endless cases before the retry at 20,000,000 steps, which took minutes per run
+  and made these time out. A long fixed count is not steady (its registers change every pass) and still gets the retry.
+- Two steady cases past repair stop the repair (up to 31 s per case on main); the rest are probed for 20,000 steps.
+- The check cuts an endless case's device accesses to the shorter run too, as it did the calls (equiv.cut_endless): compiled code
+  makes fewer passes in the same steps.
+- A loop whose only change per pass is a counter fails the steady test by design (it cannot be told from a long count). It is declared:
+  endless.txt in the decomp's root, one name per line with the reason; main is listed (registers repeat every 107 steps, only a frame
+  counter and a pointer derived from it change). These proofs are weaker than a finished run: the exit path is not exercised.
+
+Virtua Tennis, down to three (2026-10-28), what each of the last six needed:
+- cpuDblSignalPut: drawing evaluated a memory address as Python and stopped on C's `(a4 > 0x100) ? 1 : 0`. A balanced scan turns a
+  parenthesised conditional with plain branches into a Python one (gen_drv._c_ternary; tests/addrexpr).
+- circuitStatsCalc: two float words differed by 64 units in the last place. The original rounds ((float)i * g) * (float)f in that
+  order; the C had folded the first product back into one expression, and SHC reassociates the chain. inline_single now keeps a float
+  product that feeds another product as a statement of its own (tests/fmulchain).
+- BupFailDialog: `--regen` after the endless handling (its cases are steady at the step limit).
+- _div64: a mocked call's fill (poke_arg) is longer than the stack buffer it is given and runs onto the saved return address, so rts runs
+  drawn data. Repair cuts that call's fill to the whole words before the slot (unclobber, tests/repair fillover). Not enough: the
+  original still does not finish on the cases drawn after that.
+- Repair now has a time budget per function (GEN_MEND_SECONDS, 12): on emotFaceMorph it spent 17 s a case. Still times out.
+- cpuDblInit (1,548 B): functions.txt gives it one range, but the code pops its registers at 8c056a98 and, with no rts, runs on into a
+  second prologue at 8c056aaa (push r14..r8, pr; add #-12,r15). The C's guard `(int)0x8C2FCC20 >= 0` uses a register constant from the
+  first part, stale after the second part sets the register again (mov #1,r10 at 8c056ac2): the reader keeps a constant across that
+  second prologue. Not fixed; a reader change inside one large function.
+
+The last three on Virtua Tennis (2026-10-28), after which VT has no function left that can be C:
+- _div64 (420 B): (1) repair looked for stores onto the saved return address; here a mocked call's fill (poke_arg) overran its buffer. It now
+  cuts every overrunning fill of the run to the words before the slot, reading the pointer register after the call's delay slot (tests/repair
+  fillover, which fails with the old read). (2) A function read in the flat form (labels and gotos) was never "loopy", so its values were
+  drawn huge (0xFFFFFFFF into a 66-pass division): has_back_goto (tests/loopy). Still too few cases ended in the time given; a search over
+  small values found 168 finishing vectors in 408 tries.
+- emotFaceMorph (256 B): drawing timed out; a search with -1 among the call answers found 54 finishing vectors in 280.
+- Both are proven with cases supplied by hand: cases-hand/<name>.json is the candidate pool for that function (gen_drv.hand_cases,
+  tests/handcases), the original is run on each and the pick is by coverage, as Crazy Taxi did by hand.
+- cpuDblInit (1,548 B): its code pops its registers at 8c056a98 and, with no rts, runs on into a second prologue at 8c056aaa. The structured
+  reading wrote a loop guard `(int)0x8C2FCC20 >= 0` (a register constant) that is wrong. Read in the flat form (GEN_FORM=flat, as for
+  cpuChasePlan) it is Equivalent. The structured reader's mistake on this function is not found or fixed; to write the function again
+  use GEN_FORM=flat.
+- Repair got a time budget per function (GEN_MEND_SECONDS, 12), and drawing skips repair for a declared-endless function.
+State at the end: TOTAL TEST COVERAGE 71.9% (60.7% in the morning); the proofs of main, vmsfs_c_dispatch, kmyInitializeHardware and
+BupFailDialog compare only up to the step limit; _div64 and emotFaceMorph rest on hand cases (158/197 and 116/116 instructions).

@@ -479,7 +479,7 @@ code had, so the build of step 8 leaves every other address of the executable wh
   refuses it); a result type declared on the wrong register (`tools/8-build/retcheck.py` refuses it).
 - **Badge**: one badge, `badges/progress.svg`. `status.txt` in the repo lists the statuses in order (`[x] BUILDS FROM C`,
   `[ ] BOOTS TO MENU`, `[ ] PLAYABLE`, `[?] STABLE`: `[x]` reached, `[ ]` tested and not reached, `[?]` not tested yet, shown as a question mark); each needs the ones above it, and progress.py stops on a tick under an
-  untick. Before BUILDS FROM C is ticked the badge shows the measures only.
+  untick. The badge lists the statuses from the first day, so a game that does not build from C yet shows BUILDS FROM C crossed.
 
 ## Rules
 

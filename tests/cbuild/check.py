@@ -83,6 +83,16 @@ def main():
                 bad.append('middle: the error does not name the address, g+4 and the C line: %s' % msg)
             if '0C020040' in msg or '0C02004C' in msg:
                 bad.append('middle: a data address after f\'s rts is reported as code: %s' % msg)
+        # head: a name the file already declares or defines as a function is not declared again as `char name[]` (Virtua Tennis: a C
+        # call into nlsndCheckPackLoadError+162 made `extern char nlsndCheckPackLoadError[];` beside `int nlsndCheckPackLoadError(int, int);`,
+        # a conflicting declaration, and the file did not compile)
+        head = cbuild.extern_head(['nlsndFn', 'tab_0c01af4c'], ['other'], 'int nlsndFn(int, int);\nint g(void) { return nlsndFn(1, 2); }\n')
+        if 'extern char nlsndFn' in head:
+            bad.append('head: a function declared in the file is declared again as char[]: %r' % head)
+        if 'extern char tab_0c01af4c[];' not in head:
+            bad.append('head: a table is no longer declared as char[]: %r' % head)
+        if 'int other();' not in head:
+            bad.append('head: a called game function is no longer declared: %r' % head)
         if not bad:
             print("[cbuild] ok: a statement starting with `*(` is code, comment lines of every kind are skipped, an entry address is not reported, a call into a function's middle is refused")
             return

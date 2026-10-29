@@ -8,6 +8,7 @@ not yet tested is not "unstable"). No game data. Stdlib only.
                     states    [x] -> True, [ ] -> False, [?] -> None, in file order, comments and blank lines skipped
                     order     a tick under a question mark is an error; a question mark or a cross under a tick is not
                     syntax    any other mark is an error that names the line
+                    gate      the badge lists the statuses whenever status.txt has any, a first cross included (build red)
                     marks     the badge's marks for the three states are a tick, a cross and a question mark
 """
 import ast
@@ -62,6 +63,9 @@ def main():
     out, err = run(statuses, '[x] BUILDS FROM C\n[-] BOOTS TO MENU\n')
     if not err or 'line 2' not in err:
         bad.append('syntax: an unknown mark must be an error naming its line, got %s %s' % (out, err or ''))
+    src = open(PROGRESS, encoding='utf-8').read()
+    if re.search(r"extra=\[\(n, .*? for n, on in status\] if reached", src):
+        bad.append('gate: the badge lists the statuses only once one is ticked; a project whose build still fails must show BUILDS FROM C crossed')
     mk = marks()
     if len(set(mk.values())) != 3 or mk[True] != '✅' or mk[False] != '❌' or mk[None] != '❓':
         bad.append('marks: expected tick, cross and question mark for True, False, None, got %r' % mk)

@@ -14,6 +14,10 @@ had 0 there, so the two sides of a check saw different memory (playerPut, call 8
                     nostack  stackfill says the callee takes no stack word and returns no structure: nothing is written (playerPut ->
                              angDiff, Virtua Tennis: the address at SP was the caller's own local, filled on the original's side only)
                     stack    stackfill not given, or says yes: the fill is there
+                  f(r4) twice, r4 loaded with the same value before each (a pointer reloaded for every call: ballMove -> nlAddVector, an
+                  output vector), a different fill for each call, *r4 read back:
+                    reset    the second fill is made: the function wrote r4 for that call, whatever value it holds. Judging "set for the
+                             call" by a change of value skipped it, and ballMove's scripted flights no longer ended
                   f(r5) twice, r5 set before the first call only, then *r5 read back:
                     leftover the fill answering the second call is not made: r5 there is a leftover, not an argument (circuitDrawMatchInfo
                              -> sprSheetPut, Virtua Tennis: the original's leftover r5 was an object pointer and got the fill, the C's
@@ -109,6 +113,21 @@ def main():
                         'entry': '%08X' % BASE, 'end': '%08X' % (BASE + 0x18), 'steps': 2000}, d)
         if r['out']['r0'] == '44444444':
             bad.append('stackleft: the fill through a leftover word at SP was made (%s)' % r['error'])
+        code = [0x4F22,              # sts.l pr,@-r15
+                0xD407,              # mov.l @(pool),r4   ; = &G
+                0xB007, 0x0009,      # bsr f / nop
+                0xD405,              # mov.l @(pool),r4   ; the same value again
+                0xB004, 0x0009,      # bsr f / nop
+                0x6042,              # mov.l @r4,r0
+                0x4F26, 0x000B, 0x0009,      # lds.l @r15+,pr / rts / nop
+                0x000B, 0x0009,      # f: rts / nop
+                0x0009, 0x0009, 0x0009]
+        body = b''.join(struct.pack('<H', w) for w in code) + struct.pack('<I', BASE + 0x100)
+        open(os.path.join(d, 'reset.bin'), 'wb').write(body + b'\x00' * (0x200 - len(body)))
+        r = sh4sim.run({'calls': [{'r0': '00000000', 'poke_arg': {'r4': '11111111'}}, {'r0': '00000000', 'poke_arg': {'r4': '22222222'}}],
+                        'exe': 'reset.bin', 'base': '%08X' % BASE, 'entry': '%08X' % BASE, 'end': '%08X' % (BASE + 0x1A), 'steps': 2000}, d)
+        if r['out']['r0'] != '22222222':
+            bad.append('reset: the word read back is %s, want the second fill (%s)' % (r['out']['r0'], r['error']))
         code = [0x4F22, 0xE210,      # sts.l pr / mov #16,r2   ; a value
                 0x2F26,              # mov.l r2,@-r15          ; at SP
                 0xB005, 0x0009,      # bsr f / nop
