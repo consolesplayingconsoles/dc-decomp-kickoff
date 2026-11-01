@@ -479,7 +479,9 @@ code had, so the build of step 8 leaves every other address of the executable wh
      that passed step 2 before the tool existed runs it now. Code it misses is built as a data table, its pools break.
      Functions listed this late go back through the steps after 2 like any other: step 5 draws them, the rest is step 6.
   2. Dropped arguments: no pass-through trampoline takes fewer arguments in C than `state/arity_scan.json` gives;
-     regenerate them and their callers (`gen_equiv --regen`), fix by hand a caller that still drops them.
+     regenerate them and their callers (`gen_equiv --regen`), fix by hand a caller that still drops them. An entry
+     `"pass-through"` is a trampoline whose target is read from memory (a table jump): its arity is unknown, not zero, so
+     list those too, regenerate their callers, and check each caller against the registers the original sets before the call.
   3. Undefined names: `cbuild.py` stops on them (the linker alone sends every such call to address 0).
   4. Stale references: after the link that fits, `cbuild.py` runs `tools/8-build/audit.py` and stops before the disc when a C
      number, a copied word or a table piece still points into the old game code, or a table piece holds code.

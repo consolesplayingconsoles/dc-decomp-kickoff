@@ -165,6 +165,26 @@ as an issue) to add a game.
   compares every call on the callee's definition (registers and stack words, a variadic prototype included; tests/equiv). The new
   rule over-reports a true variadic callee whose definition over-declares register parameters (mwRnaErrCallFunc,
   ADXERR_CallErrFunc read only their stack word; their callers now DIFFER on leftover r4/r5): open.
+- Found (Virtua Tennis, 2026-11-01): the same class through TABLE-JUMP trampolines. gdFsEntryErrFuncAll and gdFsOpenRange are
+  `mov #off,r0; mov.l @(r0,r14),r0; jmp @r0` through the file system's table, so the scan cannot name a target and gave null
+  (unknown). `_combine_def` then took the function's own generated definition, a `(void)`, as its arity: callers were generated
+  without their arguments (sysInit registered a leftover r4 instead of the drive-error callback 0x8C010DC8 and omitted r5 = 0;
+  ADXSTM_OpenRange opened a file range from leftover r4/r5) and the proof compared them on none, at 202 of 203 instructions.
+  Seen by reading the built image (r4 = 12 at the call), not by the checks. The 20 null entries of the scan held 18 small
+  trampolines; a read of the original's r4-r7 before each of their 22 call sites against the C's argument counts found these two
+  (the rest passed). Fixed: an unresolved pass-through stays unknown (`"pass-through"` in arity_scan.json, nulls rescanned),
+  tests/arity. With it, `gen_equiv --regen sysInit ADXSTM_OpenRange` writes both calls with their arguments itself (`gdFsEntryErrFuncAll(0x8C010DC8, 0)`, `gdFsOpenRange(a4, a5, ...)`) and proves them, 37 s: no hand edit left. Not covered yet: calls through function
+  pointers, callers still assembly pieces, nlObjPut_vtxcolbridge (no C call found). Whether this was the cause of the console
+  restart loop (mainExitToBios through the drive-error counter) is open.
+- Found (Virtua Tennis, 2026-11-01, static + Flycast GDB samples): the movable build left the BSS block at an alignment of its own. Code
+  units are padded to their original address modulo 32; the BSS block (one section, `ALIGN=4`, `_bss`) was not, so it moved by
+  `0x6C85C` (28 mod 32) and 290 of the 641 objects that were 32-byte aligned lost it, among them the Maple driver's buffer
+  (`mpdrv_init_ex`: original `8C472080`, built `8C4DE8DC`). The game started, cleared video memory, enabled interrupts, and the pc
+  was in `mpdrv_frame_send` with that buffer in r0 at the last sample before each reset (about every 4.5 s in the sampled run). Every
+  check that compared code or pointers passed: the code was identical, every pointer pointed at the right object; only an alignment
+  that no check looked at was wrong. Fixed in `mbuild.py`: `bss_pad` (a pad before the `_bss` label from the first link's start of the
+  block, linked again), `tests/mbuild` (bsspad). What to check after a build: `_bss - <image end>` is a multiple of 32 (the map), and
+  every `_A_` symbol whose original address is 32-byte aligned keeps that; results of the first build with it: see the game's docs.
 - Closing the round at 100% (0 functions, 0 bytes left): the strict checker found two more of the class and two false alarms.
   technicalBonusExec passed a 6-byte angle by value (copied onto the stack by _quick_odd_mvn before each Model_Put_Sprite3D
   call) and its casts dropped it; its first call also read the struct through r2, set in the delay slot of a `bt/s` that runs

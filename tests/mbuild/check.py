@@ -9,6 +9,7 @@ symbol lands once the image is linked. No game data, no compiler. Stdlib only.
                     cfun      a C function's entry is the C function's symbol
                     middle    the middle of a C function is its second copy when there is one, nothing (None) when not
                     bss       an address past the image is _bss + the same offset
+                    bsspad    bss_pad(end, start) puts _bss at the original image end modulo 32; the pad is written before the _bss label
 """
 import os
 import sys
@@ -100,6 +101,24 @@ def main():
     w = M.wrong_distance_targets(items, where, word)
     if [x[0] for x in w] != ['g'] or w[0][2] != 0x0C020100 + 4 + 0x1C or w[0][3] != 0x0C020140:
         bad.append('distance: only g (its target is 0x20 farther in the build) is wrong: %r' % w)
+    # bsspad: the BSS block keeps its original alignment modulo 32 (Virtua Tennis: _bss at 8C279530 for an image end of 8C20D1D4 moved
+    # every object by 28 mod 32; the Maple DMA buffer 8C472080, 32-byte aligned, became 8C4DE8DC and the console reset on the controller scan)
+    end_, start_ = 0x8C20D1D4, 0x8C279530
+    pad = M.bss_pad(end_, start_)
+    if pad != 4 or (start_ + pad - end_) % 32:
+        bad.append('bsspad: pad %d for end %08X and block start %08X, want 4 (so that _bss - end is a multiple of 32)' % (pad, end_, start_))
+    for st in (0x8C279530, 0x8C279534, 0x8C27953C, 0x8C279520, 0x8C20D1D4):
+        pd = M.bss_pad(end_, st)
+        if not 0 <= pd < 32 or (st + pd - end_) % 32:
+            bad.append('bsspad: start %08X gives pad %d, _bss - end = %d mod 32' % (st, pd, (st + pd - end_) % 32))
+    txt = M.bss_text(end_, 0x8C480000, pad)
+    lines_ = [l.split() for l in txt.split('\n') if l.strip() and not l.strip().startswith(';')]
+    if lines_[1][0] != '.RES.B' or lines_[1][1] != "H'4" or lines_[2] != ['.EXPORT', '_bss'] or lines_[3] != ['_bss:']:
+        bad.append('bsspad: the pad must come before the _bss label, then the block:\n' + txt)
+    if "H'%X" % (0x8C480000 - end_) not in txt:
+        bad.append('bsspad: the block size lost:\n' + txt)
+    if '.RES.B      H' in M.bss_text(end_, 0x8C480000, 0).split('_bss:')[0]:
+        bad.append('bsspad: a zero pad must write no pad line')
     if bad:
         sys.exit('[ERROR] mbuild check failed:\n' + '\n'.join(bad))
     print('[mbuild] ok: address numbers become symbols; each lands in its piece, C function, second copy or the BSS block')

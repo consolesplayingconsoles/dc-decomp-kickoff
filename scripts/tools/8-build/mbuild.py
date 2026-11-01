@@ -183,6 +183,24 @@ def veneers(text, own, tag, only=None, start=0):
     return '\n'.join(out), vsrc
 
 
+def bss_pad(end, start):
+    """Bytes to put in front of the BSS block so that `_bss` lands at the original image end modulo 32. Every object keeps its offset
+    from `_bss`, so the whole block then keeps its alignment: the DMA buffers (Maple, TA, AICA, the file system's work area) were 32-byte
+    aligned in the original and a block that moved by 28 mod 32 broke them (Virtua Tennis: the Maple driver's buffer at 8C472080 was
+    8C4DE8DC, the console reset each time the controllers were scanned)."""
+    return (end - start) % 32
+
+
+def bss_text(end, bss_end, pad):
+    """The BSS block's source (what symbolize.py writes as bss.src) with `pad` bytes of its own before `_bss`."""
+    out = ['; %08x-%08x the game\'s BSS, heaps and buffers that move with the image, as one block: _bss+offset' % (end, bss_end),
+           '          .SECTION    B, DATA, ALIGN=4']
+    if pad:
+        out.append("          .RES.B      H'%X" % pad)          # in front of the label: only the label's place is aligned
+    out += ['          .EXPORT     _bss', '_bss:', "          .RES.B      H'%X" % (bss_end - end), '          .END', '']
+    return '\n'.join(out)
+
+
 def unit_source(paths, pad):
     """One object of pieces that follow each other in the original: their bodies in order, ALIGN=4 (the C compiler's: a section
     of another alignment is laid out apart from the others by the linker, whatever the input order), pad zero bytes in front,
@@ -486,6 +504,13 @@ def main():
     unit_routes = {}                           # unit index -> body offsets of the branches a link found out of reach: veneered
     unit_veneer = {}                           # unit index -> its veneer source (the object follows the unit in the link)
 
+    bss_obj = '%s/obj/bsspad.obj' % OUT            # the BSS block with its own front pad (bss_pad): written and assembled here
+
+    def write_bss(pad):
+        src_ = '%s/asm/bsspad.src' % OUT
+        open(src_, 'w').write(bss_text(end, bss_end, pad))
+        assemble([(src_, bss_obj)])
+
     def write_units(pads):
         """Write each asm unit's source with its front pad, its out-of-reach branches through veneers (a file of their own, after
         the unit); the (source, object) pairs whose text changed."""
@@ -537,7 +562,7 @@ def main():
                 if k in unit_veneer:
                     out.append((['v', unit_veneer[k]], unit_veneer[k].replace('/asm/', '/obj/')[:-4] + '.obj'))
                 k += 1
-        return out + [(['b'], SYM + '/obj/bss.obj')]
+        return out + [(['b'], bss_obj)]
 
     # names: every A_ value, and the named globals no object defines
     exported = {label for _, label, _ in P} | {'_' + n for n in gs} | {P[k][1] + x for k, x in second.items()}
@@ -573,6 +598,7 @@ def main():
     pad1 = [u[2] % 4 for u in units]
     jobs = write_units(pad1) + [(it[1], it[1].replace('/asm/', '/obj/')[:-4] + '.obj') for it in items if it[0] == 'v']
     assemble(jobs)
+    write_bss(0)
     say('assembled %d sources' % len(jobs))
     def settle(tag, defs, pads):
         """Link until no branch is out of reach: each one the linker reports goes through a veneer, the unit is written again."""
@@ -621,6 +647,15 @@ def main():
         sum(1 for p in pads if p), sum(pads), len(jobs)))
     settle('link1', names, pads)
     syms = map_symbols(OUT + '/link1.map')
+    pad_b = bss_pad(end, syms['_bss']) if '_bss' in syms else 0
+    if pad_b:                                   # the BSS block starts where the linker left off: move _bss to the original end modulo 32
+        write_bss(pad_b)
+        settle('link1', names, pads)
+        syms = map_symbols(OUT + '/link1.map')
+    if '_bss' in syms and (syms['_bss'] - end) % 32:
+        say('[ERROR] _bss is at %08X, not at the original image end %08X modulo 32' % (syms['_bss'], end))
+        sys.exit(1)
+    say('bss: _bss at %08X, %d bytes of pad in front: the BSS keeps its original alignment modulo 32' % (syms.get('_bss', 0), pad_b))
     off = [u[2] for u in units if ((syms.get(P[u[1][0][0]][1] + (second[u[1][0][0]] if u[3] != 'k' else ''), u[2]) - u[2]) % 32)]
     if off:
         say('[ERROR] %d units are not at their original address modulo 32, e.g. %s' % (len(off), ' '.join('%08X' % x for x in off[:5])))

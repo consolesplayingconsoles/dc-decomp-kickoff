@@ -367,8 +367,9 @@ _WRITE_ONLY=('mov','mov.b','mov.w','mov.l','extu.b','extu.w','exts.b','exts.w','
 _COMPARE=('cmp','tst','fcmp')
 class _PassThrough(Exception): pass
 _SCAN_FILE=os.path.join('state','arity_scan.json')
-try: _SCAN=json.load(open(_SCAN_FILE))
+try: _SCAN={k:v for k,v in json.load(open(_SCAN_FILE)).items() if v is not None}      # a null is rescanned: it did not say why it was unknown
 except Exception: _SCAN={}
+UNRESOLVED_PT='pass-through'     # arity_scan.json value of a pass-through trampoline whose target arity is not known (a table jump)
 _STACKW={}
 def callee_stack_words(fname):
     """Words a function reads from the stack above its own frame, its stack arguments: loads at @r15 / @(k,r15) that, once the pushes and
@@ -406,7 +407,9 @@ def callee_arity(fname):
     compared on these arguments only."""
     if fname in _ARITY: return _ARITY[fname]
     res=None
+    unresolved=False
     if fname in _SCAN:                   # the scan of the code (the original never changes), cached across runs
+        if _SCAN[fname]==UNRESOLVED_PT: return _combine_def(fname,None,True)
         res=tuple(_SCAN[fname]) if _SCAN[fname] is not None else None
         return _combine_def(fname,res)
     try:
@@ -505,16 +508,20 @@ def callee_arity(fname):
         if e.args and e.args[0] and e.args[0]!=fname:
             _ARITY[fname]=None           # a cycle reads as unknown
             res=callee_arity(e.args[0])
+        unresolved=res is None           # a table jump (the target is read from memory) or a target of unknown arity
     except Exception:
         res=None
-    _SCAN[fname]=res
+    _SCAN[fname]=UNRESOLVED_PT if unresolved else res
     try:
         os.makedirs('state',exist_ok=True)
         json.dump(_SCAN,open(_SCAN_FILE+'.tmp','w')); os.replace(_SCAN_FILE+'.tmp',_SCAN_FILE)
     except Exception: pass
-    return _combine_def(fname,res)
+    return _combine_def(fname,res,unresolved)
 
-def _combine_def(fname,res):
+def _combine_def(fname,res,unresolved=False):
+    if unresolved and not res:              # a pass-through of unknown arity stays unknown: its own definition in src/ is a (void) the
+        _ARITY[fname]=None                  # generator wrote for the same reason, and taking it as the arity drops the caller's arguments
+        return None                         # (gdFsEntryErrFuncAll, gdFsOpenRange: jmp through the file system's table)
     d=def_arity(fname)                      # the function's own proven definition: what it reads on every path
     if d and res:
         res=(max(res[0],d[0]),max(res[1],d[1]))
