@@ -53,6 +53,10 @@ def main():
     for k, c in cases.items():
         if frame.scalarize(c) != c:
             bad.append('stuck: %s was changed' % k)
+    for k, c in {'address passed, reach of one word': fn('*(int *)((int)stk + 44) = a4;', 'g((int)stk + 44);', 't1 = *(int *)((int)stk + 44);'),
+                 'address passed with an offset added': fn('*(float *)(((int)stk + 36)) = f4;', 'g((((int)stk + 8) + 0x1C));', 't1 = (int)(*(float *)(((int)stk + 36)));')}.items():
+        if frame.scalarize(c, addr_window=4, min_uses=1) != c:
+            bad.append('stuck: %s was changed (the callee writes that slot)' % k)
     if frame.scalarize(frame.scalarize(fn('*(int *)((int)stk + 32) = a4;', 't1 = *(int *)(((int)stk + 32));'))) != frame.scalarize(fn('*(int *)((int)stk + 32) = a4;', 't1 = *(int *)(((int)stk + 32));')):
         bad.append('twice: a second pass changes the text')
     if bad:

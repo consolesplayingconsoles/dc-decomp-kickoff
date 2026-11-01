@@ -7,6 +7,8 @@ No game data, no compiler. Stdlib only.
     check.py      lifts register_locals from gen_drv.py:
                     scalars    int, unsigned int, short, char and float locals gain `register`, indentation and name kept
                     kept       `int stk[69];`, `int *S_ = S_v;`, a name used as `&name`, and NEXT_ are not changed
+                    paren      a name used as `&(name)` is not changed either (Virtua Tennis FUN_8c0e6620: `*(float *)&(t45)` on a
+                               register t45 did not compile, "2101 bit field width")
                     twice      applying it again changes nothing
 """
 import ast
@@ -32,13 +34,13 @@ def lift():
 def main():
     reg = lift()
     text = '\n'.join(['int f(int a4)', '{', '    int t1;', '    unsigned int t2;', '    short t3;', '    char t4;', '    float u5;', '    int stk[69];',
-                       '    int *S_ = S_v;', '    int t6;', '    int NEXT_;', '', '    t1 = a4;', '    g(&t6);', '    return t1;', '}'])
+                       '    int *S_ = S_v;', '    int t6;', '    int t7;', '    int NEXT_;', '', '    t1 = a4;', '    g(&t6);', '    u5 = (*(float *)&(t7));', '    return t1;', '}'])
     out = reg(text)
     bad = []
     for want in ('    register int t1;', '    register unsigned int t2;', '    register short t3;', '    register char t4;', '    register float u5;'):
         if want not in out.split('\n'):
             bad.append('scalars: missing %r' % want)
-    for keep in ('    int stk[69];', '    int *S_ = S_v;', '    int t6;', '    int NEXT_;', 'int f(int a4)'):
+    for keep in ('    int stk[69];', '    int *S_ = S_v;', '    int t6;', '    int t7;', '    int NEXT_;', 'int f(int a4)'):
         if keep not in out.split('\n'):
             bad.append('kept: %r changed' % keep)
     if reg(out) != out:

@@ -39,6 +39,7 @@ import gen_drv       # noqa: E402
 import gen_pipe      # noqa: E402
 import keep          # noqa: E402
 import ledger        # noqa: E402
+import stamp         # noqa: E402
 import time
 import sizes         # noqa: E402
 
@@ -131,7 +132,7 @@ def shrink_one(fn, stem, old, s, c, n_new, o_c, var, vs, log, table):
 
 def main():
     os.makedirs('build', exist_ok=True)
-    log = open(LOG, 'a')
+    log = stamp.Stamp(open(LOG, 'a'))               # each line ends with the wall-clock time
     manual = consistency.manual_names()          # written by hand: never written again by a tool
     table = {r[0]: r for r in json.load(open(sizes.OUT))} if os.path.exists(sizes.OUT) else {}
     for fn in NAMES:

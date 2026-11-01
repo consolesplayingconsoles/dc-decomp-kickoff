@@ -2,7 +2,7 @@
 """Apply a text pass to the C a function has now, without writing it again, and keep it only when it compiles smaller and the function
 still passes in its file. Run in the repo, alone (it rewrites src/ and tests/equivalent.txt).
 
-    python3 tools/7-reduction/textpass.py register <name> ...
+    python3 tools/7-reduction/textpass.py register|frame <name> ...
 
 A pass changes how the C is written, not what it does. `register` declares the function's scalar locals register
 (gen_drv.register_locals): written again by the generator the same function can come out bigger than it is (entryGridDrawCursors,
@@ -25,7 +25,26 @@ LOG = os.path.join('build', 'textpass.log')
 
 def passes():
     import gen_drv
-    return {'register': gen_drv.register_locals}
+    import frame
+    return {'register': gen_drv.register_locals,
+            # scalar frame slots become locals, a frame address passed on taken to reach one word, single-use slots included: measured
+            # per unit on Virtua Tennis it is -32% on one function and +6% on another (the locals overflow the registers), so it is a
+            # text pass, kept function by function only when smaller and proven, not a generator default
+            'frame': lambda t: frame.scalarize(t, addr_window=4, min_uses=1),
+            'shift': shift_idiom}
+
+
+_B = r'[^()]*'
+for _ in range(6):                                                    # an expression, parentheses nested up to six deep
+    _B = r'(?:[^()]|\(' + _B + r'\))*'
+_SHIFT = re.compile(r'\(\(\(int\)(' + _B + r') >= 0\) \? \((' + _B + r') << \(\1 & 31\)\) : \(\(-\(int\)\1 & 31\) \? \(\((int|unsigned int)\)\2 >> \(-\(int\)\1 & 31\)\) : (?:\(\(int\)\2 >> 31\)|0)\)\)')
+
+
+def shift_idiom(text):
+    """The reader's shift by a register, `(((int)x >= 0) ? (y << (x & 31)) : ((-(int)x & 31) ? ((int)y >> (-(int)x & 31)) : ((int)y >> 31)))`,
+    as `((int)y << (int)x)` (unsigned int for shld): SHC makes one shad or shld of it, whose meaning for a negative count is what the
+    ternary spelt out in 19 instructions (gen_core writes the short form since 2026-10-30; this is for the C written before)."""
+    return _SHIFT.sub(lambda m: '((%s)%s << (int)%s)' % (m.group(3), m.group(2), m.group(1)), text)
 
 
 def where(fn):

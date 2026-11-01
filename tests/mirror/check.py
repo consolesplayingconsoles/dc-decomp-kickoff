@@ -14,6 +14,11 @@ the functions through layout.functions(), which maps an address to the 0C mirror
                     objects   cbuild reads objects.txt (8c names) in the 0C mirror: a file inside the game block is not past it,
                               a file past it is, and boot_split() finds the file that runs into the block (the link took every old
                               file of Virtua Tennis again beside the C: 3,310 duplicate symbols, the first time its C fitted)
+                    link      the linker places every part in the mirror of BASE: a game at 8C had its code linked at 0C while
+                              elf2bin converted from 8C up, and wrote the 128-byte entry stub alone (Virtua Tennis crashed right
+                              after the licence screen); a game at 0C is linked at 0C as before
+                    binsize   a game.bin that ends before the linked code does (the stub alone) is reported; one that holds it is not, even when
+                              the code links shorter than the original's
                     parts     with no fill block in layout.txt the fit asks only for PB2 (Virtua Tennis has none: asking for PB1
                               failed a link that fitted), and with one it asks for both
 """
@@ -78,6 +83,23 @@ def main():
                 bad.append('objects: 8c030000 (past the game block) is counted inside it')
         if cbuild.boot_split() != (0x0C01FF00, 'a'):
             bad.append('objects: boot_split() is %s, not the file at 0C01FF00 that runs into the block' % (cbuild.boot_split(),))
+        # link: the start list in the mirror of BASE
+        sl = cbuild.start_lines('8C020000') if hasattr(cbuild, 'start_lines') else None
+        if sl != ['P(8C020000)', 'PB2(8C020000)', 'PT(8C030000)']:
+            bad.append('link: a game at 8C is linked at %s' % sl)
+        if hasattr(cbuild, 'start_lines') and cbuild.start_lines('0C020000') != ['P(0C020000)', 'PB2(0C020000)', 'PT(0C030000)']:
+            bad.append('link: a game at 0C is linked at %s' % cbuild.start_lines('0C020000'))
+        # binsize: BASE 8C020000, game code to 0C030000: 0x10000 bytes needed
+        if not hasattr(cbuild, 'bin_short'):
+            bad.append('binsize: cbuild has no bin_short()')
+        else:
+            open('short.bin', 'wb').write(b'\0' * 128)
+            open('full.bin', 'wb').write(b'\0' * 0x10000)
+            open('less.bin', 'wb').write(b'\0' * 0xF000)
+            if not cbuild.bin_short(0x0C030000, 'short.bin') or cbuild.bin_short(0x0C030000, 'full.bin'):
+                bad.append('binsize: 128 bytes gives %r, 0x10000 gives %r' % (cbuild.bin_short(0x0C030000, 'short.bin'), cbuild.bin_short(0x0C030000, 'full.bin')))
+            if cbuild.bin_short(0x0C02F000, 'less.bin'):
+                bad.append('binsize: code linked shorter than the original (to 0C02F000) and a game.bin that holds it is refused')
         # parts: no fill block here; a fill block in a second layout.txt (the module reads it at import)
         if cbuild.part_regions() != {'PB2': (0x0C020000, 0x0C030000)} if hasattr(cbuild, 'part_regions') else True:
             bad.append('parts: with no fill block the fit asks for %s, not PB2 alone' % (getattr(cbuild, 'part_regions', lambda: 'PB1 and PB2')(),))

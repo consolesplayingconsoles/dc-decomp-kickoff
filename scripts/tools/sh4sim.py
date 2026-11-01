@@ -87,6 +87,10 @@ class Memory:
         self.reads = []           # the address of every data read, in order (capped)
         self.stack = (STACK_TOP - 0x10000, STACK_TOP)
         self.device_reads = {}    # addr -> list of values to hand back, in order
+        self.device_latched = {}  # addr -> the last value written to a device register: what a read gives back when the case scripts
+                                  # nothing (sys_init writes 8201 to the DMAC's DMAOR and retries until it reads it back)
+        self.hw_model = False     # True: the display and the timer move on their own (hw_default), so a boot that waits for them goes on
+        self.hw_reads = 0
         self.seq_reads = {}       # RAM addr -> what each read returns, in order (the last value stays): a word an interrupt changes
         self.seq_used = {}        # RAM addr -> how many reads took one of those values
 
@@ -123,12 +127,26 @@ class Memory:
                 return 0                         # the boot ROM and flash: a read has no side effect, so its order is not an effect (a null pointer's fields)
             if not (RAM_LO <= a < RAM_HI) and not fetch and not (self.stack[0] <= a < self.stack[1]):
                 vals = self.device_reads.get(a)
-                v = vals.pop(0) if vals else 0
+                v = vals.pop(0) if vals else self.device_latched.get(a, self.hw_default(a))
                 self.devices.append(('r', a, size, v))
                 return v
             page = self.pages.setdefault(a >> 12, bytearray(4096))
         o = a & 4095
         return int.from_bytes(page[o:o + size], 'little')
+
+    def hw_default(self, a):
+        """What a hardware register reads before anything was written to it. With hw_model: SPG_STATUS (0x005F810C) the beam, 480 lines
+        a frame with the vertical blank (bit 13) for the last 40, 16 reads a line; TMU0's counter (0x1FD8000C) counting down. Else 0."""
+        if not self.hw_model:
+            return 0
+        if a == 0x005F810C:
+            self.hw_reads += 1
+            line = (self.hw_reads // 16) % 525
+            return line | (0x2000 if line >= 480 else 0) | (0x1000 if line & 1 else 0)
+        if a == 0x1FD8000C:
+            self.hw_reads += 1
+            return (0xFFFFFFFF - self.hw_reads * 0x400) & 0xFFFFFFFF
+        return 0
 
     def write(self, addr, size, value):
         a = self.phys(addr)
@@ -139,6 +157,7 @@ class Memory:
         in_stack = self.stack[0] <= a < self.stack[1]
         if page is None and not (RAM_LO <= a < RAM_HI) and not in_stack:
             self.devices.append(('w', a, size, value))
+            self.device_latched[a] = value
             return
         if page is None:
             page = self.pages.setdefault(a >> 12, bytearray(4096))
@@ -178,6 +197,7 @@ class CPU:
         self.t = self.s = self.q = self.mq = 0
         self.srx = 0x40000000         # SR's other bits (MD = 1, interrupt mask 0): read by stc sr, written by ldc sr
         self.gbr = self.mach = self.macl = self.pr = self.pc = 0
+        self.spc = self.ssr = 0       # rte returns to SPC and loads SR from SSR (run() sets them to the return address and the entry SR)
         self.vbr = 0
         self.fpul = 0
         self.fr = [0] * 16        # float32 bits, current bank
@@ -214,8 +234,10 @@ class CPU:
         return self.srx | (self.mq << 9) | (self.q << 8) | (self.s << 1) | self.t
 
     def set_sr(self, x):
-        if (x ^ self.srx) & 0x30000000:
-            raise Stop('ldc sr changes the register bank or the block bit (not modelled)')
+        if (x ^ self.srx) & 0x20000000:                 # RB: a second bank of r0-r7 the simulator does not have
+            raise Stop('ldc sr changes the register bank (not modelled)')
+        # BL (bit 28, block exceptions) is kept as a bit: there are no exceptions or interrupts here to block, and stc sr reads it back
+        # (Virtua Tennis FUN_8c0f8100 sets it around the interrupt setup)
         self.t, self.s, self.q, self.mq = x & 1, (x >> 1) & 1, (x >> 8) & 1, (x >> 9) & 1
         self.srx = x & 0xFFFFFCFC
 
@@ -250,6 +272,13 @@ class CPU:
                 return
             if op == 0x000b:                                              # rts
                 return branch_slot(self.pr, 'rts')
+            if op == 0x002b:                                              # rte: the delay slot runs, SR = SSR, the return goes to SPC
+                if in_slot:                                               # (an exception handler: SPC and SSR start as the run's return
+                    raise Stop('branch in a delay slot at %08X' % pc)     # address and SR, so rte ends the run like rts and gives SR back)
+                self.step(in_slot=True)
+                self.set_sr(self.ssr)
+                self.go(self.spc, 'rts', pc)
+                return True
             if op == 0x0008: self.t = 0; return
             if op == 0x0018: self.t = 1; return
             if op == 0x0028: self.mach = self.macl = 0; return
@@ -635,6 +664,7 @@ def run(case, case_dir='.', code=None, deep=False, entry=None, end=None, argc=No
     argc: the callee's integer argument count or register set, for its fills through r4-r7; stackfill: whether a callee can write
     through the word at SP (a structure it returns, a stack argument), for the case's poke_stack."""
     mem = Memory()
+    mem.hw_model = bool(case.get('hw_model'))             # the display and the timer move (Memory.hw_default)
     path = lambda p: p if os.path.isabs(p) else os.path.join(case_dir, p)
     if case.get('dump'):
         mem.load(RAM_LO, open(path(case['dump']), 'rb').read())
@@ -669,6 +699,7 @@ def run(case, case_dir='.', code=None, deep=False, entry=None, end=None, argc=No
         else:
             cpu.r[int(k[1:])] = int(v, 16) & M32
     cpu.pr = SENTINEL
+    cpu.spc, cpu.ssr = SENTINEL, cpu.sr()
     if case.get('gbr'):                          # the global base register the function's @(disp,gbr) accesses use
         cpu.gbr = int(case['gbr'], 16) & M32
     cpu.pc = entry

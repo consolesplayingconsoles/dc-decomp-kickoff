@@ -284,9 +284,9 @@ The nine steps, in order. Each one is announced and closed as the section above 
      others rights would overreach, and default copyright says nothing more than it should.
    - `chmod +x build.sh setup.sh tools/hooks/pre-commit` (tell the user; it is one command).
    - the pre-commit hook (`tools/hooks/pre-commit`, from `scripts/tools/hooks/`) does two things on every commit: it keeps the README's
-     Progress block current, and it refuses the commit unless `build.sh` prints `MATCH` and every staged `src/*.c` has no DIFFERS in
-     `tools/equiv.py` (about 10 s; `SKIP_BUILD_CHECK=1` skips it). Enable it with `git config core.hooksPath tools/hooks`. Commit in
-     batches, not change by change: the check runs every time.
+     Progress block current, and it refuses the commit unless `build.sh` prints `MATCH` (`SKIP_BUILD_CHECK=1` skips it). It does not
+     prove the staged sources again: each function was proven when its C was written, and checking every staged file again cost about a
+     minute a file (Virtua Tennis, 297 files: about five hours). Enable it with `git config core.hooksPath tools/hooks`.
    - write `.env` in the repo with `SDK_PATH="<absolute SDK folder>"` (gitignored, machine-local),
      so the user can rebuild with a plain `bash build.sh` later.
    Then put the original executable in as `1ST_READ.BIN` and run `bash build.sh`. It must print `MATCH`. First run assembles every file (minutes); later runs only
@@ -456,7 +456,15 @@ code had, so the build of step 8 leaves every other address of the executable wh
 
 - **Layout**: write `layout.txt` in the repo (`tools/layout.py`): `game` (the game's own code, required), `fill` (spare room in
   the file before it), `code` (what the cases may not write to), `spare` (unused RAM, test builds only). Read it off the RAM map:
-  the boot code, the entry, the libraries, the data and the SDK stay where they are.
+  the boot code, the entry, the libraries, the data and the SDK stay where they are. **`game` is the game's own code only**: the
+  library ranges of `sdk.txt` (SDK, NAOMI, the C runtime) and the data blocks stay outside it, as the original bytes, and are not
+  compiled from the C. A `game` line that spans the whole executable rebuilds the libraries at the C's size for nothing: Virtua
+  Tennis lost about 45 KB of its budget that way (SDK +27 KB, NAOMI and runtime +19 KB by function sizes) and spent a day
+  shrinking code that should not have been in the build. The libraries are Sega's: a build takes them as the original bytes, or links them from
+  the user's own SDK (bring your own SDK), never from C of ours. A library or data block in the middle of the game code is a `keep`
+  region (it stays at its address; the words in it that point at moved game code are followed); a block at the end is where
+  `game` ends. Before any shrinking, put the layout beside the one of a game that fits (Crazy Taxi: `game` 342 KB of game code,
+  `fill` 49 KB, libraries outside) and account for every difference.
 - **Build**: `make c` builds `build/cbuild/game.bin` from the C (`tools/8-build/cbuild.py`: copies of the C, pieces for what has
   no C, units of generated files compiled together, then `fit`: layout and link with Hitachi's inter-module optimizer, repeated
   with each part's measured ratio until the map shows every part inside its place). `asm-functions.txt` (one name a line) makes
@@ -466,6 +474,15 @@ code had, so the build of step 8 leaves every other address of the executable wh
 - **Checks before the build**: `make c` first runs `tools/8-build/retcheck.py`: every function's C must return in the register the
   original returns in (`sts fpul,r0` / `mov ...,r0` is r0, a write to `fr0` is fr0); a mismatch stops the build. The pre-commit hook
   runs it too. `cbuild.py` refuses a C call into the middle of another C function, naming the address and the C line.
+- **Before the first build** (each one failed a build from C once; `references/evidence.md` has the cases):
+  1. Missed functions: step 2's `missed_funcs.py` has run (`missed.txt`) and its findings are in `functions.txt`; a repo
+     that passed step 2 before the tool existed runs it now. Code it misses is built as a data table, its pools break.
+     Functions listed this late go back through the steps after 2 like any other: step 5 draws them, the rest is step 6.
+  2. Dropped arguments: no pass-through trampoline takes fewer arguments in C than `state/arity_scan.json` gives;
+     regenerate them and their callers (`gen_equiv --regen`), fix by hand a caller that still drops them.
+  3. Undefined names: `cbuild.py` stops on them (the linker alone sends every such call to address 0).
+  4. Stale references: after the link that fits, `cbuild.py` runs `tools/8-build/audit.py` and stops before the disc when a C
+     number, a copied word or a table piece still points into the old game code, or a table piece holds code.
 
 ### Step 9: Runtime repairs
 

@@ -213,6 +213,36 @@ as an issue) to add a game.
   - Callees the port cannot map (reached by a branch, not a pool word) -> named the same in both games
     (`nlFogTableSet`, `nlSpriteLoadTextureOnce_Sub`)
 
+### Step 8 and 9 on Virtua Tennis: a build with no spare room (2026-10-30)
+- No filler before the game code (Crazy Taxi's 49 KB absorbed its 1.12x C): the C must fit at about 1.0x of the original.
+  Generated C is 1.15-1.20x here as in every game (the frame array of the flat form, not the SDK, not structure), so the layout
+  shifts instead (`layout.txt` `shift <bytes> <end>`, `tools/8-build/shift.py`): the kept block, the SDK, the BSS and the heaps
+  move up by 0x28000, every reference into them follows (C literals, kept words, SDK pools, defined names, the entry stub).
+  Fits with 42 KB spare.
+- What broke, in the order found -> what changed:
+  - The kept block was built from C (the NAOMI library inside `game`) -> functions inside `keep` are not game functions
+    (`layout.moving`). Nothing then defined them: 3,329 calls linked to address 0, the game never left the BIOS -> each kept
+    function is defined at its address, and `cbuild.py` now stops on an undefined name.
+  - Byte tables read as pointers in the kept data (`07 07 08 08 | 0b 0b 0c 0c`) -> skipped and listed.
+  - Pointers to moved functions written `_name+H'80000000` (right for a game linked at 0C) wrapped to the 0C mirror in a game
+    linked at 8C (main called at 0C102D3C) -> `relocptr.py` and `relocasm.py` add the mirror difference from `BASE`.
+  - A bigger 1ST_READ.BIN moved by `disc_patch.py` to free sectors at LBA 45100 was never started by the boot code (data,
+    sector headers and the directory record all correct) -> it grows in place when it is the last file.
+  - Stuck at the licence screen: sysInit called the trampoline gdFsInit with none of its four arguments; gdFsInitG took a
+    leftover file count and cleared 84-byte records across memory -> the dropped-arguments check of step 8, 13 functions
+    regenerated, 4 calls fixed by hand.
+  - White screen: code the analysis never made into functions, reached through the data block, built as table pieces whose
+    pool loads land outside them (a jsr to 0009420B) -> `missed_funcs.py` (step 2, added after this repo passed it) lists 579
+    such regions in the game code.
+  - Stuck at the Sega screen: 11 more such functions, missed because `boundaries.py` read 8c candidates outside the file (no
+    mirror) and 4 were named only by the C (a call to 8c0c4c84, floats at 8c089f00 with a function behind them) -> the
+    candidates go through the mirror, `missed_funcs.py` also reads the C's numbers, and `audit.py` lists every table piece that
+    holds code. The 464 functions listed after step 5 had never been drawn: built as original instructions, not C.
+  - A `mova` to a float pool inside cameraExec made a 13 KB table piece, everything up to the next entry -> a number inside a
+    function's listed bytes copies only its run of pool words (44 bytes).
+- Ruled out on the way: a "578 KB overwrite" in a RAM dump was an artifact of bulk reads through the 8C mirror (read at 0C,
+  as `gdbsnap.py` says); the Flycast GDB build boots with reios, not the real BIOS.
+
 ### Boku Doraemon (Japan), T-41802M V1.003
 - Run: 2026-10-05 (v0.4) and 2026-10-06 (v0.5, on macOS and in Claude: same
   names)
@@ -888,3 +918,25 @@ The last three on Virtua Tennis (2026-10-28), after which VT has no function lef
 - Repair got a time budget per function (GEN_MEND_SECONDS, 12), and drawing skips repair for a declared-endless function.
 State at the end: TOTAL TEST COVERAGE 71.9% (60.7% in the morning); the proofs of main, vmsfs_c_dispatch, kmyInitializeHardware and
 BupFailDialog compare only up to the step limit; _div64 and emotFaceMorph rest on hand cases (158/197 and 116/116 instructions).
+
+- Virtua Tennis build from C over budget (2026-10-30): `make c` reported 138,396 bytes over after the `keep` fix put the 900 KB data
+  block (0C100E6C-0C1DCC88, 4,712 internal pointers, 319 into game code) back at its address; the earlier "fitting" build had moved
+  it and silently dropped ~164 KB of game code reached only through it (CPU AI handlers not in functions.txt). A day of measured
+  rewrites of the generated C (frame slots to locals, dead saves, boolean folds, struct-typed fields, hoisting, web renaming, fewer
+  labels) moved the total by under 1% each; the shift idiom (19 instructions for one shad/shld) and the per-function frame pass
+  gave ~10 KB. The cause that was there all day: VT's `layout.txt` `game` line spanned the whole executable, so the SDK range
+  (0C1DCC88-0C20CCD4, 1,216 functions, +26.8 KB) and the NAOMI library and runtime (0C0EA1A0-0C100E6A, 360 functions, +18.8 KB)
+  were compiled from our C at 1.3x; Crazy Taxi's `game` covers its own code only (342 KB) with a 49 KB `fill`, libraries outside, and
+  fits. The user had asked to look at how Crazy Taxi was done; the comparison of the two layouts came last instead of first. ->
+  Step 8 now says `game` is the game's own code only, with the library ranges of `sdk.txt` and the data blocks outside or as `keep`,
+  and to compare the layout with a fitting game's before shrinking. Also found: 182 VT functions (128 KB) proven on rescue cases only
+  (see Step 6 / tools/6-agentic), and a soundness hole in frame.py's passed-address window (fixed, tests/frame).
+
+### Crazy Taxi and Virtua Tennis, 2026-10-31: finding functions, slow draws, hand cases
+
+- **A table of words is not a function.** Crazy Taxi `0c089f4c` (52 bytes of pointer words and small numbers) began with a word that decodes as `bt` and was accepted by `boundaries.py`, listed, drawn and never proven. `boundaries.py` now rejects a candidate with a conditional branch that leaves it backwards (and no longer crashes when the target is before the executable). Test: `tests/findfuncs`. Existing entries it flags (6 in CT, 6 in VT, 8 in ZR) are `_tail` pieces and shared-tail SDK entries: pieces of a function that starts earlier.
+- **A "Timeout" in the draw is not always a runaway loop.** The build limit is `max(60, size/8)` s times `GEN_TIME_FACTOR`, and with 10 parallel jobs 11 Virtua Tennis functions (464 to 1766 bytes) ran out of the 60 s. Run again with `GEN_TIME_FACTOR=10 --jobs 3`: 10 of the 11 were proven (the biggest, 1766 bytes, took 1628 s). Try the factor before writing hand cases. `gen_equiv NAME` skips a function whose C already exists in `src/` (it counts as defined); `--known` selects the already-proven ones, it is not "force".
+- **Hand cases (handcase.py, equiv.py): register values are big-endian hex ("r4": "0C600000"), memory bytes in `poke` are little-endian.** Writing a register little-endian turned a size of 16 into 0x10000000 and the original ran past 2,000,000 instructions (FUN_8c08a936, FUN_8c0de3cc). Fixed-count loops need no cases; a loop whose count comes from memory or a register needs the count set small; a wait-for-flag loop needs the flag set so it passes at once.
+- **`ldc sr` and `rte` in the simulator.** `sh4sim.py` stopped on any change of SR.BL ("not modelled"). The simulator has no exceptions, so BL is now kept as a bit (it reads back through `stc sr`); a change of SR.RB still stops. `rte` is modelled as `rts` plus SR = SSR (SPC and SSR start as the return address and entry SR). Tests: `tests/srblock`, `tests/rte`. An interrupt handler is written in C with `#pragma interrupt(f)`.
+- **The generator reads the current SR where the original restores the saved one.** Virtua Tennis `FUN_8c0f8100` (stc sr at the start, ldc of that value at the end) came out as `set_cr(get_cr() & ...)`, which leaves BL set. Written by hand with a `saved` variable it is proven (src/gen_zk.c). Open: fix the generator to keep the value read at the `stc`.
+- **Two functions are interrupt handlers, one a stub:** Virtua Tennis `8c1fc77c`, `8c1fc7d0` (push r0/r4/r5/pr, call 0xAC004000, `rte`), `8c1fc7cc` (a bare `rte`, proven), `8c1643a0` (a `bra` with a `bsr` in its delay slot, 4 bytes, not a function a compiler writes).

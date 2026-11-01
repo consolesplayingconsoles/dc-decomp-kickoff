@@ -122,10 +122,28 @@ def srop(op,a,b):
     and with a constant, or with a value."""
     if isinstance(b,tuple) and b[0]=='srx': a,b=b,a
     if not isinstance(b,tuple) or b[0]!='srx':
-        _,sh,m,V=a
-        if op=='and' and isint(b) and V is None: return ('srx',sh,m&b,None)
-        if op=='or' and sh==0: return ('srx',sh,m,b if V is None else iop('or',V,b))
+        _,sh,m,V=a[:4]; tail=a[4:]                 # tail: where stc read it (sr_mark), so a restore can use the word read then
+        if op=='and' and isint(b) and V is None: return ('srx',sh,m&b,None)+tail
+        if op=='or' and sh==0: return ('srx',sh,m,b if V is None else iop('or',V,b))+tail
     raise Skip('sr op '+op)
+def sr_mark(c):
+    """Where an stc sr reads SR: the block and position (a read of SR can be put there later) and how many SR writes came before."""
+    marks=c.__dict__.setdefault('sr_marks',[])
+    marks.append([c.blocks[-1],len(c.blocks[-1]),getattr(c,'sr_epoch',0),None])
+    return len(marks)-1
+def sr_read(c,v):
+    """The SR word v was read from: _builtin_get_cr() where nothing wrote SR since its stc, else a variable read at the stc (Virtua
+    Tennis FUN_8c0f8100 saves SR, sets the block bit and puts the saved word back: get_cr() at the restore kept the bit set)."""
+    if len(v)<5: return '_builtin_get_cr()'
+    mk=c.sr_marks[v[4]]
+    if mk[2]==getattr(c,'sr_epoch',0): return '_builtin_get_cr()'
+    if mk[3] is None:
+        t='t%d'%c.ntemp; c.ntemp+=1; mk[3]=t
+        blk,pos=mk[0],mk[1]
+        blk.insert(pos,'int %s = _builtin_get_cr();'%t)
+        for o in c.sr_marks:                       # a later mark in the same block moved down one line
+            if o is not mk and o[0] is blk and o[1]>=pos: o[1]+=1
+    return mk[3]
 def sr_get_fin(c,reg):
     """(SR >> 4) & 15 is get_imask(): read now, while SR still holds what stc read."""
     v=c.R.get(reg)
@@ -875,7 +893,8 @@ def _run(name,passthru=False,frame=False,flat=False):
             setT('(%s != 0)'%e,'(%s == 0)'%e); return
         if mn=='pref':                        # prefetch a cache line: SHC's prefetch(); no effect the check can see
             c.protos['_builtin_prefetch']=('void *',); c.blocks[-1].append('_builtin_prefetch((void *)%s);'%ex(c.gi(a[0].strip('@')))); return
-        if mn=='stc' and a[0]=='sr': c.R[a[1]]=('srx',0,M,None); return
+        if mn=='stc' and a[0]=='sr':
+            c.R[a[1]]=('srx',0,M,None,sr_mark(c)); return
         # control registers through the SDK's own intrinsics (smachine.h / umachine.h: get_vbr, set_vbr, get_gbr, set_gbr, get_fpscr, set_fpscr)
         if mn=='stc' and a[0] in ('vbr','gbr'):
             nm='_builtin_get_%s'%a[0]; c.protos[nm]=(); t='t%d'%c.ntemp; c.ntemp+=1
@@ -912,14 +931,14 @@ def _run(name,passthru=False,frame=False,flat=False):
                 # SR changed beyond the interrupt mask (the BL bit, the register bank...): the whole word through the SDK's set_cr / get_cr
                 # (the bits or-ed in are a constant, or a value the function computed)
                 c.protos['_builtin_set_cr']=('int',); c.protos['_builtin_get_cr']=()
-                val='(_builtin_get_cr() & 0x%X)'%v[2] + ((' | 0x%X'%v[3] if isint(v[3]) else ' | (%s)'%ex(v[3])) if v[3] else '')
-                c.blocks[-1].append('_builtin_set_cr(%s);'%val); return
+                val='(%s & 0x%X)'%(sr_read(c,v),v[2]) + ((' | 0x%X'%v[3] if isint(v[3]) else ' | (%s)'%ex(v[3])) if v[3] else '')
+                c.blocks[-1].append('_builtin_set_cr(%s);'%val); c.sr_epoch=getattr(c,'sr_epoch',0)+1; return
             if not(isinstance(v,tuple) and v[0]=='srx' and v[1]==0 and v[2]==0xFFFFFF0F): raise Skip('ldc sr not set_imask')
             V=0 if v[3] is None else v[3]
             arg='0x%X'%((V&0xF0)>>4) if isint(V) else '((unsigned int)%s >> 4)'%ex(V)
             if isint(V) and V&~0xF0: raise Skip('ldc sr not set_imask')
             c.protos['_builtin_set_imask']=('int',)
-            c.blocks[-1].append('_builtin_set_imask(%s);'%arg); return
+            c.blocks[-1].append('_builtin_set_imask(%s);'%arg); c.sr_epoch=getattr(c,'sr_epoch',0)+1; return
         if mn=='mov' and a[0].startswith('#'): c.R[a[1]]=int(a[0][1:])&M; return
         if mn=='mov' and a[0].startswith('r'): c.R[a[1]]=c.gi(a[0]); return
         if mn=='add' and a[0].startswith('#'):
@@ -961,9 +980,12 @@ def _run(name,passthru=False,frame=False,flat=False):
                     if isint(v): c.R[a[1]]=((((v^0x80000000)-0x80000000)>>k)&M) if sg else (v>>k)
                 else: c.R[a[1]]=('e','((int)%s >> 31)'%ex(v)) if sg else 0
             else:
+                # a shift by a register: SHC compiles `y << x` to one shad (int y) or shld (unsigned y), whose meaning for a negative count
+                # (a right shift, zero or the sign past 31) is the hardware's, the same the ternary spelt out at 19 instructions a site
+                # (Crazy Taxi 111 sites, Virtua Tennis 188; tools/7-reduction/textpass.py shift rewrites the C written before this)
                 ty='int' if sg else 'unsigned int'
                 x=ex(m); y=ex(v)
-                c.R[a[1]]=('e','(((int)%s >= 0) ? (%s << (%s & 31)) : ((-(int)%s & 31) ? ((%s)%s >> (-(int)%s & 31)) : %s))'%(x,y,x,x,ty,y,x,'((int)%s >> 31)'%y if sg else '0'))
+                c.R[a[1]]=('e','((%s)%s << (int)%s)'%(ty,y,x))
             return
         if mn=='shar': v=c.gi(a[0]); c.R[a[0]]=('e','(%s >> 1)'%ex(v)) if not isint(v) else ((v>>1)|(v&0x80000000)); return
         if mn=='swap.w':
@@ -2294,6 +2316,9 @@ def _run(name,passthru=False,frame=False,flat=False):
         for n in ints: emit('int R%d;'%n)
         for n in flts: emit('float F%d;'%n)
         emit('int T_;')
+        # FPUL set in one block and read in the next (a shared `float fpul` tail: Virtua Tennis FUN_8c07b7aa 8c07bada bra 8c07bb1a): a variable too
+        fpulvar=any(x[0] in ('float','sts','fsca','fsts') and (x[1] or '').split(';')[0].split(',')[0].strip()=='fpul' for x in ins)
+        if fpulvar: emit('int FPUL_;')
         live0=c.live.get(0) if c.live else None      # the registers live at entry: only those are parameters (one written before it is read is not)
         for n in ints:
             if 4<=n<=7 and (live0 is None or 'r%d'%n in live0): c.iuse.add(n); emit('R%d = a%d;'%(n,n))
@@ -2314,7 +2339,7 @@ def _run(name,passthru=False,frame=False,flat=False):
         except Exception: LIVE=None
         def fresh_state(D):
             c.R={'r%d'%n:('e','R%d'%n) for n in ints}; c.FR={'fr%d'%n:('e','F%d'%n) for n in flts}
-            c.D=D; c.fpul=None; c.macl=None; c.stack={}; c.lastcall=None
+            c.D=D; c.fpul=('e','FPUL_') if fpulvar else None; c.macl=None; c.stack={}; c.lastcall=None
             c.pend=[(('fpend',('e','*(float *)((int)stk + @@F:%d@@)'%(-d))) if f else ('e','*(int *)((int)stk + @@F:%d@@)'%(-d))) for d,f in CARRY.get(D,[])]
             setT('T_','!T_')
         def spill(succ=None):
@@ -2343,6 +2368,9 @@ def _run(name,passthru=False,frame=False,flat=False):
                 if live is not None and f not in live: continue
                 pairs.append((FV(f),fx(v),True))
             if c.T is not None and c.T!='T_' and (live is None or 'T' in live): pairs.append(('T_','(%s)'%c.T,False))
+            if fpulvar and c.fpul is not None and c.fpul!=DIRTY and c.fpul!=('e','FPUL_'):     # no liveness for FPUL: written back whenever set
+                if isinstance(c.fpul,tuple) and c.fpul[0] in ('addr','srx'): raise Skip('flat: an address or SR value crosses a block')
+                pairs.append(('FPUL_',ex(c.fpul),False))
             tmp=[]
             for var,e,isf in pairs:
                 t=fresh(isf); emit('%s %s = %s;'%('float' if isf else 'int',t,e)); tmp.append((var,t))

@@ -59,7 +59,11 @@ def _outer(operand):
         i = r + 1
 
 
-def scalarize(text):
+def scalarize(text, addr_window=64, min_uses=2):
+    """addr_window: how many bytes a frame address passed on (`(int)stk + 40` as a value) may reach: a slot inside stays memory.
+    The default 64 is a guess at the biggest structure a callee fills; the real reach is known only to the callee.
+    min_uses: a slot with fewer accesses than this stays (one store never read, one read: a local gains nothing by the old count, but
+    SHC drops the dead store and keeps the read in a register)."""
     if 'int stk[' not in text:
         return text
     body_at = text.index('{\n') if '{\n' in text else 0
@@ -100,11 +104,12 @@ def scalarize(text):
         if text[at:at + 4] == 'stk[' or text[at:at + 1] == '&':
             WHY[0] = 'the frame indexed by a variable or its address taken: %s' % text[at:at + 40]
             return text
-        mm = re.match(r'\(int\)stk \+ (\d+)', text[at:])
+        mm = re.match(r'\(int\)stk \+ (\d+)\)(?: \+ (0x[0-9A-Fa-f]+|\d+))?', text[at:])
         if not mm:
             WHY[0] = 'a frame address that is not a constant offset: %s' % text[at:at + 40]
             return text
-        ranges.append((int(mm.group(1)), int(mm.group(1)) + 64, 'address'))
+        base = int(mm.group(1)) + (int(mm.group(2), 0) if mm.group(2) else 0)      # `((int)stk + 8) + 0x1C` is the address of slot 36, not of slot 8
+        ranges.append((base, base + addr_window, 'address'))
     by = {}
     for s, e, t, n in spans:
         by.setdefault(n, []).append((s, e, t))
@@ -112,10 +117,11 @@ def scalarize(text):
     for n, lst in by.items():
         types = {t for _, _, t in lst}
         cls = 'f' if types == {'float'} else 'i' if types <= {'int', 'unsigned int'} else None
-        if cls is None or n % 4 or len(lst) < 2:
+        if cls is None or n % 4 or len(lst) < min_uses:
             continue
-        if any(a < n + 4 and n < b and (a, b, t) != (n, n + 4, t) and not (a == n and b == n + 4 and t in ('int', 'unsigned int', 'float'))
-               for a, b, t in ranges):
+        # anything that overlaps the slot blocks it, except the slot's own scalar accesses; a passed address whose reach is exactly the
+        # slot (addr_window 4) blocks too (the old test let any range equal to the slot through, address or not)
+        if any(a < n + 4 and n < b and not (a == n and b == n + 4 and t in ('int', 'unsigned int', 'float')) for a, b, t in ranges):
             continue
         pick[n] = cls
     if not pick:
