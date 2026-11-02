@@ -10,6 +10,15 @@ No game data, no compiler: a synthetic executable of four 16-byte functions. Std
                     float    `fldi1 fr1; fmov fr1,fr0; rts` returns in fr0: declared float, it is not reported
                     callee   `jsr @r3; mov #12,r0; rts`: the result is the callee's, nothing is said whatever the declaration
                     pointer  `float *` is a pointer, in r0: `mov.l @(pc),r0; rts` declared `float *` is not reported
+                    void     `mov #17,r0; rts` declared void while a caller uses the value: reported with r0 (Virtua Tennis
+                             screenOutcodeMargin, screenOutcode, ambLevelGet, nlSpriteF2C: outcodes and a colour handed to callers as a
+                             leftover; a void function nobody reads is left alone, generated code often stores a leftover)
+                    leftover `jsr @r3; mov #12,r0` then a 7-instruction epilogue and rts, a caller using the value: NOT reported, the
+                             mov is the copy's size argument in the delay slot and r0 at the rts is the callee's (the window runs back
+                             to the previous call, not six instructions: Virtua Tennis bodyLinePerp, padLcdLine3D, motFileRequest)
+                    poolx    the window of a return stops at a pool word, an unconditional transfer or a bank switch: code before them is
+                             not on the path (Virtua Tennis shotCheckNet voted on a `mov #0,r0` across a pool; the nlLoadMatrix family on
+                             fr0 loads after frchg). f_poolx: tail rts after `.word`, fr0 set on the other path: declared int is reported
                     index    r0 written and then used as an index (`fmov.s fr5,@(r0,r4)`) before the rts is consumed, not returned:
                              declared float, it is not reported
                     callers  a file that declares the float function as int and uses the value is listed by --callers, not an error
@@ -37,6 +46,9 @@ FUNCS = {
     'f_call': (0x30, [0x430B, 0xE00C, RTS, NOP]),      # jsr @r3 ; mov #12,r0 ; rts ; nop
     'f_ptr': (0x40, [0xD000, RTS, NOP]),                # mov.l @(0,pc),r0 ; rts ; nop  (a pointer result, in r0)
     'f_idx': (0x50, [0x9000, 0xF457, RTS, NOP]),        # mov.w @(0,pc),r0 ; fmov.s fr5,@(r0,r4) ; rts ; nop  (r0 is an index)
+    'f_void': (0x60, [0xE011, RTS, NOP]),              # mov #17,r0 ; rts ; nop  (an outcode in r0; the C says void)
+    'f_poolx': (0x90, [0x2448, 0x8903, 0xE009, 0xA004, NOP, 0x0000, 0x2232, RTS, NOP, 0xF09D, RTS, NOP]),   # tst r4,r4 ; bt tail ; mov #9,r0 ; bra fin ; nop ; .word 0 ; tail: mov.l r3,@r2 ; rts ; nop ; fin: fldi1 fr0 ; rts ; nop
+    'f_left': (0x70, [0x430B, 0xE00C, 0x7F30, 0x4F26, 0xFCF9, 0xFDF9, 0xFEF9, 0xFFF9, 0x6DF6, RTS, 0x6EF6]),   # jsr @r3 ; mov #12,r0 (a copy size, the delay slot) ; add #48,r15 ; lds.l ; 4 fmov.s pops ; mov.l pop ; rts ; mov.l pop: r0 is the callee's leftover
 }
 BASE = 0x0C020000
 
@@ -69,15 +81,36 @@ float f_idx(int a)
 {
     return 2.0f;
 }
+
+void f_void(int a)
+{
+    if (a) {
+        return;
+    }
+}
+
+void f_left(int a)
+{
+    f_imm();
+}
+
+int f_poolx(int a)
+{
+    return 9;
+}
 """
 CALLER = """int f_flt(void);
 int f_imm(void);
+int f_void(int);
+int f_left(int);
 
 void g(void)
 {
     int x;
     x = f_flt();
     f_imm();
+    x = f_void(1);
+    x = f_left(2);
 }
 """
 
@@ -91,13 +124,13 @@ def main():
     tmp = tempfile.mkdtemp()
     try:
         os.chdir(tmp)
-        code = bytearray(struct.pack('<H', NOP) * 0x60)
+        code = bytearray(struct.pack('<H', NOP) * 0xB0)
         for off, words in FUNCS.values():
             for k, w in enumerate(words):
                 code[off + 2 * k:off + 2 * k + 2] = struct.pack('<H', w)
         open('1ST_READ.BIN', 'wb').write(bytes(code))
         open('BASE', 'w').write('%08X\n' % BASE)
-        open('functions.txt', 'w').write(''.join('F %08x 16 %s\n' % (BASE + off, n) for n, (off, _) in sorted(FUNCS.items(), key=lambda kv: kv[1][0])))
+        open('functions.txt', 'w').write(''.join('F %08x %d %s\n' % (BASE + off, 2 * len(words), n) for n, (off, words) in sorted(FUNCS.items(), key=lambda kv: kv[1][0])))   # real sizes: a 16 cut f_left and f_poolx short of their rts
         os.makedirs('src')
         open('src/a.c', 'w').write(A)
         open('src/b.c', 'w').write(CALLER)
@@ -108,7 +141,11 @@ def main():
             bad.append('int: a float-declared function that ends `sts fpul,r0` was accepted')
         if 'f_int: declared float' not in out or 'returns in r0' not in out:
             bad.append('int: f_int is not reported with r0: %s' % out.strip())
-        for n in ('f_imm', 'f_flt', 'f_call', 'f_ptr', 'f_idx'):
+        if 'f_poolx: declared int' not in out or 'f_poolx: declared int in src/a.c, the original returns in fr0' not in out:
+            bad.append('poolx: the tail rts sits after a pool word and before it an unrelated `mov #9,r0`; the window must stop at the pool and the function returns fr0 (the other path), so declared int is reported: %s' % out.strip())
+        if 'f_void: declared void' not in out or 'returns in r0' not in out:
+            bad.append('void: f_void (void, the original sets r0, a caller uses the value) is not reported: %s' % out.strip())
+        for n in ('f_imm', 'f_flt', 'f_call', 'f_ptr', 'f_idx', 'f_left'):
             if ('%s:' % n) in out:
                 bad.append('%s: reported although its declaration is right or its result is a callee\'s: %s' % (n, out.strip()))
         rc, out = run('--callers')
@@ -116,28 +153,28 @@ def main():
             bad.append('callers: b.c declares f_flt as int and uses the value, not listed: %s' % out.strip())
         if 'declares f_imm' in out:
             bad.append('callers: b.c declares f_imm with the right type (and discards the value), yet listed')
-        open('src/a.c', 'w').write(A.replace('float f_int(void)\n{\n    return 1.0f;', 'int f_int(void)\n{\n    return 1;'))
+        open('src/a.c', 'w').write(A.replace('float f_int(void)\n{\n    return 1.0f;', 'int f_int(void)\n{\n    return 1;').replace('void f_void(int a)\n{\n    if (a) {\n        return;\n    }\n}', 'int f_void(int a)\n{\n    return 17;\n}').replace('int f_poolx(int a)\n{\n    return 9;\n}', 'float f_poolx(int a)\n{\n    return 1.0f;\n}'))
         rc, out = run()
         if rc != 0:
-            bad.append('fixed: with f_int declared int the check still fails: %s' % out.strip())
+            bad.append('fixed: with f_int declared int and f_void int the check still fails: %s' % out.strip())
         # the cache: the original's registers are read once; the C is still checked every run
-        if '(6 function(s) of the original read, 0 from' not in first:
+        if '(9 function(s) of the original read, 0 from' not in first:
             bad.append('cache: the first run did not read the six functions of the original: %s' % first.strip())
         rc, out = run()
-        if rc != 0 or '(0 function(s) of the original read, 6 from build/retcheck.json)' not in out:
+        if rc != 0 or '(0 function(s) of the original read, 9 from build/retcheck.json)' not in out:
             bad.append('cache: the second run read the original again: %s' % out.strip())
         open('src/a.c', 'w').write(A)                       # the wrong declaration comes back: still caught, from the cache
         rc, out = run()
         if rc == 0 or 'f_int: declared float' not in out or '(0 function(s) of the original read' not in out:
             bad.append('cache: a wrong declaration is not caught with the original read from the cache: %s' % out.strip())
-        open('src/a.c', 'w').write(A.replace('float f_int(void)\n{\n    return 1.0f;', 'int f_int(void)\n{\n    return 1;'))
+        open('src/a.c', 'w').write(A.replace('float f_int(void)\n{\n    return 1.0f;', 'int f_int(void)\n{\n    return 1;').replace('void f_void(int a)\n{\n    if (a) {\n        return;\n    }\n}', 'int f_void(int a)\n{\n    return 17;\n}').replace('int f_poolx(int a)\n{\n    return 9;\n}', 'float f_poolx(int a)\n{\n    return 1.0f;\n}'))
         open('build/retcheck.json', 'w').write('not json')
         rc, out = run()
-        if rc != 0 or '(6 function(s) of the original read, 0 from' not in out:
+        if rc != 0 or '(9 function(s) of the original read, 0 from' not in out:
             bad.append('cache: an unreadable cache was not read again from the original: %s' % out.strip())
         open('functions.txt', 'a').write('F %08x 16 f_extra\n' % (BASE + 0x70))
         rc, out = run()
-        if '(0 function(s) of the original read, 6 from' in out:
+        if '(0 function(s) of the original read, 9 from' in out:
             bad.append('cache: a changed functions.txt kept the old cache: %s' % out.strip())
         rc, out = run()                                     # settled on the new functions.txt
         exe = bytearray(open('1ST_READ.BIN', 'rb').read())
