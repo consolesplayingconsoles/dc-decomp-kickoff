@@ -41,6 +41,7 @@ SYM = 'build/sym'
 LIT = re.compile(r'(?<![\w.])0[xX]([0-9A-Fa-f]{7,8})([uUlL]*)(?![\w.])')       # an integer suffix (0x0C0DB008u) is part of the number
 TOPS = (0x0C, 0x8C, 0xAC)
 LOG = OUT + '/mbuild.log'
+VENEER_ROUNDS = 40       # each round routes the branches a link found out of reach; a veneer pushes the next one out (H5 of Virtua Tennis needed more than 6)
 
 
 def say(msg):
@@ -139,6 +140,33 @@ def data_copy(text, label, start, word):
             continue
         out.append(l)
     return '\n'.join(out)
+
+
+def hole_text(text, label, start, word, suffix='__h'):
+    """The bytes of a piece the C replaces, kept so the pieces around it keep their distance: its own words, not zeros. A kept
+    piece reads literal-pool words that the original compiler put inside a neighbour (fadeScreenStart's constants sit inside the
+    next function), so the hole holds what was there: instructions as raw words, pool words as the symbols they were written
+    with (they follow their targets). The label is _name__h, which no other copy of the piece uses; with suffix '__d' the hole is
+    the piece's data copy too (a piece the C reads has one, and a second item between the kept pieces would split their unit)."""
+    return data_copy(text, label, start, word).replace(label + '__d', label + suffix)
+
+
+def hole_pieces(gstart, npieces, dropped, fill_pieces):
+    """The pieces the C replaces that must stay as bytes: in a group (pieces that move together) with a kept piece, every replaced
+    piece from the first kept one to the end of the group. A kept piece reads literal-pool words only forward (pc-relative loads
+    have no negative distance), and the original compiler put them anywhere after the code, often inside the next function: a
+    replaced piece after the last kept one is a pool the kept piece reads (fadeScreenStart's constants sit inside the next
+    function, hudFadeNearPlayers' in the gap after the one after it)."""
+    out = set()
+    for g_, st_ in enumerate(gstart):
+        last = (gstart[g_ + 1] if g_ + 1 < len(gstart) else npieces) - 1
+        kept = [k for k in range(st_, last + 1) if k not in dropped]
+        if not kept:
+            continue
+        for k in range(min(kept), last + 1):
+            if k in dropped and k not in fill_pieces:
+                out.add(k)
+    return out
 
 
 def veneers(text, own, tag, only=None, start=0):
@@ -440,11 +468,12 @@ def main():
     first = {}
     for a, n in sorted(cfun.items()):
         first.setdefault(gs[n], piece(a))
+    holes = hole_pieces(gstart, len(P), dropped, fill_pieces)
     group_end = {}                            # a running copy is one block: what would land inside it goes after its last piece
     for g in range(len(gstart)):
         run = range(gstart[g], gstart[g + 1] if g + 1 < len(gstart) else len(P))
-        if any(second.get(k) == '__2' for k in run):
-            for k in run:
+        if any(second.get(k) == '__2' for k in run) or any(k in holes for k in run):      # a group with holes too: the C
+            for k in run:                                                                     # must not land between a kept piece and its pool
                 group_end[k] = run[-1]
     at_piece = {}
     for stem, i in first.items():
@@ -456,12 +485,7 @@ def main():
     # one object of pieces that follow each other in the original (a group: nothing inside it moves), ALIGN=4 like the C,
     # padded in front so that it lands at its original address modulo 32 (pool loads read (pc + 4) & ~3; data may need its alignment)
     gset = set(gstart)
-    hole = {}                                  # replaced pieces inside a group between kept ones: their size
-    for g_, st_ in enumerate(gstart):
-        run_ = [k for k in range(st_, gstart[g_ + 1] if g_ + 1 < len(gstart) else len(P)) if k not in dropped]
-        for k in range(min(run_, default=0), max(run_, default=-1) + 1):
-            if k in dropped and k not in fill_pieces:
-                hole[k] = (starts[k + 1] if k + 1 < len(P) else end) - starts[k]
+    hole = {k: (starts[k + 1] if k + 1 < len(P) else end) - starts[k] for k in holes}      # replaced pieces kept as bytes: their size
     items = []
 
     def asm(i, path, kind):
@@ -473,18 +497,18 @@ def main():
     for i, (s, label, f) in enumerate(P):
         if i not in group_end:
             items += [['c', stem] for stem in at_piece.get(i, [])]
-        if i in copies:
+        if i in copies and not (i in hole and second.get(i) == '__d'):        # a hole that is also read is its own data copy
             asm(i, '%s/asm/%s' % (OUT, copies[i]), '2' if second[i] == '__2' else 'd')
+        if i in hole:                                         # C replaces it, but kept code reads pools across it: the bytes stay, before
+            hp = '%s/asm/hole_%s' % (OUT, P[i][2])             # the C that waited for the group's end (that C must not split the group)
+            src_ = '%s/asm/%s' % (SYM, f)
+            open(hp, 'w').write(hole_text(open(src_ if os.path.exists(src_) else 'asm/' + f).read(), label, s, B.word,
+                                           '__d' if second.get(i) == '__d' else '__h'))
+            asm(i, hp, 'k')
         if i in group_end and group_end[i] == i:             # the end of a running copy: its veneers, then the C that waited
             items += [['v', '%s/asm/%s' % (OUT, vf)] for vf in after.get(i, [])]
             items += [['c', stem] for stem in at_piece.get(i, [])]
         if i in dropped:
-            if i in hole:                                     # C replaces it, but kept code on both sides reads pools across it
-                hp = '%s/asm/hole_%s' % (OUT, P[i][2])
-                open(hp, 'w').write('; %s: %d bytes the C replaces, kept so the pieces around it keep their distance\n'
-                                    '          .SECTION    P, CODE, ALIGN=2\n%s          .END\n' % (
-                                        P[i][2], hole[i], "          .DATA.W     H'0000\n" * (hole[i] // 2)))
-                asm(i, hp, 'k')
             continue
         if i in repoint:
             asm(i, '%s/asm/r_%s' % (OUT, f), 'k')
@@ -602,7 +626,7 @@ def main():
     say('assembled %d sources' % len(jobs))
     def settle(tag, defs, pads):
         """Link until no branch is out of reach: each one the linker reports goes through a veneer, the unit is written again."""
-        for round_ in range(6):
+        for round_ in range(VENEER_ROUNDS):
             over = link(tag, defs, soft=True)
             if not over:
                 return
@@ -618,7 +642,7 @@ def main():
             jobs = write_units(pads)
             assemble(jobs)
             say('link %s: %d branches out of reach go through a veneer (round %d, %d units)' % (tag, n, round_ + 1, len(unit_routes)))
-        say('[ERROR] branches still out of reach after 6 rounds of veneers')
+        say('[ERROR] branches still out of reach after %d rounds of veneers' % VENEER_ROUNDS)
         sys.exit(1)
 
     settle('layout', names, pad1)

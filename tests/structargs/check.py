@@ -5,7 +5,9 @@ the registers carry only the scalar arguments. Counting it as an integer registe
 Taxi kmiInitPAL / kmiInitNTSC -> kmiSetVideoTimings(KmVideoTimings) and missed the stack words. No game data, no compiler. Stdlib only.
 
     check.py      a temp C file with typedef'd structures:
-                    alone      f(T252 t): no register argument, stack words compared (4, the cap)
+                    alone      f(T252 t): no register argument, stack words compared (16, the cap)
+                    many       v(11 ints): four registers, the other seven on the stack, all seven compared (a cap of 4 let
+                               Virtua Tennis shadowBallDraw -> segPlaneHit pass 1 of its 7 stack words, the vectors never passed)
                     mixed      g(int a, P3 p, float s): one integer and one float register, the point's 3 words on the stack
                     nested     h(int a, int b, Prop q) with Prop { int pad; P3 pos; }: two registers, 4 stack words
                     pointer    k(P3 *p): a pointer is a register, as before
@@ -42,7 +44,9 @@ int k(P3 *p);
 int m(int a, int b, int c, int d, int e);
 int q(int a, int b, AngleR r, float f, int *p);
 int w(CS c);
+int v(int a, int b, int c, int d, int e, int f2, int g2, int h2, int i, int j, int k2);
 
+int v(int a, int b, int c, int d, int e, int f2, int g2, int h2, int i, int j, int k2) { return k2; }
 int f(T252 t) { return t.w[0]; }
 int g(int a, P3 p, float s) { return a; }
 int h(int a, int b, Prop q) { return a; }
@@ -52,9 +56,9 @@ int q(int a, int b, AngleR r, float f, int *p) { return a; }
 int w(CS c) { return 0; }
 '''
 
-WANT_REGS = {'f': (0, 0), 'g': (1, 1), 'h': (2, 0), 'k': (1, 0), 'm': (4, 0), 'q': (3, 1), 'w': (0, 0)}
-WANT_STACK = {'f': 4, 'g': 3, 'h': 4, 'k': 0, 'm': 1, 'q': 2, 'w': 1}
-WANT_DEFS = dict(WANT_REGS, m=(5, 0))                 # definitions() keeps the raw integer count; compared_arity caps it at 4
+WANT_REGS = {'f': (0, 0), 'g': (1, 1), 'h': (2, 0), 'k': (1, 0), 'm': (4, 0), 'q': (3, 1), 'w': (0, 0), 'v': (4, 0)}
+WANT_STACK = {'f': 16, 'g': 3, 'h': 4, 'k': 0, 'm': 1, 'q': 2, 'w': 1, 'v': 7}
+WANT_DEFS = dict(WANT_REGS, m=(5, 0), v=(11, 0))      # definitions() keeps the raw integer count; compared_arity caps it at 4
 
 
 def main():
@@ -76,7 +80,7 @@ def main():
                 bad.append('%s stack words: %r, want %r' % (n, st.get(n), WANT_STACK[n]))
             if tuple(de.get(n, ())[:2]) != WANT_DEFS[n]:
                 bad.append('%s definition registers: %r, want %r' % (n, de.get(n), WANT_DEFS[n]))
-            if len(de.get(n, ())) > 2 and min(de[n][2], 4) != WANT_STACK[n]:
+            if len(de.get(n, ())) > 2 and min(de[n][2], 16) != WANT_STACK[n]:
                 bad.append('%s definition stack words: %r, want %r' % (n, de[n][2], WANT_STACK[n]))
         caller = os.path.join(tmp, 'src', 'caller.c')
         open(caller, 'w').write('int f(int, int, int, int);\nint m(int, int);\nint use(void) { return f(1, 2, 3, 4) + m(1, 2); }\n')

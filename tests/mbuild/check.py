@@ -9,7 +9,7 @@ symbol lands once the image is linked. No game data, no compiler. Stdlib only.
                     cfun      a C function's entry is the C function's symbol
                     middle    the middle of a C function is its second copy when there is one, nothing (None) when not
                     bss       an address past the image is _bss + the same offset
-                    bsspad    bss_pad(end, start) puts _bss at the original image end modulo 32; the pad is written before the _bss label
+                    holes     hole_pieces(): replaced pieces from the first kept piece to the end of the group are holes (a pool donor after the\n                              last kept piece too), none before it or in a group with no kept piece\n                    holepool  hole_text(): a piece the C replaces keeps its words (a pool word stays a symbol), not zeros\n                    bsspad    bss_pad(end, start) puts _bss at the original image end modulo 32; the pad is written before the _bss label
 """
 import os
 import sys
@@ -62,6 +62,21 @@ def main():
     d = M.data_copy(piece, '_f', 0x0C010000, lambda a: raw[a])
     if '_f__d:' not in d or '.EXPORT     _f__d' not in d or "_f__d+H'8" not in d or 'BSR' in d or ".DATA.W     H'B123" not in d:
         bad.append('data copy: want label _f__d, its self pointer _f__d+H\'8 and the bsr back as H\'B123:\n' + d)
+    hp = ('          .SECTION    P, CODE, ALIGN=2\n          .IMPORT     _vecMake\n          .EXPORT     _g\n_g:\n          .DATA.W     H\'4F22\n'
+          '          .DATA.W     H\'0009\n          .DATA.L     _vecMake\n          .DATA.W     H\'0000\n          .END')
+    raw_h = {0x0C020000: 0x4F22, 0x0C020002: 0x0009}
+    h = M.hole_text(hp, '_g', 0x0C020000, lambda a: raw_h[a])
+    if '.DATA.L     _vecMake' not in h or '_g__h:' not in h or '__d' in h or "H'0000\n" in h.replace("          .DATA.W     H'0000\n          .END", ''):
+        bad.append('hole: a replaced piece keeps its pool word (.DATA.L _vecMake) and its label is _g__h, not zeros:\n' + h)
+    h2 = M.hole_text(hp, '_g', 0x0C020000, lambda a: raw_h[a], '__d')
+    if '_g__d:' not in h2 or '__h' in h2 or '.DATA.L     _vecMake' not in h2:
+        bad.append('hole as data copy: with suffix __d the hole is labelled _g__d (the piece\'s data copy), pool word kept:\n' + h2)
+    got = M.hole_pieces([0, 4], 8, {0, 2, 3, 5, 6}, {6})
+    if got != {2, 3, 5}:
+        bad.append('holes: group 0-3 has kept piece 1 and replaced 0, 2, 3 (0 comes before the first kept one: no hole; 2 and 3, the pool '
+                   'donors after it, are holes) and group 4-7 has kept 4 and 7 with 5 replaced and 6 in the filler: got %r, want {2, 3, 5}' % sorted(got))
+    if M.hole_pieces([0, 3], 6, {0, 1, 2, 3, 4, 5}, set()):
+        bad.append('holes: a group with no kept piece has no hole')
     run = ('          .EXPORT     _f__2\n_f__2:\n          BSR         _g\n          .DATA.W     H\'0009\n'
            '          BRA         _h__2+H\'4\n          .DATA.W     H\'0009\n          .END')
     v, vs = M.veneers(run, {'_f__2', '_h__2'}, '_f__2')

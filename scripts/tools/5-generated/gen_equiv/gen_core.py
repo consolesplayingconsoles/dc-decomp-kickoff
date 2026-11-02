@@ -59,7 +59,9 @@ class Ctx:
             return ('e','((int)stk + @@F:%d@@)'%(-s.D))
         if r not in s.R:
             n=int(r[1:])
-            if 4<=n<=7: s.R[r]=('s','a%d'%n); s.iuse.add(n)
+            if 4<=n<=7 and getattr(s,'ncalls',0) and getattr(s,'uninit',None):
+                s.uninit(r)                  # a call on this path already clobbered it: what is read is the callee's leftover, not the incoming argument (an uninitialised local, as in the original C)
+            elif 4<=n<=7: s.R[r]=('s','a%d'%n); s.iuse.add(n)
             elif 8<=n<=14 and getattr(s,'uninit',None) and getattr(s,'wrote_somewhere',set()) & {r}:
                 s.uninit(r)                  # a callee-saved register this path never wrote, written on another: an uninitialised local in the original C
             else: raise Skip('read '+r)

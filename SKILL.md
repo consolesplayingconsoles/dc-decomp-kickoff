@@ -284,8 +284,8 @@ The nine steps, in order. Each one is announced and closed as the section above 
      others rights would overreach, and default copyright says nothing more than it should.
    - `chmod +x build.sh setup.sh tools/hooks/pre-commit` (tell the user; it is one command).
    - the pre-commit hook (`tools/hooks/pre-commit`, from `scripts/tools/hooks/`) does two things on every commit: it keeps the README's
-     Progress block current, and it refuses the commit unless `build.sh` prints `MATCH` (`SKIP_BUILD_CHECK=1` skips it). It does not
-     prove the staged sources again: each function was proven when its C was written, and checking every staged file again cost about a
+     Progress block current, and it runs two quick checks (retcheck, and the audit of `tests/equivalent.txt`; `SKIP_BUILD_CHECK=1` skips them). It does not
+     build, and it does not prove the staged sources again: each function was proven when its C was written, and checking every staged file again cost about a
      minute a file (Virtua Tennis, 297 files: about five hours). Enable it with `git config core.hooksPath tools/hooks`.
    - write `.env` in the repo with `SDK_PATH="<absolute SDK folder>"` (gitignored, machine-local),
      so the user can rebuild with a plain `bash build.sh` later.

@@ -70,14 +70,32 @@ def branches(P, starts, words, end):
     piece = lambda a: bisect.bisect_right(starts, a) - 1
     out = {}
     F = layout.functions()
+    fstart = [f[0] for f in F]
+    mids = {}                                 # a code address a pointer word names inside a function's own piece, not at its start (a
+    for v in words.values():                  # callback entry): the walk from the function's entry does not reach it (Virtua Tennis: the
+        t = layout.mirror(v)                  # file system's interrupt callback, 14 bytes after FUN_8c1dd692, ended in a bra to
+        k = bisect.bisect_right(fstart, t) - 1    # gdFsExecServerG that stayed the original word and landed 32 bytes early once the
+        if k >= 0 and F[k][0] < t and piece(t) == piece(F[k][0]):     # pieces moved); a pointer into a data piece is no entry
+            mids.setdefault(k, set()).add(t)
+    is_code = lambda r: not any((B.shdis.decode(B.word(x), x)[0] or '.').startswith('.') for x in r)
     for k, (a, s, n) in enumerate(F):
         nxt = F[k + 1][0] if k + 1 < len(F) else end
         try:                                  # only the instructions the code walk from the entry reaches: a listed "function"
             run = sorted(x for x in B.reach(a, stop_at=nxt)[1] if a <= x < min(a + s, end))      # that is data (Crazy Taxi
         except Exception:                     # meshVertexIndexBlock) has words shaped like branches, which must stay words
             run = []
-        if any((B.shdis.decode(B.word(x), x)[0] or '.').startswith('.') for x in run):
+        if not is_code(run):
             run = []                          # the walk ran into a word that is no instruction: no code executes one, it is data
+        run = set(run)
+        for e in sorted(mids.get(k, ())):     # each other way in, walked on its own: kept when it meets no word that is no instruction
+            try:
+                lim = starts[piece(e) + 1] if piece(e) + 1 < len(starts) else end        # the end of the piece the entry is in
+                r = sorted(x for x in B.reach(e, stop_at=lim)[1] if e <= x < min(lim, end))
+            except Exception:
+                continue
+            if r and is_code(r):
+                run.update(r)
+        run = sorted(run)
         for x in run:
             if x in pools or x - 2 in pools or x in taken:
                 continue
@@ -93,6 +111,10 @@ def branches(P, starts, words, end):
             else:
                 continue
             t = x + 4 + 2 * d
+            if mn in ('BRA', 'BSR', 'BT/S', 'BF/S'):          # the slot runs before the branch: a branch, a jump, a return or a
+                slot = (B.shdis.decode(B.word(x + 2), x + 2)[0] or '.')        # pc-relative load there does not assemble
+                if slot.startswith(('.', 'b', 'j', 'rt', 'trapa')) or ',pc)' in slot:
+                    continue
             if piece(t) != piece(x) and P[0][0] <= t < end:
                 out[x] = (mn, t)
     return out
