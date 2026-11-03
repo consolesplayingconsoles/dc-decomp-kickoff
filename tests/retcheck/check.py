@@ -143,8 +143,13 @@ def main():
             bad.append('int: f_int is not reported with r0: %s' % out.strip())
         if 'f_poolx: declared int' not in out or 'f_poolx: declared int in src/a.c, the original returns in fr0' not in out:
             bad.append('poolx: the tail rts sits after a pool word and before it an unrelated `mov #9,r0`; the window must stop at the pool and the function returns fr0 (the other path), so declared int is reported: %s' % out.strip())
-        if 'f_void: declared void' not in out or 'returns in r0' not in out:
-            bad.append('void: f_void (void, the original sets r0, a caller uses the value) is not reported: %s' % out.strip())
+        if 'warning: f_void: declared void' not in out or 'returns in r0' not in out:
+            bad.append('void: f_void (void, the original sets r0, a caller uses the value) is not reported as a warning: %s' % out.strip())
+        open('src/a.c', 'w').write(A.replace('float f_int(void)\n{\n    return 1.0f;', 'int f_int(void)\n{\n    return 1;').replace('int f_poolx(int a)\n{\n    return 9;\n}', 'float f_poolx(int a)\n{\n    return 1.0f;\n}'))
+        rc, out = run()
+        if rc != 0 or 'warning: f_void' not in out:
+            bad.append('void: with only f_void left (void, a caller reads the leftover) the check must warn and pass: rc %d %s' % (rc, out.strip()))
+        open('src/a.c', 'w').write(A)
         for n in ('f_imm', 'f_flt', 'f_call', 'f_ptr', 'f_idx', 'f_left'):
             if ('%s:' % n) in out:
                 bad.append('%s: reported although its declaration is right or its result is a callee\'s: %s' % (n, out.strip()))
