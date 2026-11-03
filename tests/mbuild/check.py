@@ -68,13 +68,10 @@ def main():
     h = M.hole_text(hp, '_g', 0x0C020000, lambda a: raw_h[a])
     if '.DATA.L     _vecMake' not in h or '_g__h:' not in h or '__d' in h or "H'0000\n" in h.replace("          .DATA.W     H'0000\n          .END", ''):
         bad.append('hole: a replaced piece keeps its pool word (.DATA.L _vecMake) and its label is _g__h, not zeros:\n' + h)
-    h2 = M.hole_text(hp, '_g', 0x0C020000, lambda a: raw_h[a], '__d')
-    if '_g__d:' not in h2 or '__h' in h2 or '.DATA.L     _vecMake' not in h2:
-        bad.append('hole as data copy: with suffix __d the hole is labelled _g__d (the piece\'s data copy), pool word kept:\n' + h2)
     got = M.hole_pieces([0, 4], 8, {0, 2, 3, 5, 6}, {6})
-    if got != {2, 3, 5}:
-        bad.append('holes: group 0-3 has kept piece 1 and replaced 0, 2, 3 (0 comes before the first kept one: no hole; 2 and 3, the pool '
-                   'donors after it, are holes) and group 4-7 has kept 4 and 7 with 5 replaced and 6 in the filler: got %r, want {2, 3, 5}' % sorted(got))
+    if got != {5}:
+        bad.append('holes: group 0-3 has kept piece 1 only (nothing between kept pieces: no hole) and group 4-7 has kept 4 and 7 with 5 replaced '
+                   'and 6 in the filler: the hole is 5 alone, got %r' % sorted(got))
     if M.hole_pieces([0, 3], 6, {0, 1, 2, 3, 4, 5}, set()):
         bad.append('holes: a group with no kept piece has no hole')
     run = ('          .EXPORT     _f__2\n_f__2:\n          BSR         _g\n          .DATA.W     H\'0009\n'

@@ -40,7 +40,7 @@ def main():
         os.chdir(tmp)
         open('layout.txt', 'w').write('game 0C020000 0C030000\n')
         open('BASE', 'w').write('0C020000\n')
-        open('functions.txt', 'w').write('F 0c020000 16 f\nF 0c020040 4 g\n')
+        open('functions.txt', 'w').write('F 0c020000 16 f\nF 0c020040 4 g\nF 0c027ff0 4 h\n')           # the executable's code runs to h: the table points inside it
         open('1ST_READ.BIN', 'wb').write(image([]))
         sys.path.insert(0, os.path.join(TOOLS, '8-build'))
         sys.path.insert(0, TOOLS)
