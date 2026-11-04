@@ -12,7 +12,8 @@ data, no compiler. Stdlib only.
                     parens     `x = (*(float *)A);` is replaced with its parentheses, `(a * (*(float *)A))` keeps the one that is
                                the expression's own
                     literal    the shortest decimal that gives the same bits back: 500.0, 0.5, a negative one in parentheses,
-                               1/3 exactly; NaN and an infinity have no constant (None)
+                               1/3 exactly; NaN and an infinity have no constant (None); the largest float (FLT_MAX), where a
+                               shorter decimal rounds above it and cannot be packed, is found with more digits
 """
 import os
 import struct
@@ -84,6 +85,14 @@ def main():
         bad.append('literal: a negative constant is not in parentheses')
     if lit(0x7FC00000) is not None or lit(0x7F800000) is not None:
         bad.append('literal: NaN or an infinity got a constant')
+    for w in (0x7F7FFFFF, 0xFF7FFFFF):                    # FLT_MAX: a four digit decimal (3.403e+38) is above it and does not pack: more digits, no crash
+        try:
+            s = lit(w)
+        except OverflowError:
+            bad.append('literal: %08X (FLT_MAX) raised OverflowError: a candidate decimal that does not fit must be skipped' % w)
+            continue
+        if s is None or bits(s) != struct.pack('<I', w):
+            bad.append('literal: %08X (FLT_MAX) does not give the same bits back (%s)' % (w, s))
 
     if not bad:
         print('[codeconsts] ok: a float read from the replaced code becomes its constant, exactly; reads outside, stores, unaligned addresses are left alone; parentheses kept right')

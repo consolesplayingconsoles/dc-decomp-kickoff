@@ -9,6 +9,15 @@ symbol lands once the image is linked. No game data, no compiler. Stdlib only.
                     cfun      a C function's entry is the C function's symbol
                     middle    the middle of a C function is its second copy when there is one, nothing (None) when not
                     bss       an address past the image is _bss + the same offset
+                    bss_start the BSS block starts word aligned: an image end on a word is kept, 0C9E293F becomes 0C9E2940
+                    flag      layout.txt `mixed 1` switches the behaviours below on; a missing line or `0` is off
+                    define    lnk_hex(): a value that starts with a letter (AC210C5A) gets a leading 0, the others are as they were
+                    routes    split_routes(): a branch near a unit's start gets its veneer before the unit, only when allowed
+                    ties      cond_ties(): a conditional branch into another group joins the two; copy_extent() takes the groups between
+                    tramp     tramp_text(): the first 12 bytes of a replaced function's hole (14 from an address 2 mod 4, so the pool
+                              word is aligned) become mov.l / jmp @r0 / nop and the pool word with the C function; too short, or a
+                              pool word among them, and the hole stays
+                    retarget  retarget_branches(): a conditional branch goes into any hole, a call only into a callable one
                     holes     hole_pieces(): replaced pieces from the first kept piece to the end of the group are holes (a pool donor after the\n                              last kept piece too), none before it or in a group with no kept piece\n                    holepool  hole_text(): a piece the C replaces keeps its words (a pool word stays a symbol), not zeros\n                    bsspad    bss_pad(end, start) puts _bss at the original image end modulo 32; the pad is written before the _bss label
 """
 import os
@@ -131,6 +140,65 @@ def main():
         bad.append('bsspad: the block size lost:\n' + txt)
     if '.RES.B      H' in M.bss_text(end_, 0x8C480000, 0).split('_bss:')[0]:
         bad.append('bsspad: a zero pad must write no pad line')
+    import layout as L
+    for e_, want in ((0x8C20D1D4, 0x8C20D1D4), (0x0C9E293F, 0x0C9E2940), (0x0C9E2941, 0x0C9E2944), (0x0C9E2940, 0x0C9E2940)):
+        if L.bss_start(e_) != want:
+            bad.append('bss_start: %08X -> %08X, want %08X (an image that ends on a word keeps its end)' % (e_, L.bss_start(e_), want))
+    region0 = L.region
+    L.region = lambda name, required=False: (1, None) if name == 'mixed' else ((0, None) if name == 'off' else None)
+    try:
+        if not L.flag('mixed') or L.flag('off') or L.flag('absent'):
+            bad.append('flag: `mixed 1` is on, `off 0` and a missing line are off')
+    finally:
+        L.region = region0
+    for v, want in ((0xAC210C5A, '0AC210C5A'), (0x8C2FC69C, '8C2FC69C'), (0x0C010000, '0C010000'), (0xFFFFFFFF, '0FFFFFFFF'), (0x9FFFFFFF, '9FFFFFFF')):
+        if M.lnk_hex(v) != want:
+            bad.append('lnk_hex: %08X -> %s, want %s (a value that starts with a letter needs a leading 0 or the linker reads a symbol)' % (v, M.lnk_hex(v), want))
+    if M.split_routes([10, 1999, 2000, 4000], True) != ([10, 1999], [2000, 4000]) or M.split_routes([10, 1999, 2000], False) != ([], [10, 1999, 2000]):
+        bad.append('routes: offsets under 2000 go before the unit only when allowed: %r %r' % (M.split_routes([10, 1999, 2000, 4000], True), M.split_routes([10, 1999, 2000], False)))
+    B0 = 0x0C010000
+    words = {B0: 0x8B10, B0 + 0x5C: 0x8B04, B0 + 0x80: 0xB010}           # bf from +00 lands at +24 (group 1); bf from +5C at +6C (group 3 from 2); a bsr is no tie
+    gof = lambda a: (a - B0) // 0x20
+    ties = M.cond_ties([(B0, 0x100)], lambda a: words.get(a, 0x0009), set(), B0 + 0x100, B0, gof)
+    if ties != {(0, 1), (2, 3)}:
+        bad.append('cond_ties: %r, want the groups {(0, 1)} and {(2, 3)}' % sorted(ties))
+    if M.cond_ties([(B0, 0x100)], lambda a: words.get(a, 0x0009), {B0, B0 + 0x5C}, B0 + 0x100, B0, gof):
+        bad.append('cond_ties: a pool word is no instruction')
+    for g_, ts_, want in ((1, {(1, 3), (3, 4)}, (1, 4)), (1, {(5, 6)}, (1, 1)), (2, {(0, 2)}, (0, 2)), (0, set(), (0, 0)), (4, {(1, 3), (3, 4)}, (1, 4))):
+        if M.copy_extent(g_, ts_) != want:
+            bad.append('copy_extent: group %d with ties %r -> %r, want %r' % (g_, sorted(ts_), M.copy_extent(g_, ts_), want))
+    hole = ('; hole\n          .SECTION    P, CODE, ALIGN=2\n          .IMPORT     _g\n          .EXPORT     _f__h\n_f__h:\n'
+            + ''.join("          .DATA.W     H'%04X\n" % (0x1000 + i) for i in range(8)) + '          .END')
+
+    def nbytes(t_):
+        n_ = 0
+        for l_ in t_.split('\n'):
+            m_ = l_.split()
+            if m_[:1] in (['.DATA.W'],) or (m_ and m_[0] in ('MOV.L', 'JMP', 'NOP')):
+                n_ += 2
+            elif m_[:1] == ['.DATA.L']:
+                n_ += 4
+        return n_
+    for st_, pad_ in ((0x0C010100, 1), (0x0C010102, 2)):
+        t_, ok_ = M.tramp_text(hole, '_f', st_, 16, set())
+        lines_ = [l.strip() for l in t_.split('\n')]
+        if not ok_ or nbytes(t_) != 16 or 'MOV.L       LTf,R0' not in lines_ or 'JMP         @R0' not in lines_ \
+                or lines_.count(".DATA.W     H'0009") != pad_ or 'LTf:' not in lines_ or '.DATA.L     _f' not in lines_ \
+                or lines_.index('.IMPORT     _f') > lines_.index('.EXPORT     _f__h') or lines_[-1 - len(range(5 + pad_, 8)):-1] != [".DATA.W     H'%04X" % (0x1000 + i) for i in range(5 + pad_, 8)]:
+            bad.append('tramp: start %08X (%d pad word(s)): %s, %d bytes, want 16 with the pool word aligned:\n%s' % (st_, pad_, ok_, nbytes(t_), t_))
+    if M.tramp_text(hole, '_f', 0x0C010100, 8, set()) != (hole, False):
+        bad.append('tramp: a hole shorter than 12 bytes is left as it is')
+    if M.tramp_text(hole, '_f', 0x0C010100, 16, {0x0C010104}) != (hole, False):
+        bad.append('tramp: a pool word of a neighbour in the first 12 bytes keeps the hole as it is')
+    if M.tramp_text(hole.replace("          .DATA.W     H'1002\n          .DATA.W     H'1003\n", "          .DATA.L     _g\n"), '_f', 0x0C010100, 16, set())[1]:
+        bad.append('tramp: a long word (a pool word) among the first 12 bytes keeps the hole as it is')
+    src = ["          BT          _f", "          BT/S        _f+H'4", "          BSR         _g", "          BRA         _f", "          BSR         _h", "          .DATA.L     _f"]
+    out_, hit_ = M.retarget_branches(src, {'_f', '_g'}, {'_f'})
+    want_ = ["          BT          _f__h", "          BT/S        _f__h+H'4", "          BSR         _g", "          BRA         _f__h", "          BSR         _h", "          .DATA.L     _f"]
+    if out_ != want_ or hit_ != {'_f__h'}:
+        bad.append('retarget: conditional branches into any hole, calls only into a callable hole, words and other calls untouched:\n' + '\n'.join(out_) + '\n' + repr(hit_))
+    if M.retarget_branches(src, set(), set()) != (src, set()):
+        bad.append('retarget: with no holes nothing changes')
     if bad:
         sys.exit('[ERROR] mbuild check failed:\n' + '\n'.join(bad))
     print('[mbuild] ok: address numbers become symbols; each lands in its piece, C function, second copy or the BSS block')

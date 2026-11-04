@@ -11,6 +11,8 @@ unlisted, sat at the end of a data piece and loaded its pool from the next one: 
                     branch    f3 (+20) bsr's to f4 (+30) nearby: a name, no tie: f4 starts a group
                     data      d5 (+40, not a listed function) is kept with f4 before it and f6 after it
                     reach     a bsr more than 3 KB from its target ties the two
+                    bsr_ties  with bsr_ties=False (a running copy: a far bsr goes through a veneer) that bsr ties nothing, pools and
+                              data still do; the default is the old behaviour
                     bsrf      a bsrf whose register is a pool distance ties its piece to the one it reaches (Crazy Taxi strcmp)
                     stay      with the game starting at +30, the pieces before it (boot code, entry stub) are one group with +00
                     map       with a pad of 32 before each later group, an address in group n and an address value pointing there are
@@ -46,6 +48,12 @@ def main():
     g2 = M.groups(starts2, set(starts2), [(s, 0x10) for s in starts2], lambda a: far.get(a, 0x0009), set(), B0 + 0xE00)
     if g2 != [0]:
         bad.append('reach: %r, want [0]: a bsr 3.5 KB from its target ties everything between' % g2)
+    g2b = M.groups(starts2, set(starts2), [(s, 0x10) for s in starts2], lambda a: far.get(a, 0x0009), set(), B0 + 0xE00, bsr_ties=False)
+    if g2b != [0, 1, 2, 3]:
+        bad.append('bsr_ties: %r, want [0, 1, 2, 3]: a running copy sends a far bsr through a veneer, so it does not tie' % g2b)
+    gp = M.groups(starts, listed, code, lambda a: mem.get(a, 0x0009), set(), end, bsr_ties=False)
+    if gp != g:
+        bad.append('bsr_ties: pools and data still tie without bsr ties: %r, want %r' % (gp, g))
     g3 = M.groups(starts, listed, code, lambda a: mem.get(a, 0x0009), set(), end, stay=B0 + 0x30)
     if g3 != [0, 3]:
         bad.append('stay: %r, want [0, 3]: pieces before layout.txt\'s game start stay with the first one' % g3)
