@@ -102,6 +102,15 @@ def main():
     for lab in ('L_0001', 'L_0002', 'L_0003'):
         if lab + ':;' not in p:
             bad.append('stuck: %s was moved though it has two jumps in, a jump from the if above it, or is the first block' % lab)
+    # a dispatch before the first label jumps to L_0003 as well as the block above it (Zombie Revenge FUN_0c0b7a16): the jump before
+    # the first label counts, so L_0003 keeps its label and nothing is jumped to without one
+    s = '\n'.join(['void f(void)', '{', '    out = 0;', '    if (c0) goto L_0003;', '    if (c1) goto L_0002;', '    L_0001:;',
+                   '    return out;', '    L_0002:;', '    out = 1;', '    goto L_0003;', '    L_0004:;', '    goto L_0001;', '    L_0003:;',
+                   '    out = 2;', '    goto L_0001;', '}'])
+    p = place.place(s)
+    gone = sorted(set(re.findall(r'goto (L_\w+);', p)) - set(re.findall(r'^\s*(L_\w+):;', p, re.M)))
+    if gone:
+        bad.append('stuck: %s is jumped to but has no label: the jump before the first label was not counted' % ', '.join(gone))
     if bad:
         sys.exit('[ERROR] place check failed:\n' + '\n'.join(bad[:8]))
     print('[place] ok: %d random functions behave the same before and after (loops compared on their first 60 effects) on all inputs, %d lost labels, shared blocks stay' % (total, fewer))

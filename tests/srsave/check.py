@@ -27,6 +27,11 @@ W = lambda ws: b''.join(struct.pack('<H', w) for w in ws)
 # stc sr,r1 / mov.l @(12,pc),r2 / mov r1,r3 / or r2,r3 / ldc r3,sr / ldc r1,sr / rts / nop / pool 0x10000000
 SAVED = W([0x0102, 0xD203, 0x6313, 0x232B, 0x430E, 0x410E, 0x000B, 0x0009]) + struct.pack('<I', 0x10000000)
 # stc sr,r3 / mov.l @(8,pc),r2 / or r2,r3 / ldc r3,sr / rts / nop / pool 0x10000000
+# add #-4,r15 / stc sr,r3 / mov.l @(24,pc),r2 / mov.l r3,@r15 / or r2,r3 / ldc r3,sr / mov #0,r5 / mov #12,r4 / add #1,r5 / cmp/ge r4,r5 /
+# bf (back to the add) / mov.l @r15,r2 / ldc r2,sr / add #4,r15 / rts / nop / pool: the word is saved in the stack and a loop sits between
+# the save and the restore, the way Zombie Revenge FUN_0c0e6400 does (the loop made the structured form, which lost the read of SR)
+STACKED = W([0x7FFC, 0x0302, 0xD206, 0x2F32, 0x232B, 0x430E, 0xE500, 0xE40C, 0x7501, 0x3543, 0x8BFC, 0x62F2, 0x420E, 0x7F04, 0x000B,
+             0x0009]) + struct.pack('<I', 0x10000000)
 PLAIN = W([0x0302, 0xD202, 0x232B, 0x430E, 0x000B, 0x0009]) + struct.pack('<I', 0x10000000)
 
 
@@ -35,9 +40,9 @@ def main():
     tmp = tempfile.mkdtemp()
     try:
         shutil.copytree(os.path.join(SKILL, 'scripts', 'tools'), os.path.join(tmp, 'tools'), ignore=shutil.ignore_patterns('__pycache__'))
-        open(os.path.join(tmp, '1ST_READ.BIN'), 'wb').write(SAVED + PLAIN)
+        open(os.path.join(tmp, '1ST_READ.BIN'), 'wb').write(SAVED + PLAIN + STACKED)
         open(os.path.join(tmp, 'BASE'), 'w').write('%08X\n' % BASE)
-        open(os.path.join(tmp, 'functions.txt'), 'w').write('F %08x %d savedfn\nF %08x %d plainfn\n' % (BASE, len(SAVED), BASE + len(SAVED), len(PLAIN)))
+        open(os.path.join(tmp, 'functions.txt'), 'w').write('F %08x %d savedfn\nF %08x %d plainfn\nF %08x %d stackedfn\n' % (BASE, len(SAVED), BASE + len(SAVED), len(PLAIN), BASE + len(SAVED) + len(PLAIN), len(STACKED)))
         os.makedirs(os.path.join(tmp, 'src'))
         script = ("import sys; sys.path.insert(0, 'tools'); import toolpath, gen_core, gen_drv, gen_pipe\n"
                   "for n in sys.argv[1:]:\n"
@@ -45,7 +50,7 @@ def main():
                   "        print('@@@@ ' + n); print(gen_drv.build(n, 'void', False)[0])\n"
                   "    except gen_core.Skip as e:\n"
                   "        print('SKIPPED ' + str(e))\n")
-        out = subprocess.run([sys.executable, '-c', script, 'savedfn', 'plainfn'], cwd=tmp, stdout=subprocess.PIPE,
+        out = subprocess.run([sys.executable, '-c', script, 'savedfn', 'plainfn', 'stackedfn'], cwd=tmp, stdout=subprocess.PIPE,
                              stderr=subprocess.STDOUT, universal_newlines=True).stdout
         parts = dict(p.split('\n', 1) for p in out.split('@@@@ ')[1:])
         saved, plain = parts.get('savedfn', ''), parts.get('plainfn', '')
@@ -58,6 +63,11 @@ def main():
                 bad.append('saved: no variable read from SR before the first set_cr\n%s' % saved)
             elif m.group(1) not in sets[1] or '_builtin_get_cr' in sets[1]:
                 bad.append('saved: the restore is %r, want the saved variable %s\n%s' % (sets[1], m.group(1), saved))
+        stacked = parts.get('stackedfn', '')
+        m = re.search(r'_builtin_set_cr\((.*)\);', stacked.split('_builtin_set_cr(', 1)[-1] and stacked[stacked.rindex('_builtin_set_cr('):])
+        used = set(re.findall(r'\bt\d+\b', m.group(1))) if m else set()
+        if not m or not used or any(not re.search(r'\b%s = _builtin_get_cr\(\);' % v, stacked) for v in used):
+            bad.append('stacked: the restore reads %r but no line sets it from SR\n%s' % (m.group(1) if m else None, stacked))
         if '_builtin_set_cr((_builtin_get_cr() & 0xFFFFFFFF) | 0x10000000);' not in plain:
             bad.append('plain: changed\n%s' % plain)
     finally:
