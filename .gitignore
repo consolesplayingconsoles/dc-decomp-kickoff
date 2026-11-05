@@ -1,2 +1,4 @@
 # Local test runs (game, SDK and decomp material): never committed
 dist/
+__pycache__/
+*.pyc
