@@ -39,6 +39,18 @@ def main():
         bad.append('frozen: the pass stored with the frozen checker is not looked up')
     if keys[0] != equiv.proof_key(*args):
         bad.append('stored: a new pass is not stored under the current checker')
+    pk = equiv.proof_key(*args, srcs=(old_e, old_s))
+    open(os.path.join('state', 'proof-key-printf.py'), 'w').write(open(old_e).read())
+    if pk not in equiv.proof_keys(*args, printf=False):
+        bad.append('printf: a function with no printf call does not find a pass under the checker saved in proof-key-printf.py')
+    if equiv.proof_key(*args, srcs=(os.path.join('state', 'proof-key-printf.py'), equiv.sh4sim.__file__)) in equiv.proof_keys(*args, printf=True):
+        bad.append('printf: a function with a printf call found a pass under the old checker')
+    old_sim = equiv.proof_key(*args, srcs=(os.path.abspath(equiv.__file__), old_s))
+    open(os.path.join('state', 'proof-key-sh4sim.py'), 'w').write(open(old_s).read())
+    if old_sim not in equiv.proof_keys(*args, tail=False):
+        bad.append('sim: a function with no branch into a shared epilogue does not find a pass under the simulator saved in proof-key-sh4sim.py')
+    if old_sim in equiv.proof_keys(*args, tail=True):
+        bad.append('sim: a function that branches into a shared epilogue found a pass under the old simulator')
     if bad:
         sys.exit('[ERROR] proofkey check failed:\n' + '\n'.join(bad))
     print('[proofkey] ok: passes stored with the frozen checker still count; new ones are stored with the current one')

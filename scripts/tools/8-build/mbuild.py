@@ -475,9 +475,11 @@ def main():
     import codeconsts                                    # a float read from a pool of code the C replaces: the constant itself
     gone = [(starts[i] & 0x1FFFFFFF, (starts[i + 1] if i + 1 < len(P) else end) & 0x1FFFFFFF) for i in sorted(dropped)]
     allv, nconst = set(), 0
+    calls = set()                                         # addresses the C calls through a cast: code that runs, not bytes that are read
     game_stems = set(gs.values())                         # the decomp's own files; the others are a mod's (mod-sources.txt)
     for f in glob.glob(cbuild.OUT + '/src/*.c') + glob.glob(cbuild.OUT + '/src/**/*.h', recursive=True):     # headers too: a mod's game.h holds function addresses
         t = open(f, errors='replace').read()
+        calls |= {int(m.group(1), 16) for m in re.finditer(r'\(\*\)\([^()]*\)\)\((?:0x|\(\(int\)A_)([0-9A-Fa-f]{8})\)', t)}   # as written, or as cbuild left it
         hits = [h for h in codeconsts.scan(t, B.BIN, int(base_txt, 16), gone) if h[3]]
         for s, e, a, lit in reversed(hits):
             t = t[:s] + lit + t[e:]
@@ -497,13 +499,21 @@ def main():
     infill = lambda a: bool(fill) and fill[0] <= a < fill[1]
     mid = lambda v: (end > layout.mirror(v) >= B.BASE and piece(layout.mirror(v)) in dropped
                      and layout.mirror(v) not in cfun and not infill(layout.mirror(v)))
-    run_need = {piece(layout.mirror(v)) for at, v in words.items() if piece(at) not in dropped and mid(v)}   # code that runs
+    run_need = ({piece(layout.mirror(v)) for at, v in words.items() if piece(at) not in dropped and mid(v) and not v & 1}  # code that runs: asm points into it
+                | {piece(layout.mirror(v)) for v in calls if mid(v)})                                        # or the C calls into it
+                                                 # (an odd word is no code address: a byte table taken for pointers, Zombie Revenge 0C0E0C0D
+                                                 # in 0C11581C's bytes 0B F7 0B F8 .., made a 1.3 MB running copy of FUN_0c0e07b4's group)
     read_need = {piece(layout.mirror(v)) for v in allv if mid(v)} - run_need                               # bytes that are read
     listed = {a for a, s, n in F}
     _, _, pools = shift._listed()
     game = layout.region('game')
     G = movecheck.groups(starts, listed, [(a, s) for a, s, n in F], B.word, pools, end, stay=game[0] if game else None,
                          pool32=lambda a: struct.unpack_from('<i', B.BIN, a - B.BASE)[0])
+    for _n, x_, p_, t_ in distance_items(B, F, piece, end):      # a distance branch keeps its pool and its target in its group, also one
+        lo_, hi_ = sorted((piece(x_), piece(t_)))                 # movecheck.groups skipped as a pool word (Zombie Revenge _slow_strcpy at
+        lo_, hi_ = min(lo_, piece(p_)), max(hi_, piece(p_))       # 0C0E62CA -> quick_strcpy1: groups split, the braf landed 0x1DC0 short)
+        if end > t_ >= B.BASE:
+            G = [g_ for g_ in G if not lo_ < g_ <= hi_]
     gstart = sorted(G)
     if MIXED:          # a copy may hold pieces without C: it is tied by pools only (a bsr out of it goes through a veneer), plus the conditional branches
         gstart_c = sorted(movecheck.groups(starts, listed, [(a, s) for a, s, n in F], B.word, pools, end, stay=game[0] if game else None,
@@ -551,7 +561,7 @@ def main():
     repoint = {}
     for at, v in words.items():
         i = piece(at)
-        if i not in dropped and mid(v):
+        if i not in dropped and mid(v) and not v & 1:      # an odd word points at no code: it has no copy to point at
             repoint.setdefault(i, set()).add(P[piece(layout.mirror(v))][1])
     for i, labs in repoint.items():
         t = open('%s/asm/%s' % (SYM, P[i][2])).read()
@@ -588,6 +598,11 @@ def main():
             for k in run:
                 group_end[k] = run[-1]
         g = h + 1
+    if MIXED:          # a C object never goes inside a group: its pieces (kept ones and holes) keep their distances (bsrf/braf, pools)
+        for g_, gs_ in enumerate(gstart):
+            ge_ = (gstart[g_ + 1] if g_ + 1 < len(gstart) else len(P)) - 1
+            for k in range(gs_, ge_ + 1):
+                group_end.setdefault(k, ge_)
     at_piece = {}
     for stem, i in first.items():
         at_piece.setdefault(group_end.get(i, i), []).append(stem)
@@ -654,6 +669,7 @@ def main():
             lines[1:1] = ['          .IMPORT     %s' % x for x in sorted(hit)]
             open(out_, 'w').write('\n'.join(lines))
             return out_
+        pending_d = []
         pending = []                                  # a running copy waits for its group's last piece: the copy is one block after the group's own pieces
         for i, (s, label, f) in enumerate(P):
             if i not in group_end:
@@ -661,6 +677,8 @@ def main():
             if i in copies:
                 if second[i] == '__2':
                     pending.append((i, '%s/asm/%s' % (OUT, copies[i])))
+                elif i in group_end:                      # bytes only read: after the group too, so its pieces keep their distances
+                    pending_d.append((i, '%s/asm/%s' % (OUT, copies[i])))
                 else:
                     asm(i, '%s/asm/%s' % (OUT, copies[i]), 'd')
             if i in dropped:
@@ -676,6 +694,9 @@ def main():
                 for j, pth in pending:
                     asm(j, pth, '2')
                 pending = []
+                for j, pth in pending_d:
+                    asm(j, pth, 'd')
+                pending_d = []
                 items += [['v', '%s/asm/%s' % (OUT, vf)] for vf in after.get(i, [])]
                 items += [['c', stem] for stem in at_piece.get(i, [])]
     extra = sorted(set(stems_all) - set(first))     # C that no piece of the original stands for (a mod's own files): linked after the game

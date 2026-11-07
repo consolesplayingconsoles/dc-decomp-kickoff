@@ -963,3 +963,66 @@ BupFailDialog compare only up to the step limit; _div64 and emotFaceMorph rest o
 - **`ldc sr` and `rte` in the simulator.** `sh4sim.py` stopped on any change of SR.BL ("not modelled"). The simulator has no exceptions, so BL is now kept as a bit (it reads back through `stc sr`); a change of SR.RB still stops. `rte` is modelled as `rts` plus SR = SSR (SPC and SSR start as the return address and entry SR). Tests: `tests/srblock`, `tests/rte`. An interrupt handler is written in C with `#pragma interrupt(f)`.
 - **The generator reads the current SR where the original restores the saved one.** Virtua Tennis `FUN_8c0f8100` (stc sr at the start, ldc of that value at the end) came out as `set_cr(get_cr() & ...)`, which leaves BL set. Written by hand with a `saved` variable it is proven (src/gen_zk.c). Open: fix the generator to keep the value read at the `stc`.
 - **Two functions are interrupt handlers, one a stub:** Virtua Tennis `8c1fc77c`, `8c1fc7d0` (push r0/r4/r5/pr, call 0xAC004000, `rte`), `8c1fc7cc` (a bare `rte`, proven), `8c1643a0` (a `bra` with a `bsr` in its delay slot, 4 bytes, not a function a compiler writes).
+
+### Step 9 on Virtua Tennis: plays in the emulator, hangs on Start on the console (2026-11-06)
+
+- Symptom: the build from C boots, shows the title and plays in Flycast. On the console pressing Start on the press-start screen
+  freezes the game; waiting on the title for the demo and coming back also failed (black screen, the press-start screen never
+  returns). The original disc plays there, so the fault was in the build. The Start hang is fixed (operator's test, 2026-11-06).
+  The demo-timeout hang is not explained by the fix: open.
+- **The debug overlay (the trick that found it).** Days of comparing the build with the original in Flycast (RAM and register
+  state, hardware registers, DMA descriptors, the call set) found nothing, because the fault was in what the emulator does not
+  model. What broke the deadlock was making the console say where it stops, with no debug cable: a layer
+  (`mods/virtua-tennis/virtua-debug`, a patch over a copy of the decomp, the decomp itself untouched) that adds
+  (1) a ring of one-byte breadcrumb ids, `dbgTrace(id)`, called at each step of the failing path (Start branch, file load, wait
+  loop, loader phases), in memory the original leaves unused after its BSS (the build's BSS block covers it; cleared once in
+  `sysInit`), and (2) a readout drawn by the game's own vblank callback, the one registered with `nlSetIntrFunction(1, ...)` and
+  already run every frame, which writes six rows of hex straight into both video frame buffers: RGB565, 640x480 interlaced, 1280
+  bytes a line, the visible one from FB_R_SOF1 (0xA05F8050), the other 0x400000 from it, only when FB_R_CTRL bit 0 is set and the
+  offset is 0x100000 to 0x600000. A 4x6 hex font is computed in code (no tables, no string literals), so nothing depends on the
+  game's scene, texture or text system, and it keeps drawing while the main thread is stuck in a loop that never draws. Rows: the
+  interrupt count, the main-loop count and the frames since it last moved; the state machine's mode, sub-state and counter; the
+  file loader's words; the ADX error count, the GD-ROM drive status, the last `ADXF_GetStat`; the trace count and the last 8 ids;
+  the main-loop pass of each. A host build of the overlay against a fake VRAM (clang, `-std=c89`) was checked before the console
+  run. One photo of the screen decided it: interrupts counting up and the main loop frozen (the CPU alive, the thread stuck), the
+  last ids `32 63 31 62 63 60 30 1B` (wait loop over, file closed) and no `33` (the call after `sprStartLoad` returns): the hang
+  was inside `sprStartLoad`. Later versions add one id per sprite texture (`A0`+n) and the SPC register (the interrupted PC) as a
+  seventh row, so the next photo names the function. Rule of thumb: put one id after every call on the failing path and read the
+  last one; the emulator cannot give this, the console can.
+- **Cause: a library helper called without its register arguments (a fifth shape of the dropped-argument class above).**
+  `sprStartLoad` ends with `bra sprStartInit`, which calls `logoBInit`. The original starts it with `r2 = 0x8C10E418` (source),
+  `r1 = r15` (the frame), `r0 = 80`, `jsr _quick_mvn`: the block copy that puts an 80-byte sprite-rectangle template on the
+  stack. The generated C was `_quick_mvn();`; the compiled call is `jsr @r3; nop`. `_quick_mvn` ran on whatever r0, r1, r2 held
+  and the template, passed on to `sprInitRectF`, was never written. Flycast starts with zeroed memory and clean registers, so the
+  leftovers were harmless there; the console's are whatever earlier code left. Fix (src/gen_e.c, one line): the struct copy the
+  neighbouring functions use, `{ struct mv20 { int w[20]; }; *(struct mv20 *)(((int)stk + 12)) = *(struct mv20 *)(0x8C10E418); }`.
+- Why the checks missed it: equiv.py compares a call on r4-r7, fr4-fr11 and the stack words, never r0-r2, and the proof excludes
+  writes to the stack, so a missing copy into the frame is not an effect. The generator lifts `_quick_odd_mvn` and
+  `_quick_evn_mvn` to struct copies and left `_quick_mvn` (a size in r0, any length) as a bare call. A scan of every function
+  compiled from C for calls to the block-copy helpers without arguments found this one only. A second scan, the source address
+  the original loads into r2 before each of 489 helper calls against the C, left 11 sites without it in the C: not confirmed
+  (the function list merges functions there, `sndLoadStep` holds another function), open.
+- Excluded before the overlay, so nobody repeats it (all on the original and the build, in Flycast, at the same moment): RAM and
+  C-variable dumps at Start (identical but frame counters); every hardware register block (SH-4 CCR, BSC, DMAC, INTC, TMU; ASIC,
+  maple, G1, G2, PVR, AICA: only time, frame parity and buffer addresses differ); the maple DMA descriptor lists; the
+  render-to-texture surface descriptor and the PVR registers around `kmRenderTexture`; the 109 hardware-facing SDK functions
+  called on the demo-timeout path (same set); a slow disc (300 polls of `ADXF_GetStat`); the kept SDK against the original (3,967
+  of 3,976 changed halfwords are addresses or branch displacements, 1,607 of 1,613 address words point to the right new place, the
+  other 6 are instruction pairs); the disc layout (`disc_patch.py` moves the first file's slot, no overlap).
+- Found on the way, real, not on any failing path (open, build tool): `mbuild` cuts the SDK into units with a 32-byte zero pad
+  in front of each. Two cuts fall where the original does not stop: `adxf_purge_all` (`rts` at 8C1F1904, its delay slot `add
+  #4,r15` is the first word of the next piece, so the slot is the pad, opcode 0x0000, illegal on the console; its only caller
+  `ADXF_InitCache_P2_` has no callers) and `vmsfs_c_fiber7` (`mov #7,r4` falls into `vmsfs_c_dispatch` across 16 zero halfwords).
+  The unit builder should keep a piece with its delay slot and a falling-through piece with its successor.
+- **Open: start the emulator with dirty state.** Flycast zeroes memory and registers, the console does not, and the class above
+  (and any read of an uninitialised local or register) is invisible there. Two directions, neither done. (1) In `sh4sim.py` /
+  `equiv.py`: run each case twice with different junk in r0-r3, the FPU registers and the stack below SP, and compare the original
+  with the C; a difference is a hidden dependence, and this one would have been caught at proof time. (2) In Flycast through the
+  GDB server: poison the registers and the stack at entry. Writing a pattern over all of RAM before the game loads made the
+  ORIGINAL stop with an illegal instruction (0xA5 fill), so the regions must be chosen (only memory the game clears itself or
+  never reads), and poisoning at entry does not reach a call in the middle of a function. Practical: the server answers no
+  reply to a memory write over 0x400 bytes and wedges that instance (1 KB packets, all of RAM in 3 s); `Dynarec.Enabled=no` on
+  the command line made no visible difference.
+- -> the skill: the generator should lift `_quick_mvn` (r0 size, r1 destination, r2 source) to a struct copy or a loop as it does
+  the other two; equiv.py should compare r0-r2 at calls to register-convention helpers; Step 9 should say that a console-only
+  hang is found by an on-screen breadcrumb readout drawn from the vblank callback, not by more emulator comparison.
