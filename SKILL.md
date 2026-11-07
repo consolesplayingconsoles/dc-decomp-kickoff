@@ -445,6 +445,16 @@ code had, so the build of step 8 leaves every other address of the executable wh
   strictly smaller (`tools/sizes.py` measures both the same way) and still proven on its cases. Smallest functions first: they
   are cheap and add up; stop when the target and a little spare are reached. `--regen` keeps the new C at any size when it is
   proven, for after a generator fix. `tools/7-reduction/hoist.py` holds a value the original loaded once in a local.
+- **Rewrite passes first**: `python3 tools/7-reduction/shrink.py --passes` rewrites the current C of every unit with the
+  strategies that change no address or type (callees declared wider than their own definitions narrowed, with the leftover
+  registers and frame words their calls passed dropped; frame slots stored back unchanged dropped; far field accesses as one-field
+  structure members, frame slots held in locals, nearby globals reached off one base, a state chain of ifs on one variable as a
+  switch, a result threaded up through nesting levels by `tA = (tB);` copies merged into one temporary; `gen_equiv/rewrites.py`), and keeps each
+  function that compiles smaller and is still proven. No regeneration, so it is fast: run it before the regenerating shrink.
+  Zombie Revenge, 80 random units: 28-38% less excess, 50% with `narrow`. The generator now ends every function with the same
+  rewrites (`rewrites.py`: self-copies, struct access, global base, switch, copies; `narrow_unit` on each unit it writes), so new C is born as
+  small as the passes make old C. What only a person rewrites: an unrolled software-pipelined loop, flat
+  register-level C, a join the structured form copied with renamed temporaries, switch cases differing only in constants.
 - **One pass at a time**, and never edit the generator, the checker or the simulator while one runs: a pass stamps what it keeps
   with their hashes, and every later re-proof fails.
 - **Outliers** (one function the generator gets wrong) are fixed in the C by hand, proven, and reported as a skill unit test
@@ -605,7 +615,7 @@ Grouped by the step that first needs them (scripts, then templates, then referen
 
 | script                               | what it does |
 |--------------------------------------|--------------|
-| `scripts/tools/7-reduction/shrink.py`               | in the repo: regenerate functions and keep the new C when strictly smaller and still proven (`--regen`: any size) |
+| `scripts/tools/7-reduction/shrink.py`               | in the repo: regenerate functions and keep the new C when strictly smaller and still proven (`--regen`: any size; `--passes`: the rewrite strategies on the current C, per unit) |
 | `scripts/tools/7-reduction/hoist.py`                | in the repo: hold a value the C recomputes at every use in a local, as the original held it in a register (`--loose`, `--apply`) |
 | `scripts/tools/sizes.py`                   | in the repo: the compiled size of a function's C, literal pools and constants included |
 

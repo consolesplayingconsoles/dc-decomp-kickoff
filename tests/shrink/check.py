@@ -11,6 +11,7 @@ with no game data and no compiler. Stdlib only.
                     pass      EQUIVALENT rows and other functions' rows are not failures
                     none      no file, or no row: None
                     source    shrink.py writes the failing C to build/shrink-failed/<function>.c and logs it
+                    stop      SIGTERM or Ctrl-C between a pass's write and its proof puts the unit's proven text back
 """
 import json
 import os
@@ -64,12 +65,34 @@ def main():
         for needle in ("ledger.last_failure(fn, since)", "'shrink-failed'", "new C failed, old restored"):
             if needle not in src:
                 bad.append('source: shrink.py does not contain %s' % needle)
+        # stop: a stop between writing a unit's new text and its proof puts the proven text back (Zombie Revenge gen_bq.c)
+        import re
+        m = re.search(r'^_SAFE = .*?\n\n\ndef _stop\(.*?\n    sys\.exit\(1\)\n', src, re.S | re.M)
+        if not m:
+            bad.append('stop: shrink.py has no _SAFE/_stop')
+        else:
+            ns = {'sys': sys}
+            exec(m.group(0), ns)
+            open('unit.c', 'w').write('new, unproven')
+            ns['_SAFE']['unit.c'] = 'old, proven'
+            try:
+                ns['_stop'](15, None)
+                bad.append('stop: the run did not end')
+            except SystemExit:
+                pass
+            if open('unit.c').read() != 'old, proven':
+                bad.append('stop: the unit was not put back')
+        for needle in ('signal.signal(signal.SIGTERM, _stop)', 'signal.signal(signal.SIGINT, _stop)'):
+            if needle not in src:
+                bad.append('stop: shrink.py does not contain %s' % needle)
+        if src.count('_SAFE[f] = text') < 2 or src.count('_SAFE.pop(f, None)') < 2:
+            bad.append('stop: a pass writes unproven text without recording the proven one')
     finally:
         os.chdir(cwd)
         shutil.rmtree(tmp, ignore_errors=True)
     if bad:
         sys.exit("[ERROR] shrink check failed:\n" + "\n".join(bad))
-    print("[shrink] ok: a restored function's log line carries the recheck's failing case and names the file with the new C; a failed form is followed by the next smaller one")
+    print("[shrink] ok: a restored function's log line carries the recheck's failing case and names the file with the new C; a failed form is followed by the next smaller one; a stop puts unproven units back")
 
 
 if __name__ == '__main__':
