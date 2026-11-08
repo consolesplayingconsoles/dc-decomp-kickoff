@@ -27,6 +27,19 @@ as `p->field` does (Zombie Revenge FUN_0c031e5e: 360 bytes of C to 296; five suc
                     keepcall  a callee with a call whose dropped argument would hold a call is left as it is, declaration and calls
                     types     a declaration whose leading types differ from the definition's is left as it is
                     vararg    a variadic declaration is left as it is
+                  drop_dead_frame on C text:
+                    dead      stores to stk slots, bare volatile stk reads and the array itself go when nothing else uses stk
+                    read      a slot read anywhere: left
+                    address   the array's address passed on: left
+                    call      a store whose value comes from a call (the call stays, so does the store): left
+                    volatile  a store whose value is a volatile read: left
+                    twice     a second run changes nothing
+                  hoist_builtins on C text:\n                    hoist     three `_builtin_sqrtf(u5)` in one block, u5 not assigned after the first: one `s1 = ...` before the first, the calls read s1\n                    reassigned the argument assigned between the calls: left\n                    loop      a function with for/while/goto/label: left\n                    expr      an argument that is not a plain variable: left\n                    branches  calls only in sibling branches (no block holds all): left\n                    twice     a second run changes nothing\n                  frame_rebase on C text:
+                    rebase    `int stk[16]` used from `(int)stk + 4` on: every offset 4 lower, one word less; two functions in one text each by their own lowest offset
+                    zero      a first slot already at 0: left
+                    index     a function that uses stk[..] or any other form: left
+                    odd       an offset that is not a word multiple: left
+                    twice     a second run changes nothing
                   merge_copies on C text:
                     merge     `t70 = (t30);` with t30 dead after: t30 becomes t70 and the copy goes
                     goto      a goto, break, continue or label between t30's first use and the copy: left
@@ -174,6 +187,60 @@ def main():
     src4 = fn('    if (t0 != 0) {\n        if (t0 != 1) {\n            g(9);\n        } else {\n            g(1);\n        }\n    } else {\n        g(0);\n    }\n', '    int t0;\n')
     if rewrites.chains_to_switch(src4) != src4:
         bad.append('switch short: %s' % rewrites.chains_to_switch(src4))
+    # drop_dead_frame: a stack array nothing reads goes, with its stores and bare volatile reads
+    t = ('int f(int a4)\n{\n    int t1;\n    int stk[6];\n\n    t1 = a4 + 1;\n    *(int *)((int)stk + 4) = t1;\n    *(unsigned int *)(((int)stk + 8)) = a4;\n'
+         '    *(volatile int *)((int)stk + 4);\n    return g(t1);\n}\n')
+    got = rewrites.drop_dead_frame(t)
+    if 'stk' in got or 'return g(t1);' not in got or 't1 = a4 + 1;' not in got or '    int t1;\n\n' not in got:
+        bad.append('dead frame: %s' % got)
+    for name, src in (('read', t.replace('return g(t1);', 'return *(int *)((int)stk + 4);')),
+                      ('address', t.replace('return g(t1);', 'return g(((int)stk + 4));')),
+                      ('call', t.replace('= a4;\n', '= h(a4);\n')),
+                      ('volatile rhs', t.replace('= a4;\n', '= *(volatile int *)0xFFFFFFE0;\n'))):
+        if rewrites.drop_dead_frame(src) != src:
+            bad.append('dead frame %s: a function that needs its frame changed' % name)
+    if rewrites.drop_dead_frame(got) != got:
+        bad.append('dead frame twice: a second run changed the text')
+    # hoist_builtins: a pure builtin called with the same variable more than once is computed once
+    t = ('int f(int a4)\n{\n    float u0;\n    float u5;\n\n    u5 = *(float *)(a4 + 0);\n    u5 = u5 * u5;\n    if (_builtin_sqrtf(u5) > 1.0f) {\n        return 0;\n    }\n'
+         '    if (_builtin_sqrtf(u5) > 2.0f) {\n        return 1;\n    }\n    return _builtin_sqrtf(u5) > 3.0f;\n}\n')
+    got = rewrites.hoist_builtins(t)
+    if got.count('_builtin_sqrtf(u5)') != 1 or 'float s1;' not in got or '    s1 = _builtin_sqrtf(u5);\n    if (s1 > 1.0f) {' not in got or 'return s1 > 3.0f;' not in got:
+        bad.append('hoist: %s' % got)
+    t2 = t.replace('    u5 = u5 * u5;\n', '    u5 = u5 * u5;\n    if (a4) {\n        u5 = u5 + 1.0f;\n    }\n').replace('    return _builtin_sqrtf(u5) > 3.0f;', '    u5 = 2.0f;\n    return _builtin_sqrtf(u5) > 3.0f;')
+    if rewrites.hoist_builtins(t2) != t2:
+        bad.append('hoist reassigned: the argument changes between the calls')
+    t3 = t.replace('    if (_builtin_sqrtf(u5) > 1.0f) {', '    for (;;) {\n        if (_builtin_sqrtf(u5) > 1.0f) {\n            break;\n        }\n    }\n    if (u5 > 1.0f) {')
+    if rewrites.hoist_builtins(t3) != t3:
+        bad.append('hoist loop: a function with a loop changed')
+    t4 = t.replace('_builtin_sqrtf(u5)', '_builtin_sqrtf(u5 + 1.0f)')
+    if rewrites.hoist_builtins(t4) != t4:
+        bad.append('hoist expr: a call whose argument is an expression changed')
+    t5 = ('int f(int a4)\n{\n    float u5;\n\n    u5 = *(float *)(a4 + 0);\n    if (a4) {\n        if (_builtin_fabsf(u5) > 1.0f) {\n            return 0;\n        }\n    } else {\n'
+          '        if (_builtin_fabsf(u5) > 2.0f) {\n            return 1;\n        }\n    }\n    return 2;\n}\n')
+    if rewrites.hoist_builtins(t5) != t5:
+        bad.append('hoist branches: calls in sibling branches changed')
+    if rewrites.hoist_builtins(got) != got:
+        bad.append('hoist twice: a second run changed the text')
+    # frame_rebase: the stack array based at its first used word
+    t = ('int f(int a4)\n{\n    int stk[16];\n\n    *(unsigned int *)(((int)stk + 4)) = a4;\n    *(float *)(((int)stk + 12)) = 1.0f;\n'
+         '    return g(((int)stk + 4), *(int *)((int)stk + 8 + 4));\n}\n\nint h(int a4)\n{\n    int stk[6];\n\n    *(int *)(((int)stk + 8)) = a4;\n    return g(((int)stk + 8));\n}\n')
+    got = rewrites.frame_rebase(t)
+    for want in ('int stk[15];', '*(unsigned int *)(((int)stk + 0)) = a4;', '*(float *)(((int)stk + 8)) = 1.0f;', 'g(((int)stk + 0), *(int *)((int)stk + 4 + 4))',
+                 'int stk[4];', '*(int *)(((int)stk + 0)) = a4;'):
+        if want not in got:
+            bad.append('rebase: %r missing in %s' % (want, got))
+    t2 = 'int f(int a4)\n{\n    int stk[8];\n\n    *(int *)(((int)stk + 0)) = a4;\n    *(int *)(((int)stk + 8)) = a4;\n}\n'
+    if rewrites.frame_rebase(t2) != t2:
+        bad.append('rebase zero: a function whose first slot is 0 changed')
+    t3 = 'int f(int a4)\n{\n    int stk[8];\n\n    stk[1] = a4;\n    *(int *)(((int)stk + 8)) = a4;\n}\n'
+    if rewrites.frame_rebase(t3) != t3:
+        bad.append('rebase index: a function that indexes stk changed')
+    t4 = 'int f(int a4)\n{\n    int stk[8];\n\n    *(int *)(((int)stk + 6)) = a4;\n}\n'
+    if rewrites.frame_rebase(t4) != t4:
+        bad.append('rebase odd: an offset that is not a word multiple changed')
+    if rewrites.frame_rebase(got) != got:
+        bad.append('rebase twice: a second run changed the text')
     # narrow_unit: the generator's hook, read once from a scratch src/ (a temp repo), and the line count unchanged (gen_pipe's spans)
     import tempfile
     import shutil

@@ -1210,7 +1210,7 @@ def main():
             ('copyframefn', ["not:SKIPPED", r"re:bodyfn\(0x1, 0x2, 0x3, 0x4, \*\(Stk3 \*\)\(.*?\), \*\(Stk1 \*\)\(\(int\)stk \+ \d+(?: \+ \d+)?\)\)"]),
             ('fnegsubfn', ["not:SKIPPED", r"re:(u\d+) = \(f4 - f5\);\s*\1 = -\1;"]),
             ('fivecallffn', ["not:SKIPPED", r"re:fivefn\(0x1, 0x2, 0x3, 0x4, 0x9\)"]),
-            ('hiddenregfn', ["not:SKIPPED", r"not:re:\.\.\.\)\)", r"re:readstack1\(0x1, 0x2, 0x0, 0x0, \(\(int\)stk \+ 8\)\)"]),      # its fr4-fr7 are leftovers: readstack1 takes no float
+            ('hiddenregfn', ["not:SKIPPED", r"not:re:\.\.\.\)\)", r"re:readstack1\(0x1, 0x2, 0x0, 0x0, \(\(int\)stk \+ 4\)\)"]),      # its fr4-fr7 are leftovers: readstack1 takes no float; the stack array is based at its first used word (frame_rebase), so +4 where it was +8
             ('fspillfn', ["not:SKIPPED", r"re:= \(?\*\(float \*\)\(+\(int\)stk", r"not:re:float u\d+;"]),
             ('fslotfn', ["not:SKIPPED", "1.0f", "a8"]),
             ('fcarryfn', ["not:SKIPPED", r"re:float u\d+;"]),

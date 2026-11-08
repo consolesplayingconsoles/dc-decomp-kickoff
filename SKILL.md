@@ -449,10 +449,12 @@ code had, so the build of step 8 leaves every other address of the executable wh
   strategies that change no address or type (callees declared wider than their own definitions narrowed, with the leftover
   registers and frame words their calls passed dropped; frame slots stored back unchanged dropped; far field accesses as one-field
   structure members, frame slots held in locals, nearby globals reached off one base, a state chain of ifs on one variable as a
-  switch, a result threaded up through nesting levels by `tA = (tB);` copies merged into one temporary; `gen_equiv/rewrites.py`), and keeps each
+  switch, a result threaded up through nesting levels by `tA = (tB);` copies merged into one temporary, a pure builtin called repeatedly with the same variable computed once (`hoist`), the stack array based at its
+  first used word (`rebase`), a stack array nothing reads dropped with its stores (`deadframe`); `gen_equiv/rewrites.py`), and keeps each
   function that compiles smaller and is still proven. No regeneration, so it is fast: run it before the regenerating shrink.
-  Zombie Revenge, 80 random units: 28-38% less excess, 50% with `narrow`. The generator now ends every function with the same
-  rewrites (`rewrites.py`: self-copies, struct access, global base, switch, copies; `narrow_unit` on each unit it writes), so new C is born as
+  Zombie Revenge, 80 random units: 28-38% less excess, 50% with `narrow`; on the medium units 25-41%; `rebase` ~4 bytes and `hoist` ~14 and `deadframe` ~17 per function they change.
+  `tools/7-reduction/residue.py` lists the C shapes the bloated functions share and the fine ones lack: where the next pass comes from. The generator now ends every function with the same
+  rewrites (`rewrites.py`: self-copies, struct access, global base, switch, copies, hoist, deadframe, rebase; `narrow_unit` on each unit it writes), so new C is born as
   small as the passes make old C. What only a person rewrites: an unrolled software-pipelined loop, flat
   register-level C, a join the structured form copied with renamed temporaries, switch cases differing only in constants.
 - **One pass at a time**, and never edit the generator, the checker or the simulator while one runs: a pass stamps what it keeps

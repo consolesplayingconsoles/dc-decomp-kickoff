@@ -18,6 +18,7 @@ symbol lands once the image is linked. No game data, no compiler. Stdlib only.
                               word is aligned) become mov.l / jmp @r0 / nop and the pool word with the C function; too short, or a
                               pool word among them, and the hole stays
                     retarget  retarget_branches(): a conditional branch goes into any hole, a call only into a callable one
+                    fit_text  fit_text(): the last line says 'N bytes (K KB) over fixed' or 'N bytes spare', not just fits / DOES NOT FIT
                     holes     hole_pieces(): replaced pieces from the first kept piece to the end of the group are holes (a pool donor after the\n                              last kept piece too), none before it or in a group with no kept piece\n                    holepool  hole_text(): a piece the C replaces keeps its words (a pool word stays a symbol), not zeros\n                    bsspad    bss_pad(end, start) puts _bss at the original image end modulo 32; the pad is written before the _bss label
 """
 import os
@@ -199,6 +200,14 @@ def main():
         bad.append('retarget: conditional branches into any hole, calls only into a callable hole, words and other calls untouched:\n' + '\n'.join(out_) + '\n' + repr(hit_))
     if M.retarget_branches(src, set(), set()) != (src, set()):
         bad.append('retarget: with no holes nothing changes')
+    # fit_text: the build's last line states the gap, so nobody works it out from the two addresses
+    for hi, fixed, want in ((0x0CA22C00, 0x0CA10000, 'DOES NOT FIT: 76,800 bytes (75.0 KB) over fixed'),
+                            (0x0CA0F000, 0x0CA10000, 'fits, 4,096 bytes spare below fixed'),
+                            (0x0CA10000, 0x0CA10000, 'DOES NOT FIT: 0 bytes spare, the image must end below fixed'),
+                            (0x0CA10001, 0x0CA10000, 'DOES NOT FIT: 1 bytes (0.0 KB) over fixed')):
+        got = M.fit_text(hi, fixed)
+        if got != want:
+            bad.append('fit_text(%08X, %08X): %r, wanted %r' % (hi, fixed, got, want))
     if bad:
         sys.exit('[ERROR] mbuild check failed:\n' + '\n'.join(bad))
     print('[mbuild] ok: address numbers become symbols; each lands in its piece, C function, second copy or the BSS block')

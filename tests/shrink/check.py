@@ -11,7 +11,7 @@ with no game data and no compiler. Stdlib only.
                     pass      EQUIVALENT rows and other functions' rows are not failures
                     none      no file, or no row: None
                     source    shrink.py writes the failing C to build/shrink-failed/<function>.c and logs it
-                    stop      SIGTERM or Ctrl-C between a pass's write and its proof puts the unit's proven text back
+                    stop      SIGTERM or Ctrl-C between a pass's write and its proof puts the unit's proven text back and ends the run with os._exit (a SystemExit was swallowed by unit_sizes when the signal landed mid-compile, 2026-11-08)
 """
 import json
 import os
@@ -67,19 +67,28 @@ def main():
                 bad.append('source: shrink.py does not contain %s' % needle)
         # stop: a stop between writing a unit's new text and its proof puts the proven text back (Zombie Revenge gen_bq.c)
         import re
-        m = re.search(r'^_SAFE = .*?\n\n\ndef _stop\(.*?\n    sys\.exit\(1\)\n', src, re.S | re.M)
+        m = re.search(r'^_SAFE = .*?\n\n\ndef _stop\(.*?\n    os\._exit\(1\)[^\n]*\n', src, re.S | re.M)
         if not m:
             bad.append('stop: shrink.py has no _SAFE/_stop')
         else:
-            ns = {'sys': sys}
+            class HardExit(BaseException):
+                pass
+
+            class FakeOs:
+                @staticmethod
+                def _exit(code):                 # the real os._exit cannot be caught: this one raises something no `except SystemExit` takes
+                    raise HardExit(code)
+            ns = {'sys': sys, 'os': FakeOs}
             exec(m.group(0), ns)
             open('unit.c', 'w').write('new, unproven')
             ns['_SAFE']['unit.c'] = 'old, proven'
             try:
                 ns['_stop'](15, None)
                 bad.append('stop: the run did not end')
-            except SystemExit:
+            except HardExit:
                 pass
+            except SystemExit:
+                bad.append('stop: it raises SystemExit, which unit_sizes (and any `except SystemExit`) swallows when the signal lands mid-compile')
             if open('unit.c').read() != 'old, proven':
                 bad.append('stop: the unit was not put back')
         for needle in ('signal.signal(signal.SIGTERM, _stop)', 'signal.signal(signal.SIGINT, _stop)'):
