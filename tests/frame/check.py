@@ -10,6 +10,7 @@ No game data, no compiler. Stdlib only.
                     float     a float-only slot is a float local
                     stuck     a struct access over the slot, an address taken, a variable index `stk[a4]`, a variable added to the frame address, a slot used as
                               int and float, and a slot used once keep their frame accesses
+                    reach     a passed address reaches every slot from it to the end of the frame, not a guessed size; a slot below it still becomes a local
                     twice     a second pass changes nothing
 """
 import os
@@ -57,7 +58,13 @@ def main():
                  'address passed with an offset added': fn('*(float *)(((int)stk + 36)) = f4;', 'g((((int)stk + 8) + 0x1C));', 't1 = (int)(*(float *)(((int)stk + 36)));')}.items():
         if frame.scalarize(c, addr_window=4, min_uses=1) != c:
             bad.append('stuck: %s was changed (the callee writes that slot)' % k)
-    if frame.scalarize(frame.scalarize(fn('*(int *)((int)stk + 32) = a4;', 't1 = *(int *)(((int)stk + 32));'))) != frame.scalarize(fn('*(int *)((int)stk + 32) = a4;', 't1 = *(int *)(((int)stk + 32));')):
+    far = fn('t1 = *(int *)((int)stk + 100);', 'g(((int)stk + 4) + 0x4);', 'h(*(int *)((int)stk + 100));')       # Zombie Revenge FUN_0c0154c0: a call fills a struct whose field is 92 bytes on
+    if frame.scalarize(far, min_uses=1) != far:
+        bad.append('reach: a slot past a passed address stays memory however far it is (the callee fills it): %s' % frame.scalarize(far, min_uses=1))
+    below = fn('*(int *)((int)stk + 4) = a4;', 'g((int)stk + 8);', 't1 = *(int *)((int)stk + 4);')
+    if 'R1004 = a4;' not in frame.scalarize(below, min_uses=1):
+        bad.append('reach: a slot below a passed address is out of its reach and still becomes a local: %s' % frame.scalarize(below, min_uses=1))
+    if frame.scalarize(frame.scalarize(fn('*(int *)((int)stk + 32) = a4;', 't1 = *(int *)(((int)stk + 32));'))) !=frame.scalarize(fn('*(int *)((int)stk + 32) = a4;', 't1 = *(int *)(((int)stk + 32));')):
         bad.append('twice: a second pass changes the text')
     if bad:
         sys.exit('[ERROR] frame check failed:\n' + '\n'.join(bad))
