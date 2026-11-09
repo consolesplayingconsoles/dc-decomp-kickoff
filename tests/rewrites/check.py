@@ -258,6 +258,11 @@ def main():
     finally:
         os.chdir(cwd)
         shutil.rmtree(tmp)
+    got = rewrites.by_function_size({'a.c': ['s', 'm'], 'b.c': ['l'], 'c.c': ['t']}, {'s': 40, 'm': 300, 'l': 900, 't': 10}, 256)
+    if got != ['b.c', 'a.c']:
+        bad.append('by_function_size: largest function first, a unit with none of the size left out: %r' % got)
+    if rewrites.function_names('int f(int a)\n{\n}\nint g(void);\nvoid h(void)\n{\n}\n') != ['f', 'h']:
+        bad.append('function_names: definitions only')
     if bad:
         sys.exit('[ERROR] rewrites check failed:\n' + '\n'.join(bad))
     print('[rewrites] ok: self-copies go, far fields and nearby globals are structure members, over-wide callees narrowed, units take them once')

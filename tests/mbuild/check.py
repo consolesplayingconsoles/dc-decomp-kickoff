@@ -18,6 +18,9 @@ symbol lands once the image is linked. No game data, no compiler. Stdlib only.
                               word is aligned) become mov.l / jmp @r0 / nop and the pool word with the C function; too short, or a
                               pool word among them, and the hole stays
                     retarget  retarget_branches(): a conditional branch goes into any hole, a call only into a callable one
+                    runs      data_runs(): the data runs (4-aligned, merged) that contain a read, from a code map; no code map = the whole piece
+                    dcopy     data_copy_runs(): a data copy of just those runs, one label each (_F__d0, _F__d1), ALIGN=4; None (whole copy) when a kept word points into its own piece
+                    druns     mapper(..., druns=): an address maps to its run's label plus its offset in the run; outside the runs, None
                     fit_text  fit_text(): the last line says 'N bytes (K KB) over fixed' or 'N bytes spare', not just fits / DOES NOT FIT
                     holes     hole_pieces(): replaced pieces from the first kept piece to the end of the group are holes (a pool donor after the\n                              last kept piece too), none before it or in a group with no kept piece\n                    holepool  hole_text(): a piece the C replaces keeps its words (a pool word stays a symbol), not zeros\n                    bsspad    bss_pad(end, start) puts _bss at the original image end modulo 32; the pad is written before the _bss label
 """
@@ -82,6 +85,11 @@ def main():
     if got != {5}:
         bad.append('holes: group 0-3 has kept piece 1 only (nothing between kept pieces: no hole) and group 4-7 has kept 4 and 7 with 5 replaced '
                    'and 6 in the filler: the hole is 5 alone, got %r' % sorted(got))
+    got = M.hole_pieces([0, 4], 8, {0, 2, 3, 5, 6}, {6}, {3})
+    if got != {2, 3, 5}:
+        bad.append('holes: a kept piece reads a pool word in replaced piece 3, past the last kept one: 2 and 3 stay (and 5), got %r' % sorted(got))
+    if M.hole_pieces([0, 3], 6, {0, 1, 2, 3, 4, 5}, set(), {1, 4}):
+        bad.append('holes: a donor in a group with no kept piece makes no hole')
     if M.hole_pieces([0, 3], 6, {0, 1, 2, 3, 4, 5}, set()):
         bad.append('holes: a group with no kept piece has no hole')
     run = ('          .EXPORT     _f__2\n_f__2:\n          BSR         _g\n          .DATA.W     H\'0009\n'
@@ -191,6 +199,10 @@ def main():
         bad.append('tramp: a hole shorter than 12 bytes is left as it is')
     if M.tramp_text(hole, '_f', 0x0C010100, 16, {0x0C010104}) != (hole, False):
         bad.append('tramp: a pool word of a neighbour in the first 12 bytes keeps the hole as it is')
+    if M.tramp_text(hole, '_f', 0x0C010100, 16, set(), {0x0C010106}) != (hole, False):
+        bad.append('tramp: a word a neighbour reads with mov.w in the first 12 bytes keeps the hole as it is')
+    if M.tramp_text(hole, '_f', 0x0C010100, 16, set(), {0x0C01010C})[1] is not True:
+        bad.append('tramp: a mov.w word past the first 12 bytes does not stop the trampoline')
     if M.tramp_text(hole.replace("          .DATA.W     H'1002\n          .DATA.W     H'1003\n", "          .DATA.L     _g\n"), '_f', 0x0C010100, 16, set())[1]:
         bad.append('tramp: a long word (a pool word) among the first 12 bytes keeps the hole as it is')
     src = ["          BT          _f", "          BT/S        _f+H'4", "          BSR         _g", "          BRA         _f", "          BSR         _h", "          .DATA.L     _f"]
@@ -200,6 +212,36 @@ def main():
         bad.append('retarget: conditional branches into any hole, calls only into a callable hole, words and other calls untouched:\n' + '\n'.join(out_) + '\n' + repr(hit_))
     if M.retarget_branches(src, set(), set()) != (src, set()):
         bad.append('retarget: with no holes nothing changes')
+    # data_runs / data_copy_runs / mapper with druns: a data copy keeps only the data the C reads
+    code = set()
+    for x in range(0x1000, 0x1020, 2):
+        code.update((x, x + 1))                               # instructions at 0x1000-0x101F; 0x1020-0x103F is pool and table
+    r = M.data_runs(code, [0x1028], 0x1000, 0x40)
+    if r != [(0x1020, 0x1040)]:
+        bad.append('runs pool: %r' % (r,))
+    r = M.data_runs(code, [0x1004, 0x1028, 0x1034], 0x1000, 0x40)
+    if r != [(0x1004, 0x1008), (0x1020, 0x1040)]:
+        bad.append('runs code+pool merged: %r' % (r,))
+    if M.data_runs(None, [0x1028], 0x1000, 0x40) != [(0x1000, 0x1040)]:
+        bad.append('runs without a code map keep the whole piece')
+    txt = ("; header\n          .SECTION    P, CODE, ALIGN=2\n          .EXPORT     _F\n_F:\n          .DATA.W     H'AAAA\n          .DATA.W     H'BBBB\n"
+           "          .DATA.L     H'12345678\n          .DATA.L     _other\n          .DATA.W     H'CCCC\n          .DATA.W     H'DDDD\n")
+    word = lambda a: 0x4F22
+    out = M.data_copy_runs(txt, '_F', 0x2000, word, [(0x2004, 0x200C)])
+    if out is None or '_F__d0:' not in out or "H'12345678" not in out or '_other' not in out or "H'AAAA" in out or "H'CCCC" in out or 'ALIGN=4' not in out:
+        bad.append('data_copy_runs: %r' % (out,))
+    txt2 = txt.replace('_other', '_F+8')
+    if M.data_copy_runs(txt2, '_F', 0x2000, word, [(0x2004, 0x200C)]) is not None:
+        bad.append('data_copy_runs: a kept word that points into its own piece must fall back to the whole copy (None)')
+    syms = {'_F__d0': 0x0C400000, '_F__d1': 0x0C400100, '_G': 0x0C300000}
+    new = M.mapper([(0x0C002000, '_F'), (0x0C002100, '_G')], {0}, {0: '__d'}, syms, {}, 0x0C003000, 0x0C003000, 0x0,
+                   druns={0: [(0x0C002004, 0x0C002010), (0x0C002020, 0x0C002030)]})
+    if new(0x0C002008) != 0x0C400004 or new(0x0C002024) != 0x0C400104 or new(0x0C002000) is not None or new(0x0C002014) is not None:
+        bad.append('mapper druns: %r %r %r %r' % (new(0x0C002008), new(0x0C002024), new(0x0C002000), new(0x0C002014)))
+    new2 = M.mapper([(0x0C002000, '_F'), (0x0C002100, '_G')], {0}, {0: '__d'}, {'_F__d': 0x0C400000}, {}, 0x0C003000, 0x0C003000, 0x0)
+    if new2(0x0C002008) != 0x0C400008:
+        bad.append('mapper without druns changed: %r' % (new2(0x0C002008),))
+
     # fit_text: the build's last line states the gap, so nobody works it out from the two addresses
     for hi, fixed, want in ((0x0CA22C00, 0x0CA10000, 'DOES NOT FIT: 76,800 bytes (75.0 KB) over fixed'),
                             (0x0CA0F000, 0x0CA10000, 'fits, 4,096 bytes spare below fixed'),
