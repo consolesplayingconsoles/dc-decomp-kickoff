@@ -16,6 +16,9 @@ unlisted, sat at the end of a data piece and loaded its pool from the next one: 
                     bsrf      a bsrf whose register is a pool distance ties its piece to the one it reaches (Crazy Taxi strcmp)
                     stay      with the game starting at +30, the pieces before it (boot code, entry stub) are one group with +00
                     flash     the BIOS stubs: the flash-ROM vector (B8) answers a failed read (r0 = -1), the others success (r0 = 0)
+                    objects   a piece with no build/obj object (a function split after the last build.sh: Zombie Revenge
+                              FUN_0c017ad0 and FUN_0c031014 stopped the build) or an older one is assembled by movecheck, not an
+                              error; a piece with a current build/obj object links it; a piece symbolize.py changed is assembled
                     map       with a pad of 32 before each later group, an address in group n and an address value pointing there are
                               n * 32 higher; one in the first group, or past the fixed line, is not; BSS moves by all the pads
 """
@@ -77,6 +80,30 @@ def main():
     stub = lambda v: bytes.fromhex(pk['%08X' % (struct.unpack('<I', bytes.fromhex(pk[v]))[0])])
     if stub('8C0000B8') != bytes.fromhex('0b00ffe0') or stub('8C0000B0') != bytes.fromhex('0b0000e0'):
         bad.append('flash: the flash-ROM vector does not answer a failed read, or another vector not success')
+    import tempfile
+    import shutil
+    import time
+    tmp = tempfile.mkdtemp()
+    here = os.getcwd()
+    try:
+        os.chdir(tmp)
+        for p in ('asm', 'build/obj', 'build/sym/asm', 'build/sym/obj'):
+            os.makedirs(p)
+        src = {'a.src': 'same\n', 'b.src': 'same\n', 'c.src': 'same\n', 'd.src': 'orig\n'}
+        for f, t in src.items():
+            open(os.path.join('asm', f), 'w').write(t)
+            open(os.path.join('build/sym/asm', f), 'w').write(t if f != 'd.src' else 'named\n')
+        open('build/obj/a.obj', 'w').write('x')                              # a: assembled by build.sh, current
+        open('build/obj/c.obj', 'w').write('x')                              # c: older than its source
+        old = time.time() - 100
+        os.utime('build/obj/c.obj', (old, old))
+        changed, stale, missing = M.to_assemble('build/sym', ['a.src', 'b.src', 'c.src', 'd.src'])
+        if sorted(missing) != ['b.src', 'c.src'] or sorted(changed) != ['b.src', 'c.src', 'd.src'] or sorted(stale) != ['b.src', 'c.src', 'd.src']:
+            bad.append('objects: changed %r stale %r missing %r, want b and c (no object, an older one) assembled here with d, a linked'
+                       % (changed, stale, missing))
+    finally:
+        os.chdir(here)
+        shutil.rmtree(tmp, ignore_errors=True)
     if bad:
         sys.exit('[ERROR] movecheck check failed:\n' + '\n'.join(bad))
     print('[movecheck] ok: shared pools, far branches and data keep pieces together; addresses map to their group\'s new place')

@@ -28,7 +28,7 @@ CALLER = [0x2FE6,                                    # mov.l r14,@-r15
           0x4F22,                                    # sts.l pr,@-r15
           0x7FF0,                                    # add #-16,r15
           0x64F3,                                    # mov r15,r4        (the address of the frame's first local)
-          0xBFF9, 0x0009,                            # bsr callee / nop
+          0xBFF8, 0x0009,                            # bsr callee / nop  (0C01000C + 4 - 16 = 0C010000; 0xBFF9 landed 2 bytes inside callee)
           0x7F10,                                    # add #16,r15
           0x4F26,                                    # lds.l @r15+,pr
           0x000B, 0x6EF6]                            # rts / mov.l @r15+,r14

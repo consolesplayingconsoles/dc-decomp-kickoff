@@ -10,6 +10,10 @@ splice() only: the text of the generator is given, nothing is generated. No game
                     protofix  a prototype the file already has for a callee takes the new signature, once
                     defined   a callee the file defines is given no prototype
                     self      the function itself is given no prototype
+                    ownproto  a prototype the file already has for the function itself takes its new signature (Zombie Revenge
+                              FUN_0c0b8bcc kept `(int a4)` above a five-parameter definition)
+                    structs   the field structures the new text names and the file lacks are declared once, before the file's own
+                              (FUN_0c0b8bcc named o8_int, which gen_tb.c did not declare: shc stopped with an internal error)
 """
 import os
 import shutil
@@ -21,8 +25,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL = os.path.dirname(os.path.dirname(HERE))
 
 D_C = "typedef struct { int w[2]; } Stk2;\n\nint old(int a4)\n{\n    return a4;\n}\n\nint keep(int a4)\n{\n    return a4 + 1;\n}\n"
-E_C = ("typedef struct { int w[3]; } Stk3;\nint other(int);\n\nint local(int a4)\n{\n    return a4;\n}\n\n"
+E_C = ("typedef struct { int w[3]; } Stk3;\nint other(int);\nint old(int a4);\nstruct o4_int { char p[0x4]; int v; };\n\n"
+       "int local(int a4)\n{\n    return a4;\n}\n\n"
        "int old(int a4)\n{\n    return other(a4) + local(a4);\n}\n")
+NEW_E = ("int old(int a4, int a5)\n{\n    return (((struct o4_int *)a4)->v) + (((struct o8_uint *)a5)->v) + (((struct o0_int *)a4)->v);\n}\n")
 NEW = "typedef struct { int w[3]; } Stk3;\nint old(int a4, Stk3 s)\n{\n    return s.w[2];\n}\n"
 
 
@@ -65,6 +71,15 @@ def main():
             bad.append('protofix: other\'s prototype is not the new signature, once:\n' + e)
         if 'int local(int);' in e:
             bad.append('defined: local is defined in the file and was given a prototype:\n' + e)
+        script = ("import sys; sys.path[:0] = ['tools', 'tools/5-generated/gen_equiv']; import toolpath, regenone\n"
+                  "for _ in range(2): regenone.splice('old', %r, {})\n" % NEW_E)
+        subprocess.run([sys.executable, '-c', script], cwd=tmp, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
+        e = open(os.path.join(tmp, 'src', 'e.c')).read()
+        if e.count('int old(int a4, int a5);') != 1 or 'int old(int a4);' in e or 'Stk3 s);' in e:
+            bad.append('ownproto: the file\'s prototype of old is not the new signature, once:\n' + e)
+        want = ('struct o0_int { int v; };', 'struct o8_uint { char p[0x8]; unsigned int v; };', 'struct o4_int { char p[0x4]; int v; };')
+        if any(e.count(w) != 1 for w in want) or e.index(want[1]) > e.index(want[2]):
+            bad.append('structs: o0_int and o8_uint not declared once before the file\'s o4_int:\n' + e)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     if bad:

@@ -12,6 +12,7 @@ opened from leftover registers) and the proof compared them on none.
                              says why ("pass-through"), a null rescans
                   named      a jump to a named function takes that function's arity
                   defonly    a function that is not a pass-through still takes its definition's arity when its code reads less
+                  delay      an argument read in the delay slot of the function's first call counts (Zombie Revenge ADXT_Stop: called with no handle)
 """
 import json
 import os
@@ -46,6 +47,21 @@ wrapperA:
 8c1de002 412b  jmp @r1
 8c1de004 0009  nop
 """
+DELAY = """; delayReads 8c1de300, 12 bytes (functions.txt)
+
+delayReads:
+8c1de2fe d301  mov.l @(0x8c1de308,pc),r3  ; =8c1de400 targetZero
+8c1de300 430b  jsr @r3
+8c1de302 6e43  mov r4,r14
+8c1de304 000b  rts
+8c1de306 0009  nop
+"""
+ZERO = """; targetZero 8c1de400, 4 bytes (functions.txt)
+
+targetZero:
+8c1de400 000b  rts
+8c1de402 0009  nop
+"""
 READS = """; readsLess 8c1de200, 8 bytes (functions.txt)
 
 readsLess:
@@ -61,10 +77,10 @@ def main():
     open('BASE', 'w').write('8C010000\n')
     open('functions.txt', 'w').write('F 8c010000 128 stubfn\n')
     import gen_core
-    for n, a, z in (('gdFsOpenRange', 0x8C1DE7E0, 24), ('wrapperA', 0x8C1DE000, 8), ('readsLess', 0x8C1DE200, 8), ('targetB', 0x8C1DE100, 8)):
+    for n, a, z in (('gdFsOpenRange', 0x8C1DE7E0, 24), ('wrapperA', 0x8C1DE000, 8), ('readsLess', 0x8C1DE200, 8), ('targetB', 0x8C1DE100, 8), ('delayReads', 0x8C1DE2FE, 400), ('targetZero', 0x8C1DE400, 4)):
         gen_core.SPANS[n] = (a, z)                 # the sizes functions.txt gives: a pass-through is a few bytes
     bad = []
-    text = {'gdFsOpenRange': TABLE, 'wrapperA': NAMED, 'readsLess': READS,
+    text = {'gdFsOpenRange': TABLE, 'wrapperA': NAMED, 'readsLess': READS, 'delayReads': DELAY, 'targetZero': ZERO,
             'targetB': READS.replace('readsLess', 'targetB')}
 
     class R:
@@ -85,6 +101,10 @@ def main():
     json.dump({'oldNull': None}, open(os.path.join('state', 'arity_scan.json'), 'w'))
     if 'oldNull' in {k: v for k, v in json.load(open(os.path.join('state', 'arity_scan.json'))).items() if v is not None}:
         bad.append('table: a null in the scan file is kept')
+
+    got = gen_core.callee_arity('delayReads')
+    if got != (1, 0):
+        bad.append('delay: r4 read in the delay slot of the first call is an argument (the slot runs before the call), got %s, want (1, 0)' % (got,))
 
     got = gen_core.callee_arity('readsLess')
     if got != (3, 0):

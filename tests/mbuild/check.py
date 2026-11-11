@@ -21,8 +21,8 @@ symbol lands once the image is linked. No game data, no compiler. Stdlib only.
                     runs      data_runs(): the data runs (4-aligned, merged) that contain a read, from a code map; no code map = the whole piece
                     dcopy     data_copy_runs(): a data copy of just those runs, one label each (_F__d0, _F__d1), ALIGN=4; None (whole copy) when a kept word points into its own piece
                     druns     mapper(..., druns=): an address maps to its run's label plus its offset in the run; outside the runs, None
+                    escapes   keep_escapes(): a bsrf or braf at a fixed distance from inside the keep block to a function outside it, which the build refuses
                     fit_text  fit_text(): the last line says 'N bytes (K KB) over fixed' or 'N bytes spare', not just fits / DOES NOT FIT
-                    holes     hole_pieces(): replaced pieces from the first kept piece to the end of the group are holes (a pool donor after the\n                              last kept piece too), none before it or in a group with no kept piece\n                    holepool  hole_text(): a piece the C replaces keeps its words (a pool word stays a symbol), not zeros\n                    bsspad    bss_pad(end, start) puts _bss at the original image end modulo 32; the pad is written before the _bss label
 """
 import os
 import sys
@@ -241,6 +241,14 @@ def main():
     new2 = M.mapper([(0x0C002000, '_F'), (0x0C002100, '_G')], {0}, {0: '__d'}, {'_F__d': 0x0C400000}, {}, 0x0C003000, 0x0C003000, 0x0)
     if new2(0x0C002008) != 0x0C400008:
         bad.append('mapper without druns changed: %r' % (new2(0x0C002008),))
+
+    # keep_escapes: a kept block moves as one, so a fixed distance from inside it to a function outside lands elsewhere (Zombie Revenge FUN_0c0df758 -> FUN_0c0d7f60)
+    items = [('in', 0x0C0DF836, 0x0C0DF878, 0x0C0D7F60), ('inside', 0x0C0DF900, 0x0C0DF950, 0x0C0DF000), ('out', 0x0C010100, 0x0C010140, 0x0C0DF000)]
+    got = M.keep_escapes(items, (0x0C0D7FC0, 0x0C236384))
+    if got != [('in', 0x0C0DF836, 0x0C0D7F60)]:
+        bad.append('keep_escapes: only a fixed-distance call from inside the block to outside it, got %r' % (got,))
+    if M.keep_escapes([('m', 0x8C0DF836, 0x8C0DF878, 0x8C0DF000)], (0x0C0D7FC0, 0x0C236384), lambda a: (a & 0x1FFFFFFF) | 0x0C000000):
+        bad.append('keep_escapes: an 8C address inside the block is inside it')
 
     # fit_text: the build's last line states the gap, so nobody works it out from the two addresses
     for hi, fixed, want in ((0x0CA22C00, 0x0CA10000, 'DOES NOT FIT: 76,800 bytes (75.0 KB) over fixed'),
