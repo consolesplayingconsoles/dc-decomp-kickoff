@@ -3,7 +3,8 @@
 functions that are never built from C kept the game short of 100%). No game data, no compiler. Stdlib only.
 
     check.py      a temp repo with four functions of 8 bytes: two with proven C, one listed in sdk.txt, one in sdk-verified.txt
-                    equivalent   FUNCTIONS LEFT is 0, 100.0% complete, of the 2 functions that can be C: the SDK ones are out of the count
+                    equivalent   only the SDK function proven to be the SDK's (sdk-verified.txt, sdk-identical.txt) is out of the count; one
+                                 merely listed in sdk.txt is not done: 1 left of 3 (ZR, 2026-11-11: two functions listed by hand hid behind 100%)
                     proven       an SDK function that also has proven C stays in the count (it is built): 3 functions, 0 left
                     matching     MODE: matching, nothing else proven: the SDK source counts as done, 3 of the 4 functions are left
 """
@@ -48,8 +49,8 @@ def main():
         os.makedirs(os.path.join(tmp, 'tests'))
         os.makedirs(os.path.join(tmp, 'src'))
         out = report(tmp, ['alpha', 'beta'])
-        if left(out) != (100.0, 0, 2):
-            bad.append('equivalent: %r, want (100.0, 0, 2): the SDK functions are out of the count\n%s' % (left(out), out[-600:]))
+        if not left(out) or left(out)[1:] != (1, 3):
+            bad.append('equivalent: %r, want 1 left of 3: only a proven SDK function is out of the count, a listed one is not done\n%s' % (left(out), out[-600:]))
         out = report(tmp, ['alpha', 'beta', 'sdk_listed'])
         if left(out) != (100.0, 0, 3):
             bad.append('proven: %r, want (100.0, 0, 3): a proven SDK function stays in the count\n%s' % (left(out), out[-600:]))

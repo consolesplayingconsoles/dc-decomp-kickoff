@@ -151,6 +151,12 @@ A unit goes in only when all of it matches. One that will not match after a fair
 written down (what differs) for later; move on.
 
 ## Matching notes *(both)*
+- Options starting with `+` in an `@unit` header go to `fill.py` or `build.sh` (the original's literal-pool layout: `+pool32`, `+pool00`,
+  `+tail0900`, `+poolafter=`, `+synth16`; another `shc` flag set: `+<x>flags`; another `shc` release: `+r04`, from `SDK_R04_PATH` in `.env`;
+  `@ddata`/`@bdata` pieces; a unit in a folder of `src/`), the others to `shc`. A unit that asks for none gets the default layout. What each is
+  for: the kickoff skill's `references/matching-units.md`. `python3 tools/fcmp.py src/<file>.c [function ...] -v` compares a file function by
+  function; `python3 tools/permute.py src/<file>.c <function>` tries rewrites that keep the meaning.
+- Code overlays (a game with `overlays.tsv`): `bash build.sh --overlay <name>`, `bash build_overlays.sh`; the kickoff skill's `references/overlays.md`.
 - Library-style code padded with `nop`s to 16 or 32 bytes between functions and before branch
   targets was built with `-align16`: put it in the `@unit` header.
 - Gaps the compiler reserves (`.RES`) were filled with `0xEE` by the original link; padding before

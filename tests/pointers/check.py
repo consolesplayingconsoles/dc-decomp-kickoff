@@ -17,6 +17,9 @@ a listed size, tables of low pointers, byte tables that look like addresses.
                     coderun   three words at a stride of 8 with close values inside a function are P coderun; two are not
                     halves    two 16-bit numbers of a table (0C300C2F...), the end of a run and a lone consecutive pair are N halves; two close
                               4-aligned pointers and the starts of listed functions stay P 0c (Zombie Revenge 0C1127D8: slot numbers rewritten as addresses)
+                    dataref   a word inside a function that other code loads by address (its address is a pool word) and that holds
+                              an address is P dataref; its neighbour of the same shape, whose address nothing loads, is no candidate
+                              (Zombie Revenge 0C20B184: the end of the heap inside the C library; left a number, the heap lost 170 KB)
                     words     words.txt N on a word the rules take as an address makes it N words
 """
 import os
@@ -52,6 +55,11 @@ HALVES = (L(0x0C300C2F, 0x0C320C31, 0x0C340C33) +     # 100 a table of 16-bit nu
           L(0x0C010C00, 0x0C010C3A))                  # 130 two function pointers whose halves are close: listed starts, addresses
 IMAGE = CODE + DATA + b'\0' * (0x40 - len(CODE + DATA)) + F2
 IMAGE = IMAGE + b'\0' * (0x100 - len(IMAGE)) + HALVES + b'\0' * (0xD00 - 0x100 - len(HALVES))
+F3 = (W(0xD201, 0x000B, 0x0009, 0x0009) +             # C00 mov.l @(C08),r2 / rts / nop / nop: the pool holds the address of C10
+      L(0x0C010C10) + W(0x0009, 0x0009) +             # C08 the pool word, C0C pad
+      L(0x0C010700) +                                 # C10 a variable inside f3 that other code reads by address: holds an address
+      L(0x0C010704))                                  # C14 the same shape, but nothing loads its address: two instructions
+IMAGE = IMAGE[:0xC00] + F3 + IMAGE[0xC00 + len(F3):]
 
 
 def main():
@@ -75,12 +83,15 @@ def main():
                 0x24: ('N', 'fixed'), 0x28: ('P', '8c'), 0x2C: ('N', 'words'),
                 0x100: ('N', 'halves'), 0x104: ('N', 'halves'), 0x108: ('N', 'halves'), 0x10C: ('N', 'halves'), 0x110: ('N', 'halves'),
                 0x118: ('N', 'halves'), 0x124: ('P', '0c'), 0x128: ('P', '0c'), 0x130: ('P', '0c'), 0x134: ('P', '0c'),
-                0x40: ('P', 'codefn'), 0x48: ('P', 'coderun'), 0x50: ('P', 'coderun'), 0x58: ('P', 'coderun')}
+                0x40: ('P', 'codefn'), 0x48: ('P', 'coderun'), 0x50: ('P', 'coderun'), 0x58: ('P', 'coderun'),
+                0xC08: ('P', 'pool'), 0xC10: ('P', 'dataref')}
         for at, w in sorted(want.items()):
             if rows.get(at) != w:
                 bad.append('+%02X: %r, want %r' % (at, rows.get(at), w))
         if 0x08 in rows:
             bad.append('code: the instruction pair at +08 is a candidate: %r' % (rows[0x08],))
+        if 0xC14 in rows:
+            bad.append('dataref: +C14 is inside f3 and nothing loads its address: two instructions, not a candidate: %r' % (rows[0xC14],))
         for at in (0x60, 0x68):
             if at in rows:
                 bad.append('coderun: +%02X is a far word beside a run, not part of it: %r' % (at, rows[at]))

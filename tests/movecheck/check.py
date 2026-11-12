@@ -14,6 +14,9 @@ unlisted, sat at the end of a data piece and loaded its pool from the next one: 
                     bsr_ties  with bsr_ties=False (a running copy: a far bsr goes through a veneer) that bsr ties nothing, pools and
                               data still do; the default is the old behaviour
                     bsrf      a bsrf whose register is a pool distance ties its piece to the one it reaches (Crazy Taxi strcmp)
+                    fall      a function that runs on into the next piece (it ends without an rts/jmp/bra before its delay slot) or ends
+                              on a branch whose delay slot is the next piece's first word stays with that piece; one that closes with an
+                              rts + slot, a jmp + slot, or those followed by a pool word, does not (Zombie Revenge vmsfs_c_fiber7)
                     stay      with the game starting at +30, the pieces before it (boot code, entry stub) are one group with +00
                     flash     the BIOS stubs: the flash-ROM vector (B8) answers a failed read (r0 = -1), the others success (r0 = 0)
                     objects   a piece with no build/obj object (a function split after the last build.sh: Zombie Revenge
@@ -32,6 +35,12 @@ sys.path.insert(0, os.path.join(SKILL, 'scripts', 'tools'))
 B0 = 0x0C010000
 
 
+def closed(code):
+    """{address: halfword}: an rts at +0C of every function of 0x10 bytes (its delay slot, the nop at +0E, is the default word), so that no
+    function runs on into the next piece: the pieces tie only for the reason a case is about"""
+    return {a + 0x0C: 0x000B for a, s_ in code}
+
+
 def main():
     os.chdir(os.path.join(SKILL, 'tests', 'movecheck'))          # layout.py reads layout.txt from the working directory: none here
     import movecheck as M
@@ -43,33 +52,56 @@ def main():
     listed = {B0, B0 + 0x10, B0 + 0x20, B0 + 0x30, B0 + 0x50}      # +40 is data
     code = [(B0 + o, 0x10) for o in (0x00, 0x10, 0x20, 0x30, 0x50)]
     end = B0 + 0x60
-    g = M.groups(starts, listed, code, lambda a: mem.get(a, 0x0009), set(), end)
+    cl = closed(code)
+    g = M.groups(starts, listed, code, lambda a: mem.get(a, cl.get(a, 0x0009)), set(), end)
     if g != [0, 2, 3]:
         bad.append('groups: %r, want [0, 2, 3]: f1+f2 share a pool, f3 alone, f4+d5+f6 with the data' % g)
     # a far bsr: f1 to f6, 3.5 KB away
     far = {B0: 0xB000 | 0x6F0}                                    # bsr +4+2*0x6F0 = +0xDE4
     starts2 = [B0, B0 + 0x10, B0 + 0x800, B0 + 0xDE4]
-    g2 = M.groups(starts2, set(starts2), [(s, 0x10) for s in starts2], lambda a: far.get(a, 0x0009), set(), B0 + 0xE00)
+    cl2 = closed([(s_, 0x10) for s_ in starts2])
+    g2 = M.groups(starts2, set(starts2), [(s, 0x10) for s in starts2], lambda a: far.get(a, cl2.get(a, 0x0009)), set(), B0 + 0xE00)
     if g2 != [0]:
         bad.append('reach: %r, want [0]: a bsr 3.5 KB from its target ties everything between' % g2)
-    g2b = M.groups(starts2, set(starts2), [(s, 0x10) for s in starts2], lambda a: far.get(a, 0x0009), set(), B0 + 0xE00, bsr_ties=False)
+    g2b = M.groups(starts2, set(starts2), [(s, 0x10) for s in starts2], lambda a: far.get(a, cl2.get(a, 0x0009)), set(), B0 + 0xE00, bsr_ties=False)
     if g2b != [0, 1, 2, 3]:
         bad.append('bsr_ties: %r, want [0, 1, 2, 3]: a running copy sends a far bsr through a veneer, so it does not tie' % g2b)
-    gp = M.groups(starts, listed, code, lambda a: mem.get(a, 0x0009), set(), end, bsr_ties=False)
+    gp = M.groups(starts, listed, code, lambda a: mem.get(a, cl.get(a, 0x0009)), set(), end, bsr_ties=False)
     if gp != g:
         bad.append('bsr_ties: pools and data still tie without bsr ties: %r, want %r' % (gp, g))
-    g3 = M.groups(starts, listed, code, lambda a: mem.get(a, 0x0009), set(), end, stay=B0 + 0x30)
+    g3 = M.groups(starts, listed, code, lambda a: mem.get(a, cl.get(a, 0x0009)), set(), end, stay=B0 + 0x30)
     if g3 != [0, 3]:
         bad.append('stay: %r, want [0, 3]: pieces before layout.txt\'s game start stay with the first one' % g3)
     dm = {B0: 0xD301, B0 + 2: 0x0303}                                  # mov.l @(1,pc),r3 / bsrf r3: the pool word at +08 holds 0x2A
     st4 = [B0, B0 + 0x10, B0 + 0x20, B0 + 0x30]
-    args = (st4, set(st4), [(s_, 0x10) for s_ in st4], lambda a: dm.get(a, 0x0009), {B0 + 8}, B0 + 0x40)
+    cl4 = closed([(s_, 0x10) for s_ in st4])
+    args = (st4, set(st4), [(s_, 0x10) for s_ in st4], lambda a: dm.get(a, cl4.get(a, 0x0009)), {B0 + 8}, B0 + 0x40)
     g4 = M.groups(*args, pool32=lambda a: 0x2A if a == B0 + 8 else 0)
     if g4 != [0]:
         bad.append('bsrf: a distance branch from +00 to +30 (pool word 0x2A) must tie the pieces: %r, want [0]' % g4)
     g5 = M.groups(*args)
     if g5 != [0, 1, 2, 3]:
         bad.append('bsrf: without a pool reader nothing is tied (the control): %r' % g5)
+    # a function that runs on into the next piece stays with it (Zombie Revenge: vmsfs_c_fiber7 is `mov #7,r4`, then the routine it sets up)
+    st3 = [B0, B0 + 0x10, B0 + 0x20]
+    code3 = [(x, 0x10) for x in st3]
+    base3 = closed(code3)
+
+    def gr(over, pools=frozenset()):
+        m = dict(base3)
+        m.update(over)
+        return M.groups(st3, set(st3), code3, lambda a: m.get(a, 0x0009), set(pools), B0 + 0x30)
+    if gr({}) != [0, 1, 2]:
+        bad.append('fall: three closed functions are three groups (the control): %r' % gr({}))
+    if gr({B0 + 0x0C: 0x0009, B0 + 0x0E: 0xE407}) != [0, 2]:
+        bad.append('fall: +00 ends `mov #7,r4` and runs into +10: they are one group: %r, want [0, 2]' % gr({B0 + 0x0C: 0x0009, B0 + 0x0E: 0xE407}))
+    if gr({B0 + 0x0C: 0x0009, B0 + 0x0E: 0x000B}) != [0, 2]:
+        bad.append('slot: +00 ends on its rts, whose delay slot is the first word of +10: one group: %r, want [0, 2]' % gr({B0 + 0x0C: 0x0009, B0 + 0x0E: 0x000B}))
+    if gr({B0 + 0x08: 0x000B, B0 + 0x0C: 0x1234, B0 + 0x0E: 0x5678}, pools={B0 + 0x0C}) != [0, 1, 2]:
+        bad.append('pool: a function that closes with rts + slot and ends in a pool word does not run on: %r, want [0, 1, 2]'
+                   % gr({B0 + 0x08: 0x000B, B0 + 0x0C: 0x1234, B0 + 0x0E: 0x5678}, pools={B0 + 0x0C}))
+    if gr({B0 + 0x0C: 0x402B, B0 + 0x0E: 0x0009}) != [0, 1, 2]:
+        bad.append('jmp: a tail jump (jmp @Rn + its slot) closes the function: %r, want [0, 1, 2]' % gr({B0 + 0x0C: 0x402B, B0 + 0x0E: 0x0009}))
     new = M.mapper([B0, B0 + 0x20, B0 + 0x30], 32, end, B0, 0x0C500000)
     for v, want in ((0x0C010004, 0x0C010004), (0x8C010024, 0x8C010044), (0x0C010034, 0x0C010074), (0x0C100000, 0x0C100040),
                     (0x0C600000, 0x0C600000), (0x12345678, 0x12345678)):

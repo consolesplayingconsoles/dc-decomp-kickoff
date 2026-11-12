@@ -7,6 +7,8 @@
 A decompilation of the Dreamcast **@TITLE@**, in progress. It rebuilds the game's executable byte for byte.
 A function is **done** when its C behaves like the original (Equivalent);
 byte-identical C (Matching) is the bonus tier.
+A project can choose `MODE: matching` in `status.txt` instead: a function is then done only when its C rebuilds byte for byte (`AGENTS.md` starts with the mode,
+and `tools/progress.py` reports the one that applies).
 
 _**This is not a traditional, human-idiomatic decompilation.** It is structured and documented for AI consumption,
 and its tooling is built for the automation and scale of that paradigm.
@@ -195,7 +197,11 @@ data becomes its own piece at that range, in source order; both ranges must star
 file boundaries (add them to `functions.txt`: `F <addr> 0 FUN_<addr>` for a function start,
 `D <addr> 0 data_<addr>` for a data boundary, which is not counted as a function). A unit is one
 original source file: all its functions share literal pools, so it goes in only when all of it
-matches. `python3 tools/progress.py` reports the state,
+matches. A unit can sit in a folder of `src/` (`src/<dir>/<file>.c`) and name pieces of its own (`@ddata`, `@bdata`); options starting with `+` in the header
+(`+pool32`, `+synth16`, `+r04`, ...) are opt-in layouts and compilers for the files that need them; a unit that asks for none gets the default layout.
+`tools/fcmp.py` and `tools/permute.py` compare and rewrite a unit function by function. A game with code overlays builds them with
+`bash build_overlays.sh`. The options and overlays are described in the kickoff skill's `references/matching-units.md` and `references/overlays.md`.
+`python3 tools/progress.py` reports the state,
 each function in one bucket: done (equivalent C; matching C and SDK source part of it), named only (a name is
 not done work), unnamed; plus documented functions and named globals. `docs/equivalent.md` holds
 the evidence for each equivalent function.

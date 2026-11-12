@@ -1026,3 +1026,54 @@ BupFailDialog compare only up to the step limit; _div64 and emotFaceMorph rest o
 - -> the skill: the generator should lift `_quick_mvn` (r0 size, r1 destination, r2 source) to a struct copy or a loop as it does
   the other two; equiv.py should compare r0-r2 at calls to register-convention helpers; Step 9 should say that a console-only
   hang is found by an on-screen breadcrumb readout drawn from the vblank callback, not by more emulator comparison.
+
+### Step 9 on Zombie Revenge: the game reboots after the loading screen, and how long it took to see it was not a crash (2026-11-11)
+- Symptom: after player selection and the intro video the game shows loading, then the console restarts from the BIOS and boots the
+  disc again, in a loop. Movable build from C, 3,595 C functions. The previous session did eight builds and kept no record.
+- **It is not a crash.** Flycast prints its own log to stdout when it is started from a terminal instead of `open`:
+  `"$APP/Contents/MacOS/Flycast" -config config:Debug.GDBEnabled=no <gdi> > flycast.out 2>&1`, nothing attached, nothing slowed. At the
+  reboot it printed `SB/HOLLY: System reset requested` (hw/holly/sb.cpp). A CPU fault with SR.BL set would print `Fatal: SH4 exception
+  when blocked`; it never did. So the console was told to reset, by the game's own code.
+- The code path (read from the original and the C, not yet seen running): the load wait `FUN_0c0cbe74` (`ADXF_OpenAfs`,
+  `ADXF_ReadNw32`, then polls `FUN_0c0cbf40` = `ADXF_GetStat`) calls `FUN_0c0e40ec(0,0x100A0,0)` and `FUN_0c010a30` when the status is
+  4 (read error). `FUN_0c010a30` is the shutdown routine (`syCfgExit`, `gdFsFinish`, `syRtcFinish`, `pdExitPeripheral`, `syHwFinish`),
+  ending in `syBtExit`, which jumps through the BIOS vector at 8C0000E0 with r4 = 1 or 3. The last samples before every reset were in
+  `FUN_0c0cbf40`, with the handle valid and its status byte 2 (reading). The question that remains is why the read of that AFS file
+  ends in an error on this disc. Not checked yet: the disc image (the new executable is 170,181 bytes bigger than the original, so
+  `disc_patch.py` moves it into free sectors and repoints its directory entry; whether anything reads those sectors by position).
+- Leads that cost time and were wrong, so nobody repeats them: a stack-argument mismatch in `kmiFBControl` (it is in the kept SDK,
+  never built); built C writing to fixed addresses the relocated SDK now occupies (the build rewrites those literals to symbols,
+  `A_0C23EB08` = 0C2685E8, a +0x29AE0 shift; the dump I read at the old addresses held code bytes, which proved nothing); a null
+  ADXF handle (it is valid); `trapa #16` in `FUN_0c0cbf40` (no breakpoint on the exception vector ever hit).
+- What the GDB server cannot do, learned the hard way: (1) a sampler that stops the CPU to read it makes the game crawl (8
+  samples a second, the intro video "plays" frozen); (2) a RAM snapshot taken after the reset shows a machine the BIOS has already
+  cleared; (3) Flycast keeps a client's breakpoints after the client dies, so the next hit stops the CPU with nobody to resume it (black
+  screen); (4) killing a client between a stop and the continue leaves the CPU halted; (5) the reset itself is invisible to
+  breakpoints that sit on the exception vector, `trapa` or `A0000000`. None of these would have been needed had the emulator's own log
+  been read first.
+- -> the skill: Step 9 should say: when the console restarts instead of hanging, run the emulator from a terminal with the debugger off
+  and read its log before placing any breakpoint; a `System reset requested` line means the game asked for it, so look for `syBtExit`
+  callers (`FUN_0c010a30` here) and the condition that reaches them, instead of looking for a fault.
+- Found by looking for what the movable build does to the code rather than at the C (2026-11-11): `vmsfs_c_fiber7` (`mov #7,r4`, then the
+  routine it sets up) is built as `mov #7,r4` + 32 zero bytes, 32 bytes before `vmsfs_c_dispatch`; the same class as the
+  `adxf_purge_all` / `vmsfs_c_fiber7` entry above, still open then. Fixed in `movecheck.groups()` (scripts/tools/1-2-baseline): a function
+  that ends without an rts/jmp/bra before its delay slot, or on a branch whose slot is the next piece's first word, stays with the next
+  piece (a pool word at its end is skipped). Test `tests/movecheck`: fails on the old code, passes on the new; the four game repos carry
+  the same file. NOT known to be the cause of the reboot above: no build has been made with it. A scan of the other copied functions
+  found 40 that fall into a neighbour; the two checked by hand in the loading code (`FUN_0c0c82dc`, `FUN_0c0cc3c8`) are C-built tail jumps
+  and were fine.
+- **The likely cause, found statically (2026-11-11, not yet confirmed by a build):** the game's own heap runs from its header at
+  0C52315C up to an end address kept as a plain word at 0C20B184, inside the C library's `FUN_0c20ad7c` (one 3,504-byte function:
+  its literal area). Nothing in that function loads the word; the allocator (`FUN_0c0e2400`) loads its address from a pool. So
+  `pointers.py` never made it a candidate, the split wrote it as two halfwords (`H'315C H'0C94`), and the movable build copied it
+  unchanged: the heap start moved with the data (+0x29AE0, to 0C54CC3C), its end stayed at 0C94315C, and the heap is 170 KB
+  smaller than the original. The chain that fits every observation: after player selection `FUN_0c0a5ac4` allocates 0x5020 bytes,
+  the allocator fails ("memory allocation error !!" to the debug console), the buffer pointer at 0C249908 becomes (0 + 31) & -32
+  = 0, the character file (0x13D or 0x13E, partition 1) is read to address 0, the drive errors, the file system reports -23 (a
+  command answer -29 in state 6, `FUN_0c20f2c4`), the game's error callback `FUN_0c0cedda` calls the shutdown, and the console
+  resets ("System reset requested"). Every pre-crash snapshot shows 0C249908 = 0.
+- -> the skill: `pointers.py` rule `dataref`: a word inside a listed function whose address other code loads from a pool, holding a
+  4-aligned address in the image, is an address. On Zombie Revenge it changes 3 decisions (this word and two self-pointing words at
+  0C10BC48 and 0C10DB4C, stale in the same way); on Crazy Taxi and Virtua Tennis none. Test `tests/pointers`: fails on the old code.
+  Lesson: the checks that came out clean compared the build with the original only for words some instruction loads; a data
+  word inside a "function" that is only read by address was invisible to all of them.

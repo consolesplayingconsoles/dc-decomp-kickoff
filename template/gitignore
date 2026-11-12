@@ -23,3 +23,8 @@ __pycache__/
 *.orig
 # case-file backups the retest tool leaves behind
 *.json.old
+# code overlays (references/overlays.md): generated per overlay, never committed
+overlays/*/symbols.txt
+overlays/*/state/
+overlays/*/src/
+overlays/*/BASE

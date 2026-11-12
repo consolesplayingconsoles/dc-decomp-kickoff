@@ -1,6 +1,7 @@
 # Getting a source file to match
 
-Used in step 6 (Experience-driven agentic decomp), for the bonus tier of byte-identical C.
+Used in step 6 (Experience-driven agentic decomp), for the bonus tier of byte-identical C, and as the whole of step 5 in a project
+with `MODE: matching` (`status.txt`). The header and its options: `matching-units.md`; code overlays: `overlays.md`.
 
 What the C side of a Katana decomp needs (where it was learned: `evidence.md`). The repo's `AGENTS.md`
 has the short version; this is the detail.

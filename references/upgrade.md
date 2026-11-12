@@ -4,6 +4,8 @@ A repo this skill started keeps its tools and template files in step with the sk
 brings a repo from the skill version it is at to a newer one. The decomp's own work is never touched:
 `src/`, `tests/` cases, names in `functions.txt`, `globals.txt`, `symbols.txt`, the rules in
 `models.txt`, `docs/`, the engine notes.
+Files a decomp adds beside the tools are its own too: `tools/1-2-baseline/shc_flags.<x>.txt` (flag sets that `+<x>flags` units use), `overlays.tsv`
+and `overlays/` (`references/overlays.md`). Copying the skill's `scripts/tools/` over a repo's `tools/` leaves them.
 
 ## Versions
 

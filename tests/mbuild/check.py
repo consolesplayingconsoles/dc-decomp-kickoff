@@ -3,6 +3,15 @@
 symbol lands once the image is linked. No game data, no compiler. Stdlib only.
 
     check.py      rewrite_literals() and mapper() on made-up pieces:
+                    number    a value number_values() reads as N in pointers.txt (every word holding it) stays as written
+                    hidden    unlisted_entries(): an address after the end of a routine, or a prologue after a literal pool, that decodes as code up to its own rts is reported
+                              (an unlisted task callback); a float table there (0000 4080) and an address in the middle of a routine are not
+                    reads     read_values(): an address read through a pointer cast or used as a table base is data; one passed as a
+                              value (a callback) is not in the set
+                    passed    passed_values(): a call argument, a value stored to memory and a return value count (number or A_ form);
+                              a number only put in a local, or read through, does not
+                    unitstart unit_start(): a data copy cut to runs is padded from its first run's start, any other unit from its piece's start
+                    stale     needs_assembly(): an object older than its source is assembled again, though the source already holds the text
                     literal   *(int *)0x8C2FC69C in a C line is *(int *)((int)A_8C2FC69C), declared once; 0x12345678 (no address),
                               0x0C600000 (above the range) and an address in a comment line stay
                     piece     an address 8 bytes into a piece is 8 bytes into that piece's label, in the same mirror
@@ -61,6 +70,66 @@ def main():
     if ('((unsigned char *)A_0C2AD000)' not in tm or '(*(unsigned char **)A_0C2AD1D8)' not in tm or '#define N ((int)A_0C2AD000)' not in tm
             or 'return *(int *)((int)A_0C2AD000)' not in tm or '((unsigned char *)((int)A_0C2AD000))' not in tn):
         bad.append('macro: a mod\'s pointer-cast macro is the symbol itself (an address constant for a file-scope initializer), anything else and the decomp\'s own files keep the int cast:\n' + tm + tn)
+    tw, uw = M.rewrite_literals('f(0x3F7, 0x2, 0xFC01E000, 0xC01A000);\nint x = *(int *)0x8C01A000 + *(int *)0x0C01A004;\n',
+                                0x0C010000, 0x0C500000, numbers={0x0C01A000})
+    if uw != {0x0C01A004} or 'f(0x3F7, 0x2, 0xFC01E000, 0xC01A000);' not in tw or '*(int *)0x8C01A000' not in tw:
+        bad.append('number: a value pointers.txt decides is a number stays as written, in every mirror; its neighbour is still an address:\n' + tw)
+    open('pointers.txt', 'w').write('0c0ca8f0 0c01a000 N words\n0c0ca8f4 0c01a000 N words\n0c010004 0c020000 N words\n'
+                                    '0c010008 8c020000 P pool\n0c01000c 0c030000 P pool\n')
+    try:
+        nv = M.number_values('pointers.txt')
+    finally:
+        os.remove('pointers.txt')
+    if nv != {0x0C01A000}:
+        bad.append('numbers: only a value every word decides N is a number (0C020000 is also a P word in its 8C mirror): %r'
+                   % sorted('%08X' % v for v in nv))
+    import shdis as _sd
+    img = {}                                         # halfwords at 0x0C100000...: rts / nop, then a routine; then rts / nop and a float table
+    seq = [0x000B, 0x0009, 0x4F22, 0xB330, 0x0009, 0xA4BB, 0x4F26,     # routine at +4: sts.l pr / bsr / nop / bra / lds.l
+           0x000B, 0x0009, 0x0000, 0x4080, 0x0000, 0x3F00,             # rts / nop, then 4.0f and 0.5f at +0x12
+           0x6013, 0x7001, 0x000B, 0x0009]                             # +0x1A: mid-routine code (mov / add / rts)
+    for k, w in enumerate(seq):
+        img[0x0C100000 + 2 * k] = w
+    for k, w in enumerate([0x3AB7, 0x8034, 0x2FE6, 0x4F22, 0x6E43, 0x4F26, 0x000B, 0x6EF6]):   # a pool word, then mov.l r14,@-r15 / sts.l pr ...
+        img[0x0C100040 + 2 * k] = w
+    got = M.unlisted_entries([0x0C100004, 0x0C100012, 0x0C10001C, 0x0C100044], img.get, _sd.decode)
+    if got != [0x0C100004, 0x0C100044]:
+        bad.append('hidden: %r, want 0C100004 (after an rts) and 0C100044 (a prologue after a pool word); not the float table, not the middle of a routine'
+                   % ['%08X' % v for v in got])
+    rv = M.read_values('u = *(float *)0xC0499D8; w = ((struct o8_float *)0x0C23FE68)->v; t = *(int *)((0xC15244C + (a4 << 2)));\n'
+                       '{ *(struct mv3 *)(x) = *(struct mv3 *)(0xC0F9BCC); }\nt13 = FUN_0c0e14c4(0xC0B39A8);\n'
+                       'w0_1 = (((struct o0_float *)((int)A_0C23FE70))->v); t = FUN_0c0e14c4(((int)A_0C01AC04));\n')
+    if rv != {0x0C0499D8, 0x0C23FE68, 0x0C15244C, 0x0C0F9BCC, 0x0C23FE70}:
+        bad.append('reads: %r, want the five read through or indexed (hex and ((int)A_..) forms), not the callbacks 0C0B39A8 and 0C01AC04'
+                   % sorted('%08X' % v for v in rv))
+    pv = M.passed_values('t13 = FUN_0c0e14c4(0xC0B39A8);\n    *(unsigned int *)((v0_0 + 0x0)) = 0xC057824;\n'
+                         '    return FUN_0c0a87b4(0xC0AC034, ((int)A_0C0AC050), 0x3F7);\n    t15 = 0xC011ED8;\n'
+                         '    u = *(float *)0xC0499D8;\n    t = *(int *)((0xC15244C + (a4 << 2)));\n    return 0xC0188F8;\n'
+                         '    (((struct o0_uint *)0xC23ED44)->v) = 0xC0B2C7E;\n    if (x == 0xC0A1000) {\n')
+    if pv != {0x0C0B39A8, 0x0C057824, 0x0C0AC034, 0x0C0AC050, 0x0C0188F8, 0x0C0B2C7E}:
+        bad.append('passed: %r, want the arguments, the stores to memory and the return value; not a local, a read or a comparison'
+                   % sorted('%08X' % v for v in pv))
+    us = (M.unit_start('d', 1, [0x0C0C7354, 0x0C0C73E6], {1: [(0x0C0C7480, 0x0C0C74A4)]}),
+          M.unit_start('d', 0, [0x0C0C7354, 0x0C0C73E6], {1: [(0x0C0C7480, 0x0C0C74A4)]}),
+          M.unit_start('2', 1, [0x0C0C7354, 0x0C0C73E6], {1: [(0x0C0C7480, 0x0C0C74A4)]}))
+    if us != (0x0C0C7480, 0x0C0C7354, 0x0C0C73E6):
+        bad.append('unitstart: %r, want the first run 0C0C7480 for the cut copy, the piece start otherwise' % ['%08X' % x for x in us])
+    import tempfile as _tf
+    d = _tf.mkdtemp()
+    try:
+        s_, o_ = os.path.join(d, 'u00062.src'), os.path.join(d, 'u00062.obj')
+        open(s_, 'w').write('unit text\n'); open(o_, 'wb').write(b'obj')
+        os.utime(o_, (1000, 1000)); os.utime(s_, (2000, 2000))           # the object from an earlier build, the source written since
+        if not M.needs_assembly(s_, 'unit text\n', o_):
+            bad.append('stale: an object older than its source (the same text) is not assembled again')
+        os.utime(o_, (3000, 3000))
+        if M.needs_assembly(s_, 'unit text\n', o_):
+            bad.append('stale: an object newer than its unchanged source is assembled again')
+        if not M.needs_assembly(s_, 'other text\n', o_):
+            bad.append('stale: a changed unit text is not assembled')
+    finally:
+        import shutil as _sh
+        _sh.rmtree(d, ignore_errors=True)
     pieces = [(0x0C010000, '_f1'), (0x0C010100, '_f2'), (0x0C010200, '_d3'), (0x0C010300, '_f4')]
     syms = {'_f1': 0x8C010000, '_f2': 0x8C010400, '_d3': 0x8C010800, '_bss': 0x8C020000, '_f4__2': 0x8C030000}
     cfun = {0x0C010100: 'f2', 0x0C010300: 'f4'}
