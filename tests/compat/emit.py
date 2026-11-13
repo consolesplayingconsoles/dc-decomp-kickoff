@@ -272,6 +272,19 @@ def pressed_fixture():
             + b"PRESSEDPVRFORMAT" + b"\xff" * 8)
 
 
+def pressed_pvr_fixture():
+    """Two `PRESSEDPVRFORMAT` textures: the first stream has no end marker (it stops where the texture does, zero padding up to
+    the next tag, as in some games), the second ends as usual. Each block must hold its own texture, the first not run into
+    the second."""
+    def tex(w, h, seed):
+        body = bytes((seed + 7 * i) & 0xFF for i in range(w * h * 2))
+        return b"GBIX" + struct.pack("<II", 8, seed) + b"PVRT" + struct.pack("<I", len(body) + 8) + bytes([1, 1, 0, 0]) + struct.pack("<2H", w, h) + body
+    a, b = Prs(), Prs()
+    a.literal(tex(8, 8, 3))
+    b.literal(tex(4, 4, 9))
+    return b"PRESSEDPVRFORMAT" + bytes(a.out) + b"\x00" * 6 + b"PRESSEDPVRFORMAT" + b.end()
+
+
 def sound_fixtures():
     """An AFS archive (an ADX stream, something else, an AHX stream), a file that is one ADX stream, an archive of other things
     (no rows), a DTPK sound bank, and an archive holding an ADX stream and a DTPK pack (a row per sample)."""
@@ -430,6 +443,8 @@ def results(mm):
     out["zip:archive.zip"] = [[o, n, len(d), d[:16].hex()] for o, n, d in mm.zip_members(zp)]
     files["pressed.bin"] = pr = pressed_fixture()
     out["pressed:pressed.bin"] = [[at, name, len(dec), dec[:48].hex(), end] for at, name, dec, end in mm.pressed_blocks(pr)]
+    files["pressed_pvr.bin"] = pp = pressed_pvr_fixture()
+    out["pressed:pressed_pvr.bin"] = [[at, name, len(dec), dec[:48].hex(), end] for at, name, dec, end in mm.pressed_blocks(pp)]
     files["owntex.bin"], offs = own_texture_fixture()
     got = mm.own_textures(files["owntex.bin"], offs)
     out["owntextures:owntex.bin"] = [[list(r) for r in got[0]], sorted(got[1].items())] if got else None

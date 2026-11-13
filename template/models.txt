@@ -12,6 +12,8 @@
 #   textures <model file> <texture file> index   texture n = the n-th texture of the PVM archive <texture file> (for a model file that
 #                                                keeps its texture lists in its own data). To find the pair: the model file holds the texture names
 #                                                (the entry names of a PVM's PVMH header) as text; the archive whose names it holds is its texture file
+#   textures <model file> <texture file> entries   both AFS archives of as many entries: texture n of a model in entry i of the model file
+#                                                is the n-th PRESSEDPVRFORMAT texture of entry i of the texture file
 #   motions <model file> <motion file>          the motions in <motion file> animate the models of <model file> with as many objects as they have
 #                                                nodes (a skeleton in the viewer), for files of different names (e.g. a character's motion bank and the
 #                                                executable that holds the character)
