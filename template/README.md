@@ -54,7 +54,7 @@ make setup GDI="path/to/your disc.gdi"
 echo 'SDK_PATH="/path/to/katana-sdk"' > .env      # once: where your SDK is (not committed)
 make
 make c                                            # the executable built from the C (build/cbuild/game.bin)
-make disc GDI="path/to/your disc.gdi"             # the same, plus a disc image with it (build/disc-cbuild/)
+make disc GDI="path/to/your disc.gdi"             # the game built the way status.txt's MODE says, in a copy of your disc (build/disc-cbuild/)
 ```
 
 `make` (which runs `build.sh`) should end with `MATCH`. The other targets are listed at the top of the `Makefile`.

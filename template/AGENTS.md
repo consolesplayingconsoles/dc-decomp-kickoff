@@ -98,7 +98,7 @@ Games differ, so there is no fixed order. Try a tool on a small sample, note wha
 | `tools/5-generated/remaining.py` | Choosing what to take next | Functions and bytes per state, and per cause |
 | `tools/5-generated/diverge.py <function>` | A generated function differs from the original | The first mismatching call and where each side's value came from |
 | `tools/5-generated/overreads.py src/<file>.c [function ...]` | A build from C runs in the emulator but not on the console, or before trusting a file of proven C | Functions whose C differs from the original when unused RAM holds junk instead of 0 (reads memory the original does not); how many cases touched unset memory at all |
-| `tools/consistency.py` (`--fix`) | After several runs overlapped, or before a commit | C defined twice, cases without C, C without a recorded pass |
+| `tools/consistency.py` (`--fix`) | After several runs overlapped, or before a commit | C defined twice, cases without C, C without a recorded pass, a call without an argument the original sets (`short call`) |
 | `tools/1-2-baseline/sdk_identical.py` | Functions that look like the SDK's own library code | Functions byte-identical to the compiled SDK libraries |
 | Hand-written C with cases | The tools above have run dry | Functions per hour, in the order below |
 

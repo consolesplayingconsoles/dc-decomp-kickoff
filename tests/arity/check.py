@@ -106,6 +106,47 @@ def main():
     if got != (1, 0):
         bad.append('delay: r4 read in the delay slot of the first call is an argument (the slot runs before the call), got %s, want (1, 0)' % (got,))
 
+    gen_core.SPANS['helperThenRead'] = (0x8C1DE600, 100)
+    text['helperThenRead'] = '\n'.join(['; helperThenRead', '', '8c1de600 4f22  sts.l pr,@-r15', '8c1de602 d322  mov.l @(0x8c1de690,pc),r3  ; =8c0e609c _quick_evn_mvn',
+        '8c1de604 61f3  mov r15,r1', '8c1de606 430b  jsr @r3', '8c1de608 e030  mov #48,r0', '8c1de60a 6641  mov.w @r4,r6', '8c1de60c 2502  mov.l r0,@r5',
+        '8c1de60e 4f26  lds.l @r15+,pr', '8c1de610 000b  rts', '8c1de612 0009  nop'])
+    got = gen_core.callee_arity('helperThenRead')
+    if got != (2, 0):
+        bad.append('helper: r4 and r5 read after a call to a runtime helper (it works in r0-r3) are arguments, got %s, want (2, 0)' % (got,))
+    gen_core.SPANS['helperSaves'] = (0x8C1DE700, 100)
+    gen_core.SPANS['_quick_evn_mvn'] = (0x8C0E609C, 40)
+    text['_quick_evn_mvn'] = '\n'.join(['; _quick_evn_mvn', '', '8c0e609c 2f46  mov.l r4,@-r15', '8c0e609e 2f56  mov.l r5,@-r15', '8c0e60a0 2f66  mov.l r6,@-r15',
+        '8c0e60a2 66f6  mov.l @r15+,r6', '8c0e60a4 000b  rts', '8c0e60a6 0009  nop'])
+    text['helperSaves'] = text['helperThenRead'].replace('helperThenRead', 'helperSaves').replace('8c1de60c 2502  mov.l r0,@r5', '8c1de60c 0009  nop')
+    got = gen_core.callee_arity('helperSaves')
+    if got != (1, 0):
+        bad.append('helper: a runtime helper that saves r4-r6 does not make them arguments of its caller, got %s, want (1, 0): only the r4 read after it' % (got,))
+    gen_core.SPANS['ctxSave'] = (0x8C1DE800, 100)
+    text['ctxSave'] = '\n'.join(['; ctxSave', '', '8c1de800 1479  mov.l r7,@(36,r4)', '8c1de802 145b  mov.l r5,@(44,r4)', '8c1de804 1413  mov.l r1,@(12,r4)',
+        '8c1de806 f44b  fmov.s fr4,@-r4', '8c1de808 000b  rts', '8c1de80a e000  mov #0,r0'])
+    got = gen_core.callee_arity('ctxSave')
+    if got != (1, 0):
+        bad.append('context save: a routine that stores every register (r1 as it came in among them) through r4 takes %s, want (1, 0)' % (got,))
+    for nm, z in (('afterKeep', 100), ('afterClob', 100), ('keepfn', 8), ('clobfn', 8)):
+        gen_core.SPANS[nm] = (0x8C1DE900, z)
+    body = lambda who, callee: '\n'.join(['; ' + who, '', '8c1de900 4f22  sts.l pr,@-r15', '8c1de902 d322  mov.l @(0x8c1de990,pc),r3  ; =8c1dea00 ' + callee,
+        '8c1de904 430b  jsr @r3', '8c1de906 0009  nop', '8c1de908 6141  mov.w @r4,r1', '8c1de90a 2512  mov.l r1,@r5', '8c1de90c 4f26  lds.l @r15+,pr', '8c1de90e 000b  rts', '8c1de910 0009  nop'])
+    text['afterKeep'], text['afterClob'] = body('afterKeep', 'keepfn'), body('afterClob', 'clobfn')
+    text['keepfn'] = '\n'.join(['; keepfn', '', '8c1dea00 0002  stc sr,r0', '8c1dea02 000b  rts', '8c1dea04 0009  nop'])
+    text['clobfn'] = '\n'.join(['; clobfn', '', '8c1dea00 e401  mov #1,r4', '8c1dea02 000b  rts', '8c1dea04 0009  nop'])
+    got = gen_core.callee_arity('afterKeep')
+    if got != (2, 0):
+        bad.append('keeps: r4 and r5 read after a call to a leaf that writes none of r4-r7 are arguments, got %s, want (2, 0)' % (got,))
+    got = gen_core.callee_arity('afterClob')
+    if got != (0, 0):
+        bad.append('keeps: after a call to a routine that writes r4 the arguments are gone, got %s, want (0, 0)' % (got,))
+    # a call on a side branch before the arguments are read: the straight scan sees the call first; the code's liveness (entry_reads) decides
+    gen_core.SPANS['sideCall'] = (0x8C1DEB00, 100)
+    text['sideCall'] = body('sideCall', 'clobfn')
+    gen_core._ENTRY['sideCall'] = frozenset(['r4', 'r5'])
+    got = gen_core.callee_arity('sideCall')
+    if got != (2, 0):
+        bad.append('side call: the arguments the code reads on some path count though a call comes first in address order, got %s, want (2, 0)' % (got,))
     got = gen_core.callee_arity('readsLess')
     if got != (3, 0):
         bad.append('defonly: a function reading 1 register with a 3-parameter definition takes %s, want (3, 0)' % (got,))

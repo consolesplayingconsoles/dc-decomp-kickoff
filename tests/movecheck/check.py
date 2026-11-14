@@ -13,6 +13,9 @@ unlisted, sat at the end of a data piece and loaded its pool from the next one: 
                     reach     a bsr more than 3 KB from its target ties the two
                     bsr_ties  with bsr_ties=False (a running copy: a far bsr goes through a veneer) that bsr ties nothing, pools and
                               data still do; the default is the old behaviour
+                    cond      a bt / bf that leaves its piece (a conditional tail jump to another function: Zombie Revenge 0C086A44,
+                              whose bt goes back to FUN_0c08696c three pieces before) is not merged by groups() (the game build ties it itself,
+                              between groups); cond_joined() joins the two and all between for this check's own pad link
                     bsrf      a bsrf whose register is a pool distance ties its piece to the one it reaches (Crazy Taxi strcmp)
                     fall      a function that runs on into the next piece (it ends without an rts/jmp/bra before its delay slot) or ends
                               on a branch whose delay slot is the next piece's first word stays with that piece; one that closes with an
@@ -66,6 +69,16 @@ def main():
     g2b = M.groups(starts2, set(starts2), [(s, 0x10) for s in starts2], lambda a: far.get(a, cl2.get(a, 0x0009)), set(), B0 + 0xE00, bsr_ties=False)
     if g2b != [0, 1, 2, 3]:
         bad.append('bsr_ties: %r, want [0, 1, 2, 3]: a running copy sends a far bsr through a veneer, so it does not tie' % g2b)
+    startc = [B0, B0 + 0x10, B0 + 0x40, B0 + 0x60]
+    clc = closed([(s_, 0x10) for s_ in startc])
+    cond = {B0 + 0x62: 0x89D5}                                    # bt -> +0x62+4-2*0x2B = +0x10
+    for bt in (True, False):
+        gn = M.groups(startc, set(startc), [(s, 0x10) for s in startc], lambda a: cond.get(a, clc.get(a, 0x0009)), set(), B0 + 0x70, bsr_ties=bt)
+        if gn != [0, 1, 2, 3]:
+            bad.append('cond (bsr_ties=%s): groups() gives %r, want [0, 1, 2, 3]: a conditional branch between pieces is not merged in the shared grouping (the game build ties it itself, between groups)' % (bt, gn))
+        gc = M.cond_joined(gn, startc, [(s, 0x10) for s in startc], lambda a: cond.get(a, clc.get(a, 0x0009)), set(), B0 + 0x70)
+        if gc != [0, 1]:
+            bad.append('cond (bsr_ties=%s): cond_joined gives %r, want [0, 1]: for the move check\'s own link a bt from the fourth piece to the second joins the second to the fourth' % (bt, gc))
     gp = M.groups(starts, listed, code, lambda a: mem.get(a, cl.get(a, 0x0009)), set(), end, bsr_ties=False)
     if gp != g:
         bad.append('bsr_ties: pools and data still tie without bsr ties: %r, want %r' % (gp, g))

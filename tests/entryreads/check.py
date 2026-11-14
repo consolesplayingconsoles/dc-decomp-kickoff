@@ -56,6 +56,32 @@ def main():
     v = equiv.callview('0C000100', ['00000001', '00000002'], ['3F800000', '40000000', '40400000'], {0x0C000100: (2, 3)})
     if v[1][:2] != ['00000001', '*'] or v[2] != ['*', '*', '40400000']:
         bad.append('masked: callview gives %s %s, want r4 and fr6 only' % (v[1], v[2]))
+    # declared `f(void)` in the file (arity 0), the callee's code reads r4 and r5, the original set r5 for the call (chg): compared on
+    # r5, so a C side that left r5 as it was differs; r4, which the original did not set either, is a leftover on both sides
+    equiv._READS[0x0C000300] = (frozenset([4, 5]), frozenset())
+    equiv._READS_SURE[0x0C000300] = frozenset([4, 5])
+    vo = equiv.callview('0C000300', ['00000007', '0DFF1000', '0', '0'], [], {0x0C000300: (0, 0)}, chg=[False, True, False, False])
+    vc = equiv.callview('0C000300', ['00000007', '0C123456', '0', '0'], [], {0x0C000300: (0, 0)}, chg=[False, True, False, False])
+    if vo[1] != ['*', 'STACK'] or vc[1] != ['*', '0C123456']:
+        bad.append('undeclared: a register the original set and the callee reads is compared though the file declares f(void): %s / %s' % (vo[1], vc[1]))
+    equiv._READS_SURE[0x0C000400] = frozenset([4])          # the callee reads r5 only through a call via a pointer: not for certain
+    equiv._READS[0x0C000400] = (frozenset([4, 5]), frozenset())
+    vp = equiv.callview('0C000400', ['00000007', '0DFF1000', '0', '0'], [], {0x0C000400: (1, 0)}, chg=[True, True, False, False])
+    if vp[1] != ['00000007']:
+        bad.append('undeclared: a register the callee reads only through a pointer call is not compared beyond the declaration, got %s' % (vp[1],))
+    vn = equiv.callview('0C000300', ['00000007', '0DFF1000', '0', '0'], [], {0x0C000300: (0, 0)}, chg=[False, False, False, False])
+    if vn[1] != []:
+        bad.append('undeclared: with nothing set by the original the declared arity stands, got %s' % (vn[1],))
+    # a call through a pointer with r6 untouched: read for the generator (the safe side), not for certain (entry_reads_sure's rule)
+    ind = [('mov.l', '@(12,r2),r3', 0x8C000000), ('jsr', '@r3', 0x8C000002), ('mov', 'r4,r4', 0x8C000004), ('rts', '', 0x8C000006), ('nop', '', 0x8C000008)]
+    full = gen_core.entry_reads_of(ind)
+    gen_core._SURE = True
+    try:
+        sure = gen_core.entry_reads_of(ind)
+    finally:
+        gen_core._SURE = False
+    if full is None or 'r6' not in full or sure is None or 'r6' in sure or 'r4' not in sure:
+        bad.append('sure: a call through a pointer reads r6 for the generator (%s) and not for certain (%s); r4, read by the code itself, stays' % (sorted(full or []), sorted(sure or [])))
     equiv._READS[0x0C000200] = None
     v = equiv.callview('0C000200', ['00000001', '00000002'], ['3F800000'], {0x0C000200: (2, 1)})
     if v[1][:2] != ['00000001', '00000002'] or v[2] != ['3F800000']:
