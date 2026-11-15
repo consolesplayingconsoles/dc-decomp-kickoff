@@ -4,17 +4,31 @@
 
 **Explore this decomp project with [Shuriken Explorer](https://consolesplayingconsoles.github.io/dc-shuriken-explorer/) and see the game's models, skeletons, animations, textures, images, sounds, text and side-by-side C and assembly code directly in your browser.**
 
+<!-- MODE: equivalent (keep this block when status.txt says MODE: equivalent or has no MODE line; delete it and its markers otherwise) -->
 A decompilation of the Dreamcast **@TITLE@**, in progress. It rebuilds the game's executable byte for byte.
-A function is **done** when its C behaves like the original (Equivalent);
-byte-identical C (Matching) is the bonus tier.
-A project can choose `MODE: matching` in `status.txt` instead: a function is then done only when its C rebuilds byte for byte (`AGENTS.md` starts with the mode,
-and `tools/progress.py` reports the one that applies).
+A function is **done** when its C behaves like the original's code: `tools/equiv.py` runs both on test cases and compares
+every register and memory write the original makes. The C is not the original's bytes. The game is built from it with the
+movable build (`make c`), which compiles the C, lays it out where the original code was, and keeps the original's data and
+library code at their addresses. How strong each function's proof is depends on how much of its code the cases run;
+`docs/equivalent.md` lists that per function.
 
 _**This is not a traditional, human-idiomatic decompilation.** It is structured and documented for AI consumption,
 and its tooling is built for the automation and scale of that paradigm.
 If needed, a human-idiomatic rewrite can start from it, as a fork or a new project.
 This project constitutes a solid stepping stone for such a target: it contains equivalent C, the asset maps,
 the Shuriken Explorer code and asset views, the build pipeline and the author's notes in [docs/engine.md](docs/engine.md)._
+<!-- /MODE: equivalent -->
+
+<!-- MODE: matching (keep this block when status.txt says MODE: matching; delete it and its markers otherwise) -->
+A matching decompilation of the Dreamcast **@TITLE@**, in progress. It rebuilds the game's executable byte for byte.
+A function is **done** only when its C compiles back to the original's exact bytes. Each C unit is compiled with the
+original compiler, linked in place, and the whole executable must still end in `MATCH` (`make`, which runs `build.sh`).
+Nothing is checked by behaviour alone: a function whose C behaves the same but differs by one instruction is not done,
+and the build keeps the original assembly for it.
+
+This project contains matching C, the asset maps, the Shuriken Explorer code and asset views, the build pipeline and the
+author's notes in [docs/engine.md](docs/engine.md).
+<!-- /MODE: matching -->
 
 **This repository contains no game code or data.** You supply your own disc; `setup.sh` generates
 everything game-derived on your machine, and `.gitignore` keeps it out of git.

@@ -277,6 +277,8 @@ The nine steps, in order. Each one is announced and closed as the section above 
      `KICKOFF`, the version an upgrade starts from: `references/upgrade.md`), and `@PROGRESS@` (after the first `MATCH`: the
      output of `python3 tools/progress.py` in a ``` fence). No `@...@` may remain in those files
      (`grep -n '@[A-Z_]*@' README.md setup.sh disc.sh Makefile KICKOFF`; `tools/` has its own `@N@` tokens, ignore).
+     In `README.md` keep the `<!-- MODE: ... -->` block for the repo's mode (`status.txt`'s `MODE` line; none: equivalent) and
+     delete the other block; then delete the marker lines of the one kept (`grep -n 'MODE:' README.md` finds nothing).
      `@NAMED@` = functions whose name is not `FUN_...` (what `split_asm.py` prints). It can exceed
      `@NAMED_SDK@`: small wrappers (thunks) inherit the name of what they call.
    - **no licence**: the repo gets no `LICENSE` file and no licence section. Its contents derive
