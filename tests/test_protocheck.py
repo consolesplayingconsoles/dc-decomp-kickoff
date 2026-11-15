@@ -8,6 +8,9 @@
                     cast      a call through a function-pointer cast is not looked at
                     variadic  a definition with `...` is left alone
                     ints      five integer parameters take one stack word, so a prototype of four is short by one
+                    results   six integer parameters, the callee writing its results through the two on the stack, prototyped and
+                              called with four: short by two words (Zombie Revenge FUN_0c039034 calling FUN_0c03442c: the callee
+                              stored through a leftover stack word, 5, and the game stopped on an address error while shooting)
                   --reads (the registers the original reads against the registers a definition declares; the reads are given, no game data):
                     passed on  cpuDblThinkAll-like `(float, float, float)` against reads r6 r7 fr5 fr6 fr7 is reported for r6, r7 and fr7
                     exact      a definition that declares every register read, a structure in the list (stack) and a function with no reads are not
@@ -42,10 +45,12 @@ SKILL = os.path.dirname(HERE)
 
 DEF_C = ("typedef struct { int w[3]; } Stk3;\nint g(int a4, Stk3 p, float f4)\n{\n    return a4;\n}\n\n"
          "int five(int a4, int a5, int a6, int a7, int a8)\n{\n    return a8;\n}\n\n"
-         "int va(int a4, ...)\n{\n    return a4;\n}\n")
-SHORT_C = ("int g(int, float);\nint five(int, int, int, int);\nint va(int);\nvoid h(void)\n{\n    g(1, 2.0f);\n    five(1, 2, 3, 4);\n    va(1);\n}\n")
-FULL_C = ("typedef struct { int w[3]; } Stk3;\nint g(int, Stk3, float);\nint five(int, int, int, int, int);\nvoid k(void)\n{\n"
-          "    g(1, *(Stk3 *)0, 2.0f);\n    five(1, 2, 3, 4, 5);\n}\n")
+         "int va(int a4, ...)\n{\n    return a4;\n}\n\n"
+         "int six(int a4, int a5, int a6, int a7, int a8, int a9)\n{\n    *(int *)a8 = a6;\n    *(short *)a9 = a7;\n    return a4;\n}\n")
+SHORT_C = ("int g(int, float);\nint five(int, int, int, int);\nint va(int);\nint six(int, int, int, int);\nvoid h(void)\n{\n    g(1, 2.0f);\n    five(1, 2, 3, 4);\n    va(1);\n"
+           "    six(1, 2, 3, 4);\n}\n")
+FULL_C = ("typedef struct { int w[3]; } Stk3;\nint g(int, Stk3, float);\nint five(int, int, int, int, int);\nint six(int, int, int, int, int, int);\n"
+          "void k(void)\n{\n    g(1, *(Stk3 *)0, 2.0f);\n    five(1, 2, 3, 4, 5);\n    six(1, 2, 3, 4, 0x59C, 0x18);\n}\n")
 CAST_C = ("int g(int, float);\nvoid c(void)\n{\n    ((int (*)(int, Stk3, float))(g))(1, *(Stk3 *)0, 2.0f);\n}\n")
 
 
@@ -194,7 +199,7 @@ class TestProtocheck(unittest.TestCase):
                       "for n, f, calls, pw, dw in sorted(protocheck.scan()):\n    print(n, f, calls, pw, dw)\n")
             out = subprocess.run([sys.executable, '-c', script], cwd=tmp, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True).stdout
             got = sorted(out.strip().split('\n')) if out.strip() else []
-            want = ['five src/short.c 1 0 1', 'g src/short.c 1 0 3']
+            want = ['five src/short.c 1 0 1', 'g src/short.c 1 0 3', 'six src/short.c 1 0 2']
             if got != want:
                 self.fail('[ERROR] protocheck check failed: got %s, want %s' % (got, want))
             reads_check(tmp)
