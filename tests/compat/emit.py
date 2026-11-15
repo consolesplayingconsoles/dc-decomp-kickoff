@@ -6,7 +6,7 @@
 
 The inputs are built here from nothing: no game data, so they can be committed and run anywhere. They exercise the
 formats the readers know (Sega PRS compression, PRS streams tagged PRESSED, object trees stored as a memory image, Ninja chunk models and motions,
-PowerVR/GIF/JPEG/PNG pictures). `check.py` compares this output with `golden.json`; a viewer compares its own readers'
+PowerVR/GIF/JPEG/PNG pictures). `tests/test_compat.py` compares this output with `golden.json`; a viewer compares its own readers'
 output on the same files."""
 import importlib.util
 import json

@@ -16,4 +16,4 @@ for f in sorted(glob.glob("scripts/*.py") + glob.glob("tests/**/*.py", recursive
         print("[pre-commit] %s does not parse as Python 3.6: %s (line %s)" % (f, e.msg, e.lineno)); bad = 1
 sys.exit(bad)
 PY
-python3 tests/compat/check.py
+python3 -m unittest tests.test_compat

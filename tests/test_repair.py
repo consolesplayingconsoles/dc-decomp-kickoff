@@ -1,0 +1,331 @@
+#!/usr/bin/env python3
+"""Pointer repair of a drawn case (scripts/tools/5-generated/gen_equiv/directed.py repair), with the real simulator on synthetic code. No
+game data, no compiler. Stdlib only.
+
+Zombie Revenge FUN_0c05265c (and the other small functions whose drawing timed out) loops over a table a global describes: {array, count}.
+With the drawn memory zero, dt wraps the count to 2^32 and every case runs to the step cap; with a count, the array pointer is 0 and each
+entry's pointer too. repair runs the case, and while it fails it finds where the value went wrong came from (directed.provenance) and
+sets that source (directed.apply): a dt counter to 2, a pointer that read or wrote outside RAM to a fresh zeroed block.
+
+    check.py      G = {array, count} at BASE+0x100, zeros; the function: r5 = &G, r4 = G.array, r5 = G.count; loop: r3 = *r4;
+                  *r3 = 1; dt r5; r4 += 4:
+                    plain     with no repair the case does not finish (the step cap)
+                    repaired  repair gives a case the original finishes on, with no access outside RAM, in at most 8 rounds
+                  hang: r6 = &H; r4 = *r6; tst #8 against r4; bt to a branch to itself (Zombie Revenge FUN_0c0cac3a stops there on a
+                  record whose flag bit is clear):
+                    plain     the zero case spins to the step cap
+                    repaired  repair sets the tested word so the test goes the other way, and the case finishes
+                  spin: loop: r3 = *G; tst r3,r3; bt loop (entryPickRandomChara, Virtua Tennis: retries a random index while the
+                  table entry is 0, with no counter):
+                    repaired  repair sets the word the loop's own test reads so the loop ends
+                  count: for (i = 1; i < G; i++) with cmp/ge and G drawn as 0x7FFFFFFF (entryCharaSelExec, Virtua Tennis: a loop
+                  over the players up to a global count):
+                    repaired  repair sets G from the loop's first pass so the cmp/ge goes the other way and the loop ends at once
+                  clobber: an 8-byte local table, mov r4,r0 / shll2 r0 / store r5 at sp + r0, r4 drawn as 2: the store lands on the
+                  saved return address and rts runs drawn data (Virtua Tennis _div64, kmyGenerateRegionArray: "unknown instruction at
+                  0C930100"):
+                    repaired  repair finds the store that overwrote the return address and sets its index to 0
+                  poll: loop: r3 = *G; cmp/hs 21,r3; bf out; bra loop (G drawn as 25): the exit is a forward branch and the loop closes
+                  with an unconditional one (Virtua Tennis vmsfs_c_dispatch: a state field of 21 or more sleeps and tries again):
+                    repaired  repair takes the conditional branch that always went one way and whose other way leaves the loop
+                  fillover: an 8-byte local buffer passed to a call whose drawn fill is 16 bytes: the fill runs onto the saved return
+                  address (Virtua Tennis _div64, no store of its own to find):
+                    repaired  repair cuts that call's fill to the bytes before the slot
+                  findex: r0 = (int)fr0 from a call, shll2 r0, *(sp + r0) (entryPickRandomChara: nlRandom's answer times the table
+                  length, drawn as 100000.0, read far above the stack):
+                    repaired  repair follows the index through sts / ftrc to the call's float answer and sets it to 0
+                  index: r0 = &T; shll2 r4; *(r0 + r4) = r1, r4 drawn as a pointer (Virtua Tennis nlSetPaletteData: an index into
+                  gPaletteData):
+                    repaired  repair traces the address back through the shift and sets the index to 0: no access outside RAM
+                  addindex: r4 = &T; shll2 r5; add r5,r4; *r4 = r1 (emotFaceReset: a table entry plus a call's answer times 4):
+                    repaired  the index is found through the register add and set to 0
+                  callindex: the same with the index a call's answer, the range given as 0C... while the code runs at 8C... (gen_drv.mend
+                  passes 0C..., Virtua Tennis runs at 8C...: no call answer was ever found there):
+                    repaired  the call's answer is set to 0
+"""
+import unittest
+from unittest import mock
+import os
+import shutil
+import struct
+import sys
+import tempfile
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+TOOLS = os.path.join(os.path.dirname(HERE), 'scripts', 'tools')
+sys.path[:0] = [os.path.join(TOOLS, '5-generated', 'gen_equiv'), os.path.join(TOOLS, '5-generated'), TOOLS]
+import toolpath  # noqa: E402,F401
+import sh4sim  # noqa: E402
+import directed  # noqa: E402
+
+BASE = 0x8C010000
+
+
+class TestRepair(unittest.TestCase):
+    def setUp(self):
+        self.addCleanup(os.chdir, os.getcwd())
+        saved_path = list(sys.path)
+        self.addCleanup(sys.path.__setitem__, slice(None), saved_path)
+        environ = mock.patch.dict(os.environ)
+        environ.start()
+        self.addCleanup(environ.stop)
+        snapshot = self._snapshot_modules()
+        self.addCleanup(self._restore_modules, snapshot)
+
+    @staticmethod
+    def _snapshot_modules():
+        tools = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'scripts')
+        modules = dict(sys.modules)
+        state = {}
+        for name, mod in modules.items():
+            if (getattr(mod, '__file__', None) or '').startswith(tools):
+                state[name] = dict(vars(mod))
+        return modules, state
+
+    @staticmethod
+    def _restore_modules(snapshot):
+        modules, state = snapshot
+        for name in list(sys.modules):
+            if name not in modules:
+                del sys.modules[name]
+        sys.modules.update(modules)
+        for name, saved in state.items():
+            vars(modules[name]).clear()
+            vars(modules[name]).update(saved)
+
+    def test_repair(self):
+        code = [0xD505,              # mov.l @(pool),r5   ; = &G
+                0x6452,              # mov.l @r5,r4       ; array
+                0x5551,              # mov.l @(4,r5),r5   ; count
+                0x6342,              # loop: mov.l @r4,r3
+                0xE001,              # mov #1,r0
+                0x2302,              # mov.l r0,@r3
+                0x4510,              # dt r5
+                0x8FFA,              # bf/s loop
+                0x7404,              # add #4,r4
+                0x000B, 0x0009]      # rts / nop
+        body = b''.join(struct.pack('<H', w) for w in code)
+        pool_at = 0x18
+        body += b'\x09\x00' * ((pool_at - len(body)) // 2) + struct.pack('<I', BASE + 0x100)
+        exe = body + b'\x00' * (0x200 - len(body))
+        d = tempfile.mkdtemp()
+        bad = []
+        try:
+            open(os.path.join(d, 'exe.bin'), 'wb').write(exe)
+            def run(case, trace=True):
+                return sh4sim.run(dict(case, exe='exe.bin', base='%08X' % BASE, entry='%08X' % BASE, end='%08X' % (BASE + 0x16), steps=20000,
+                                       trace=trace), d)
+            r = run({})
+            if not r['error']:
+                bad.append('plain: the zero case finished (%s steps): the test does not show the wrap' % r['steps'])
+            try:
+                fixed = directed.repair({}, run, (0x0C000000 | (BASE & 0x1FFFFFFF), 0x0C000000 | ((BASE + 0x16) & 0x1FFFFFFF)), hw=False)
+            except AttributeError:
+                self.fail('[ERROR] repair check failed:\nrepaired: directed.py has no repair()')
+            r2 = run(fixed or {})
+            if not fixed or r2['error'] or r2.get('devices'):
+                bad.append('repaired: no case the original finishes on cleanly: %s / %s / devices %s' % (fixed, r2['error'], (r2.get('devices') or [])[:2]))
+            hang = [0xD604,              # mov.l @(pool),r6   ; = &H
+                    0x6462,              # mov.l @r6,r4
+                    0xE708,              # mov #8,r7
+                    0x2478,              # tst r7,r4
+                    0x8901,              # bt hang
+                    0x000B, 0x0009,      # rts / nop
+                    0xAFFE, 0x0009]      # hang: bra hang / nop
+            body = b''.join(struct.pack('<H', w) for w in hang) + b'\x09\x00' + struct.pack('<I', BASE + 0x100)
+            open(os.path.join(d, 'hang.bin'), 'wb').write(body + b'\x00' * (0x200 - len(body)))
+            def run2(case, trace=True):
+                return sh4sim.run(dict(case, exe='hang.bin', base='%08X' % BASE, entry='%08X' % BASE, end='%08X' % (BASE + 0x12), steps=20000,
+                                       trace=trace), d)
+            if not run2({})['error']:
+                bad.append('hang plain: the zero case finished: the test does not show the hang')
+            fixed = directed.repair({}, run2, (0x0C000000 | (BASE & 0x1FFFFFFF), 0x0C000000 | ((BASE + 0x12) & 0x1FFFFFFF)), hw=False)
+            r3 = run2(fixed or {})
+            if not fixed or r3['error']:
+                bad.append('hang repaired: no case the original finishes on: %s / %s' % (fixed, r3['error']))
+            idx = [0xD002,               # mov.l @(pool),r0   ; = &T
+                   0x4408,               # shll2 r4
+                   0x0416,               # mov.l r1,@(r0,r4)
+                   0x000B, 0x0009,       # rts / nop
+                   0x0009]
+            body = b''.join(struct.pack('<H', w) for w in idx) + struct.pack('<I', BASE + 0x100)
+            open(os.path.join(d, 'idx.bin'), 'wb').write(body + b'\x00' * (0x200 - len(body)))
+            def run3(case, trace=True):
+                return sh4sim.run(dict(case, exe='idx.bin', base='%08X' % BASE, entry='%08X' % BASE, end='%08X' % (BASE + 0xA), steps=20000,
+                                       trace=trace), d)
+            drawn = {'regs': {'r4': '0C800000'}}
+            if not run3(drawn).get('devices'):
+                bad.append('index plain: the drawn index reached nothing outside RAM: the test does not show it')
+            fixed = directed.repair(drawn, run3, (0x0C000000 | (BASE & 0x1FFFFFFF), 0x0C000000 | ((BASE + 0xA) & 0x1FFFFFFF)), hw=False)
+            r4 = run3(fixed or drawn)
+            if not fixed or r4['error'] or r4.get('devices'):
+                bad.append('index repaired: %s / %s / devices %s' % (fixed, r4['error'], (r4.get('devices') or [])[:2]))
+            add = [0xD402,               # mov.l @(pool),r4   ; = &T
+                   0x4508,               # shll2 r5
+                   0x345C,               # add r5,r4
+                   0x2412,               # mov.l r1,@r4
+                   0x000B, 0x0009]       # rts / nop
+            body = b''.join(struct.pack('<H', w) for w in add) + struct.pack('<I', BASE + 0x100)
+            open(os.path.join(d, 'add.bin'), 'wb').write(body + b'\x00' * (0x200 - len(body)))
+            def run4(case, trace=True):
+                return sh4sim.run(dict(case, exe='add.bin', base='%08X' % BASE, entry='%08X' % BASE, end='%08X' % (BASE + 0xC), steps=20000,
+                                       trace=trace), d)
+            drawn = {'regs': {'r5': '0C800000'}}
+            if not run4(drawn).get('devices'):
+                bad.append('addindex plain: the drawn index reached nothing outside RAM: the test does not show it')
+            fixed = directed.repair(drawn, run4, (0x0C000000 | (BASE & 0x1FFFFFFF), 0x0C000000 | ((BASE + 0xC) & 0x1FFFFFFF)), hw=False)
+            r5 = run4(fixed or drawn)
+            if not fixed or r5['error'] or r5.get('devices'):
+                bad.append('addindex repaired: %s / %s / devices %s' % (fixed, r5['error'], (r5.get('devices') or [])[:2]))
+            cl = [0x4F22,                # sts.l pr,@-r15
+                  0xD405,                # mov.l @(pool),r4   ; = &T
+                  0xB006,                # bsr f (outside the function)
+                  0x0009,                # nop
+                  0x4008,                # shll2 r0
+                  0x340C,                # add r0,r4
+                  0x2412,                # mov.l r1,@r4
+                  0x4F26,                # lds.l @r15+,pr
+                  0x000B, 0x0009,        # rts / nop
+                  0x000B, 0x0009]        # f: rts / nop
+            body = b''.join(struct.pack('<H', w) for w in cl) + struct.pack('<I', BASE + 0x100)
+            open(os.path.join(d, 'call.bin'), 'wb').write(body + b'\x00' * (0x200 - len(body)))
+            def run5(case, trace=True):
+                return sh4sim.run(dict(case, exe='call.bin', base='%08X' % BASE, entry='%08X' % BASE, end='%08X' % (BASE + 0x14), steps=20000,
+                                       trace=trace), d)
+            drawn = {'calls': [{'r0': '0C930100'}] * 3}
+            if not run5(drawn).get('devices'):
+                bad.append('callindex plain: the drawn answer reached nothing outside RAM: the test does not show it')
+            fixed = directed.repair(drawn, run5, (0x0C000000 | (BASE & 0x1FFFFFFF), 0x0C000000 | ((BASE + 0x14) & 0x1FFFFFFF)), hw=False)
+            r6 = run5(fixed or drawn)
+            if not fixed or r6['error'] or r6.get('devices'):
+                bad.append('callindex repaired: %s / %s / devices %s' % (fixed, r6['error'], (r6.get('devices') or [])[:2]))
+            spin = [0xD102,              # loop: mov.l @(pool),r1   ; = &G
+                    0x6312,              # mov.l @r1,r3
+                    0x2338,              # tst r3,r3
+                    0x89FB,              # bt loop
+                    0x000B, 0x0009]      # rts / nop
+            body = b''.join(struct.pack('<H', w) for w in spin) + struct.pack('<I', BASE + 0x100)
+            open(os.path.join(d, 'spin.bin'), 'wb').write(body + b'\x00' * (0x200 - len(body)))
+            def run6(case, trace=True):
+                return sh4sim.run(dict(case, exe='spin.bin', base='%08X' % BASE, entry='%08X' % BASE, end='%08X' % (BASE + 0xC), steps=20000,
+                                       trace=trace), d)
+            if not run6({})['error']:
+                bad.append('spin plain: the zero case finished: the test does not show the spin')
+            fixed = directed.repair({}, run6, (0x0C000000 | (BASE & 0x1FFFFFFF), 0x0C000000 | ((BASE + 0xC) & 0x1FFFFFFF)), hw=False)
+            r7 = run6(fixed or {})
+            if not fixed or r7['error']:
+                bad.append('spin repaired: no case the original finishes on: %s / %s' % (fixed, r7['error']))
+            cnt = [0xE400,               # mov #0,r4
+                   0x7401,               # loop: add #1,r4
+                   0xD102,               # mov.l @(pool),r1     ; = &G
+                   0x6212,               # mov.l @r1,r2
+                   0x3423,               # cmp/ge r2,r4
+                   0x8BFA,               # bf loop
+                   0x000B, 0x0009]       # rts / nop
+            body = b''.join(struct.pack('<H', w) for w in cnt) + struct.pack('<I', BASE + 0x100)
+            open(os.path.join(d, 'cnt.bin'), 'wb').write(body + b'\x00' * (0x200 - len(body)))
+            def run8(case, trace=True):
+                return sh4sim.run(dict(case, exe='cnt.bin', base='%08X' % BASE, entry='%08X' % BASE, end='%08X' % (BASE + 0x10), steps=20000,
+                                       trace=trace), d)
+            drawn = {'poke': {'%08X' % (BASE + 0x100): 'ffffff7f'}}
+            if not run8(drawn)['error']:
+                bad.append('count plain: the drawn count finished: the test does not show it')
+            fixed = directed.repair(drawn, run8, (0x0C000000 | (BASE & 0x1FFFFFFF), 0x0C000000 | ((BASE + 0x10) & 0x1FFFFFFF)), hw=False)
+            r9 = run8(fixed or drawn)
+            if not fixed or r9['error'] or r9['steps'] > 100:
+                bad.append('count repaired: %s / %s / %s steps' % (fixed, r9['error'], r9['steps']))
+            clob = [0x4F22,              # sts.l pr,@-r15
+                    0x7FF8,              # add #-8,r15          ; a local table sp+0..7, the saved pr at sp+8
+                    0x6043,              # mov r4,r0
+                    0x4008,              # shll2 r0
+                    0x61F3,              # mov r15,r1
+                    0x0156,              # mov.l r5,@(r0,r1)
+                    0x7F08,              # add #8,r15
+                    0x4F26,              # lds.l @r15+,pr
+                    0x000B, 0x0009]      # rts / nop
+            body = b''.join(struct.pack('<H', w) for w in clob)
+            open(os.path.join(d, 'clob.bin'), 'wb').write(body + b'\x00' * (0x200 - len(body)))
+            def run9(case, trace=True):
+                return sh4sim.run(dict(case, exe='clob.bin', base='%08X' % BASE, entry='%08X' % BASE, end='%08X' % (BASE + 0x14), steps=2000,
+                                       trace=trace), d)
+            drawn = {'regs': {'r4': '00000002', 'r5': '0C930100'}}
+            if 'unknown instruction' not in str(run9(drawn)['error']):
+                bad.append('clobber plain: the drawn index did not run drawn data: the test does not show it (%s)' % run9(drawn)['error'])
+            fixed = directed.repair(drawn, run9, (0x0C000000 | (BASE & 0x1FFFFFFF), 0x0C000000 | ((BASE + 0x14) & 0x1FFFFFFF)), hw=False)
+            r10 = run9(fixed or drawn)
+            if not fixed or r10['error']:
+                bad.append('clobber repaired: %s / %s' % (fixed, r10['error']))
+            poll = [0xE115,              # mov #21,r1
+                    0xD205,              # mov.l @(pool),r2     ; = &G
+                    0x6322,              # loop: mov.l @r2,r3
+                    0x3312,              # cmp/hs r1,r3
+                    0x8B01,              # bf out
+                    0xAFFB,              # bra loop
+                    0x0009,              # nop
+                    0x000B, 0x0009,      # out: rts / nop
+                    0x0009, 0x0009, 0x0009]
+            body = b''.join(struct.pack('<H', w) for w in poll) + struct.pack('<I', BASE + 0x100)
+            open(os.path.join(d, 'poll.bin'), 'wb').write(body + b'\x00' * (0x200 - len(body)))
+            def run10(case, trace=True):
+                return sh4sim.run(dict(case, exe='poll.bin', base='%08X' % BASE, entry='%08X' % BASE, end='%08X' % (BASE + 0x12), steps=2000,
+                                       trace=trace), d)
+            drawn = {'poke': {'%08X' % (BASE + 0x100): '19000000'}}
+            if not run10(drawn)['error']:
+                bad.append('poll plain: the drawn state finished: the test does not show the poll')
+            fixed = directed.repair(drawn, run10, (0x0C000000 | (BASE & 0x1FFFFFFF), 0x0C000000 | ((BASE + 0x12) & 0x1FFFFFFF)), hw=False)
+            r11 = run10(fixed or drawn)
+            if not fixed or r11['error']:
+                bad.append('poll repaired: %s / %s' % (fixed, r11['error']))
+            fo = [0x4F22,                # sts.l pr,@-r15
+                  0x7FF8,                # add #-8,r15          ; an 8-byte buffer at sp, the saved pr at sp+8
+                  0xE804,                # mov #4,r8
+                  0xB006, 0x64F3,        # loop: bsr f / mov r15,r4 (the pointer set in the delay slot); four passes, each with its own fill
+                  0x4810,                # dt r8
+                  0x8BFB,                # bf loop
+                  0x7F08,                # add #8,r15
+                  0x4F26,                # lds.l @r15+,pr
+                  0x000B, 0x0009,        # rts / nop
+                  0x000B, 0x0009]        # f: rts / nop
+            body = b''.join(struct.pack('<H', w) for w in fo)
+            open(os.path.join(d, 'fo.bin'), 'wb').write(body + b'\x00' * (0x200 - len(body)))
+            def run11(case, trace=True):
+                return sh4sim.run(dict(case, exe='fo.bin', base='%08X' % BASE, entry='%08X' % BASE, end='%08X' % (BASE + 0x1A), steps=2000,
+                                       trace=trace), d)
+            over = {'r0': '00000000', 'poke_arg': {'r4': '00000000' '00000000' '0001930c' '00000000'}}
+            drawn = {'calls': [dict(over)] + [{'r0': '00000000'} for _ in range(3)]}      # only the first pass overruns, before r4 holds the pointer
+            if 'unknown instruction' not in str(run11(drawn)['error']):
+                bad.append('fillover plain: the fill did not reach the return address: the test does not show it (%s)' % run11(drawn)['error'])
+            fixed = directed.repair(drawn, run11, (0x0C000000 | (BASE & 0x1FFFFFFF), 0x0C000000 | ((BASE + 0x1A) & 0x1FFFFFFF)), hw=False,
+                                    rounds=2)          # every overrunning fill of the run in one pass: the second round only checks
+            r12 = run11(fixed or drawn)
+            if not fixed or r12['error']:
+                bad.append('fillover repaired: %s / %s' % (fixed, r12['error']))
+            fi = [0x4F22,                # sts.l pr,@-r15
+                  0xB008, 0x0009,        # bsr f / nop
+                  0xF03D,                # ftrc fr0,fpul
+                  0x005A,                # sts fpul,r0
+                  0x4008,                # shll2 r0
+                  0x61F3,                # mov r15,r1
+                  0x031E,                # mov.l @(r0,r1),r3
+                  0x4F26, 0x000B, 0x0009,        # lds.l @r15+,pr / rts / nop
+                  0x000B, 0x0009]        # f: rts / nop
+            body = b''.join(struct.pack('<H', w) for w in fi)
+            open(os.path.join(d, 'fi.bin'), 'wb').write(body + b'\x00' * (0x200 - len(body)))
+            def run7(case, trace=True):
+                return sh4sim.run(dict(case, exe='fi.bin', base='%08X' % BASE, entry='%08X' % BASE, end='%08X' % (BASE + 0x16), steps=20000,
+                                       trace=trace), d)
+            drawn = {'calls': [{'r0': '00000000', 'fr0': '47C35000'}]}
+            if not run7(drawn).get('devices'):
+                bad.append('findex plain: the drawn answer reached nothing outside RAM: the test does not show it')
+            fixed = directed.repair(drawn, run7, (0x0C000000 | (BASE & 0x1FFFFFFF), 0x0C000000 | ((BASE + 0x16) & 0x1FFFFFFF)), hw=False)
+            r8 = run7(fixed or drawn)
+            if not fixed or r8['error'] or r8.get('devices'):
+                bad.append('findex repaired: %s / %s / devices %s' % (fixed, r8['error'], (r8.get('devices') or [])[:2]))
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+        if bad:
+            self.fail('[ERROR] repair check failed:\n' + '\n'.join(bad))
+
+
+if __name__ == '__main__':
+    unittest.main()

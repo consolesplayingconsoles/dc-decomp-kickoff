@@ -1,0 +1,141 @@
+#!/usr/bin/env python3
+"""Which words are addresses (scripts/tools/1-2-baseline/pointers.py): one word per rule. No game data, no compiler. Stdlib only.
+
+A movable build writes every address as a name, so each word is classified once, from the bytes, and the decision is written
+down (build/pointers.txt). Crazy Taxi's and Virtua Tennis's shifted builds found the rules one crash at a time: pool words past
+a listed size, tables of low pointers, byte tables that look like addresses.
+
+    check.py      a temp repo: a function, its pool, a table of pointers, a byte table, a word into a fixed buffer, two
+                  instructions that read as an address, and a words.txt override:
+                    pool      the word a mov.l @(disp,pc) reads is P pool
+                    code      a 0C-topped pair of instructions inside the function is not a candidate
+                    table     pointers whose bytes are all under 0x40 (0C01xxxx) are P 0c
+                    bytes     a byte table that only looks like an address (07070808 | 0b0b0c0c) is N bytes
+                    fixed     an address at or above layout.txt's fixed line is N fixed
+                    8c        an 8C-topped word in data is P 8c
+                    codefn    a word inside a function whose value is a listed function's start is P codefn
+                    coderun   three words at a stride of 8 with close values inside a function are P coderun; two are not
+                    halves    two 16-bit numbers of a table (0C300C2F...), the end of a run and a lone consecutive pair are N halves; two close
+                              4-aligned pointers and the starts of listed functions stay P 0c (Zombie Revenge 0C1127D8: slot numbers rewritten as addresses)
+                    dataref   a word inside a function that other code loads by address (its address is a pool word) and that holds
+                              an address is P dataref; its neighbour of the same shape, whose address nothing loads, is no candidate
+                              (Zombie Revenge 0C20B184: the end of the heap inside the C library; left a number, the heap lost 170 KB)
+                    words     words.txt N on a word the rules take as an address makes it N words
+"""
+import unittest
+from unittest import mock
+import os
+import shutil
+import struct
+import subprocess
+import sys
+import tempfile
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+SKILL = os.path.dirname(HERE)
+BASE = 0x0C010000
+W = lambda *h: struct.pack('<%dH' % len(h), *h)
+L = lambda *v: struct.pack('<%dI' % len(v), *v)
+
+CODE = (W(0xD102, 0x000B) +                            # 00 mov.l @(8),r1 (reads 0C) / rts
+        W(0x0009) + W(0xE10C, 0x0009) +                # 04 nop / 06 mov #12,r1 + nop: the pair 0C 0009 ... (see 08)
+        W(0x0009) +                                    # 0A pad
+        L(0x0C010040))                                 # 0C the pool word
+CODE = CODE[:8] + W(0x0010, 0x0C01) + CODE[12:]        # 08 two instructions that read as 0C010010
+DATA = (L(0x0C010120, 0x0C010124, 0x0C010128) +       # 10 a table of pointers, every byte under 0x40
+        L(0x08080707, 0x0C0C0B0B) +                    # 1C a byte table: the second word looks like an address
+        L(0x0C600000) +                                # 24 a fixed buffer
+        L(0x8C010000) +                                # 28 8C on top
+        L(0x0C010130))                                 # 2C taken as an address by the rules, a number by words.txt
+F2 = (L(0x0C010000) + W(0x0009, 0x0009) +             # 40 a function pointer to f1's start, then nops
+      L(0x0C010100, 0) + L(0x0C010108, 0) + L(0x0C010110) +   # 48, 50, 58 a table of three at a stride of 8
+      W(0x0009, 0x0009) + L(0x0C010400, 0) + L(0x0C010800)) # 5C pad, 60 and 68 two far words that are no run
+HALVES = (L(0x0C300C2F, 0x0C320C31, 0x0C340C33) +     # 100 a table of 16-bit numbers: two side by side read as an address
+          L(0x0C380BB1, 0x0C3A0C39) +                 # 10C the first word of a run: only its high half is near the next number
+          L(0, 0x0C450C44, 0) +                       # 114 a lone pair of consecutive numbers
+          L(0, 0x0C110C04, 0x0C110C1C, 0) +           # 120 two close 4-aligned pointers: addresses
+          L(0x0C010C00, 0x0C010C3A))                  # 130 two function pointers whose halves are close: listed starts, addresses
+IMAGE = CODE + DATA + b'\0' * (0x40 - len(CODE + DATA)) + F2
+IMAGE = IMAGE + b'\0' * (0x100 - len(IMAGE)) + HALVES + b'\0' * (0xD00 - 0x100 - len(HALVES))
+F3 = (W(0xD201, 0x000B, 0x0009, 0x0009) +             # C00 mov.l @(C08),r2 / rts / nop / nop: the pool holds the address of C10
+      L(0x0C010C10) + W(0x0009, 0x0009) +             # C08 the pool word, C0C pad
+      L(0x0C010700) +                                 # C10 a variable inside f3 that other code reads by address: holds an address
+      L(0x0C010704))                                  # C14 the same shape, but nothing loads its address: two instructions
+IMAGE = IMAGE[:0xC00] + F3 + IMAGE[0xC00 + len(F3):]
+
+
+class TestPointers(unittest.TestCase):
+    def setUp(self):
+        self.addCleanup(os.chdir, os.getcwd())
+        saved_path = list(sys.path)
+        self.addCleanup(sys.path.__setitem__, slice(None), saved_path)
+        environ = mock.patch.dict(os.environ)
+        environ.start()
+        self.addCleanup(environ.stop)
+        snapshot = self._snapshot_modules()
+        self.addCleanup(self._restore_modules, snapshot)
+
+    @staticmethod
+    def _snapshot_modules():
+        tools = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'scripts')
+        modules = dict(sys.modules)
+        state = {}
+        for name, mod in modules.items():
+            if (getattr(mod, '__file__', None) or '').startswith(tools):
+                state[name] = dict(vars(mod))
+        return modules, state
+
+    @staticmethod
+    def _restore_modules(snapshot):
+        modules, state = snapshot
+        for name in list(sys.modules):
+            if name not in modules:
+                del sys.modules[name]
+        sys.modules.update(modules)
+        for name, saved in state.items():
+            vars(modules[name]).clear()
+            vars(modules[name]).update(saved)
+
+    def test_pointers(self):
+        bad = []
+        tmp = tempfile.mkdtemp()
+        try:
+            shutil.copytree(os.path.join(SKILL, 'scripts', 'tools'), os.path.join(tmp, 'tools'), ignore=shutil.ignore_patterns('__pycache__'))
+            open(os.path.join(tmp, '1ST_READ.BIN'), 'wb').write(IMAGE)
+            open(os.path.join(tmp, 'BASE'), 'w').write('%08X\n' % BASE)
+            open(os.path.join(tmp, 'functions.txt'), 'w').write('F %08x 12 f1\nD %08x 0 data_10\nF %08x 56 f2\nF %08x 58 f3\nF %08x 20 f4\n' % (BASE, BASE + 0x10, BASE + 0x40, BASE + 0xC00, BASE + 0xC3A))
+            open(os.path.join(tmp, 'layout.txt'), 'w').write('game 0C010000 0C010D00\nfixed 0C500000\n')
+            open(os.path.join(tmp, 'words.txt'), 'w').write('N 0C01002C   # a test override\n')
+            r = subprocess.run([sys.executable, 'tools/1-2-baseline/pointers.py'], cwd=tmp, stdout=subprocess.PIPE,
+                               stderr=subprocess.STDOUT, universal_newlines=True)
+            rows = {}
+            if os.path.exists(os.path.join(tmp, 'build', 'pointers.txt')):
+                for l in open(os.path.join(tmp, 'build', 'pointers.txt')):
+                    p = l.split()
+                    rows[int(p[0], 16) - BASE] = (p[2], p[3])
+            want = {0x0C: ('P', 'pool'), 0x10: ('P', '0c'), 0x14: ('P', '0c'), 0x18: ('P', '0c'), 0x20: ('N', 'bytes'),
+                    0x24: ('N', 'fixed'), 0x28: ('P', '8c'), 0x2C: ('N', 'words'),
+                    0x100: ('N', 'halves'), 0x104: ('N', 'halves'), 0x108: ('N', 'halves'), 0x10C: ('N', 'halves'), 0x110: ('N', 'halves'),
+                    0x118: ('N', 'halves'), 0x124: ('P', '0c'), 0x128: ('P', '0c'), 0x130: ('P', '0c'), 0x134: ('P', '0c'),
+                    0x40: ('P', 'codefn'), 0x48: ('P', 'coderun'), 0x50: ('P', 'coderun'), 0x58: ('P', 'coderun'),
+                    0xC08: ('P', 'pool'), 0xC10: ('P', 'dataref')}
+            for at, w in sorted(want.items()):
+                if rows.get(at) != w:
+                    bad.append('+%02X: %r, want %r' % (at, rows.get(at), w))
+            if 0x08 in rows:
+                bad.append('code: the instruction pair at +08 is a candidate: %r' % (rows[0x08],))
+            if 0xC14 in rows:
+                bad.append('dataref: +C14 is inside f3 and nothing loads its address: two instructions, not a candidate: %r' % (rows[0xC14],))
+            for at in (0x60, 0x68):
+                if at in rows:
+                    bad.append('coderun: +%02X is a far word beside a run, not part of it: %r' % (at, rows[at]))
+            if bad:
+                bad.append(r.stdout[-600:])
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+        if bad:
+            self.fail('[ERROR] pointers check failed:\n' + '\n'.join(bad))
+
+
+if __name__ == '__main__':
+    unittest.main()
