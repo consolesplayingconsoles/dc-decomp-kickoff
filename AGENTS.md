@@ -12,7 +12,7 @@ nothing.
 - Bug fix: the test reproduces the bug with the smallest synthetic input that shows it, and says in its
   docstring what behaviour it protects. It names no game, function or address of a game.
 - Evidence is not test text. Which game exposed a bug, what it looked like there and how it was found are
-  written in `references/evidence.md`, in the entry for that technique, never in a test or in this file.
+  written in `docs/evidence.md`, in the entry for that technique, never in a test or in this file.
 - New behaviour: one test method for each thing it must do, named for that thing.
 - A change that cannot be tested (a doc, a comment) needs no test; a change to what a tool prints or
   writes is behaviour, and does.

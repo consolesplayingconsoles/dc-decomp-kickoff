@@ -197,7 +197,7 @@ nobody ran). There is no pass mark: a function that passes is done, and the tota
 runs each function in an SH-4 interpreter twice per test case, the original bytes and your compiled C,
 and they must agree on calls, memory writes and the result. Passing functions are listed in
 `tests/equivalent.txt` and counted as done. The loop, and how to write many of them quickly, is in
-`AGENTS.md` and the kickoff skill's `references/equivalent-pipeline.md`.
+`AGENTS.md` and the kickoff skill's `docs/equivalent-pipeline.md`.
 
 ## Matching C units (the build tier)
 
@@ -214,7 +214,7 @@ original source file: all its functions share literal pools, so it goes in only 
 matches. A unit can sit in a folder of `src/` (`src/<dir>/<file>.c`) and name pieces of its own (`@ddata`, `@bdata`); options starting with `+` in the header
 (`+pool32`, `+synth16`, `+r04`, ...) are opt-in layouts and compilers for the files that need them; a unit that asks for none gets the default layout.
 `tools/fcmp.py` and `tools/permute.py` compare and rewrite a unit function by function. A game with code overlays builds them with
-`bash build_overlays.sh`. The options and overlays are described in the kickoff skill's `references/matching-units.md` and `references/overlays.md`.
+`bash build_overlays.sh`. The options and overlays are described in the kickoff skill's `docs/matching-units.md` and `docs/overlays.md`.
 `python3 tools/progress.py` reports the state,
 each function in one bucket: done (equivalent C; matching C and SDK source part of it), named only (a name is
 not done work), unnamed; plus documented functions and named globals. `docs/equivalent.md` holds

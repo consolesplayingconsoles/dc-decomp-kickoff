@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pair Dreamcast functions with a port's named ones. Stdlib only. See references/port-symbols.md.
+"""Pair Dreamcast functions with a port's named ones. Stdlib only. See docs/port-symbols.md.
 
     match.py            (settings in the environment, see portcfg.py)  ->  pairs.tsv
 

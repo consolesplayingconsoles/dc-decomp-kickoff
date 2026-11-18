@@ -5,7 +5,7 @@
     sdk_scan.py --tsv <SDK folder> > table.tsv
 
 Library files carry the same "<module> Ver <x> Build:<date>" banners that banners.py reads from a
-game. references/sdk-banners.tsv lists them for every publicly preserved release (names, versions
+game. docs/sdk-banners.tsv lists them for every publicly preserved release (names, versions
 and dates only); pass it to name the SDK to ask the user for before they have any. Or pass a
 folder holding as many SDKs as the user has, in any form: disc images (.iso), .zip files or
 extracted folders, one SDK per top-level entry; every byte is read as it is (no extraction, so a

@@ -5,7 +5,7 @@ brings a repo from the skill version it is at to a newer one. The decomp's own w
 `src/`, `tests/` cases, names in `functions.txt`, `globals.txt`, `symbols.txt`, the rules in
 `models.txt`, `docs/`, the engine notes.
 Files a decomp adds beside the tools are its own too: `tools/1-2-baseline/shc_flags.<x>.txt` (flag sets that `+<x>flags` units use), `overlays.tsv`
-and `overlays/` (`references/overlays.md`). Copying the skill's `scripts/tools/` over a repo's `tools/` leaves them.
+and `overlays/` (`docs/overlays.md`). Copying the skill's `scripts/tools/` over a repo's `tools/` leaves them.
 
 ## Versions
 
@@ -57,7 +57,7 @@ or an upgrade never does, and a missing or unreadable `KICKOFF` is never taken t
    filled as at kickoff. A hunk that does not apply is shown to the user with the repo's lines
    around it; never guess a merge of the repo's own wording.
 6. **What else changed.** Read the skill's history between the two versions
-   (`git log <from>..<to>` and `git diff <from> <to> -- SKILL.md references/`) and work out what the
+   (`git log <from>..<to>` and `git diff <from> <to> -- SKILL.md docs/`) and work out what the
    target's procedure produces that this repo lacks: a new generated file, a new committed file, a
    pass that names more functions, a changed file format. Do each, keeping the repo's own work (its
    names win over any the pass would add).

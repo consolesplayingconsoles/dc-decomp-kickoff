@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Name Dreamcast globals from a port's data symbols. Stdlib only. See references/port-symbols.md.
+"""Name Dreamcast globals from a port's data symbols. Stdlib only. See docs/port-symbols.md.
 
     gmatch.py [pairs file, default accepted.tsv]  ->  globals.tsv
 

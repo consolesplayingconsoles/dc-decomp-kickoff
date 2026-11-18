@@ -377,6 +377,6 @@ for row in rows:
     else:
         print('%-*s  %7s  %s' % (w, name, p, detail))
 
-if os.path.exists('overlays.tsv'):      # a game with code overlays (docs: references/overlays.md): their own total, after this report
+if os.path.exists('overlays.tsv'):      # a game with code overlays (docs: docs/overlays.md): their own total, after this report
     sys.stdout.flush()
     subprocess.run([sys.executable, os.path.join(here, 'overlay', 'progress.py')])

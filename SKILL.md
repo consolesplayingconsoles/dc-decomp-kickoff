@@ -1,20 +1,20 @@
 ---
 name: dc-decomp-kickoff
-description: "Kick off and run the decompilation of a Sega Dreamcast (Katana) game (a byte-identical build; functions done when their C behaves like the original). Use when someone has a Dreamcast disc and wants a decomp project: names applied from SDK signatures, the executable split into one assembly file per function, a build that reproduces the original byte for byte, asset maps, and the C proven function by function, then built into the game, in nine steps."
+description: "Kick off and run the decompilation of a Sega Dreamcast (Katana) game (a byte-identical build; functions done when their C is equivalent to the original or matches its bytes). Use when someone has a Dreamcast disc and wants a decomp project: names applied from SDK signatures, the executable split into one assembly file per function, a build that reproduces the original byte for byte, asset maps, and the C proven function by function, then built into the game, in ten steps."
 ---
 
 # Kicking off a Dreamcast decomp
 
-The goal is a decomp that goes from the disc to proven C for every function, and then to the game built from that C, in nine steps: it rebuilds the original executable
+The goal is a decomp that goes from the disc to proven C for every function, and then to the game built from that C, in ten steps: it rebuilds the original executable
 byte for byte, every function is its own file, the names come from the SDK, and the C is proven function by function.
-A function is done when its C behaves like the original (Equivalent: `tools/equiv.py` runs both
-in an SH-4 interpreter on test cases and compares calls, writes and result); byte-identical C
-(Matching) is the bonus tier. The repo's build keeps matching the original either way.
+A function is done when its C is **Equivalent** (`tools/equiv.py` runs both
+in an SH-4 interpreter on test cases and compares calls, writes and result) or **Matching** (its C rebuilds the original
+bytes, one source file at a time). The repo's `MODE` in `status.txt` says which. The repo's build keeps matching the original either way.
 
 ## The steps (hard rules)
 
-Every run follows these nine steps, in this order, under these exact titles: six to proven C for every function, then three to build,
-run and stabilise the game from it. They are the milestones of the run, and the README lists the same nine. The user can stop after any step or fork into their own strategy; you never skip a step, reorder them or merge them.
+Every run follows these ten steps, in this order, under these exact titles: six to proven C for every function, then three to build,
+run and stabilise the game from it, then the native port. They are the milestones of the run, and the README table lists the same ten. The user can stop after any step or fork into their own strategy; you never skip a step, reorder them or merge them.
 
 | # | Title                               | What it covers                                                                                          | Where                                                 |
 |---|-------------------------------------|---------------------------------------------------------------------------------------------------------|-------------------------------------------------------|
@@ -27,11 +27,12 @@ run and stabilise the game from it. They are the milestones of the run, and the 
 | 7 | Code size reduction                 | the proven C made small enough to fit where the original code was, still proven                         | [Step 7](#step-7-code-size-reduction)                 |
 | 8 | Build from C                        | the executable built from the C, the image checks, a disc to play                                       | [Step 8](#step-8-build-from-c)                        |
 | 9 | Runtime repairs                     | the disc run on the console or an emulator, each stop traced to its function and its step, `status.txt` | [Step 9](#step-9-runtime-repairs)                     |
+| 10 | Native port                        | tooling to run the game on a host from the proven C                          | [Step 10](#step-10-native-port)                       |
 
 How a step is run:
 1. **List the steps to the user, with their titles, before anything starts.**
-2. **Delimit every step.** Print `=== Step N of 8: <title> ===` and one line on what it will do before it, and
-   `=== Step N of 8 done: <title> ===` after it.
+2. **Delimit every step.** Print `=== Step N of 10: <title> ===` and one line on what it will do before it, and
+   `=== Step N of 10 done: <title> ===` after it.
 3. **Report results at the end of every step**, with the numbers from `python3 tools/progress.py` (Equivalent C with generated and
    hand-written C apart, matching C, named, and the instruction coverage `equiv.py` reports). A step with nothing to count says so.
 4. **The user decides** at each boundary whether to go on. Interrupting is their risk; you repair nothing and keep no rollback state.
@@ -43,7 +44,7 @@ How a step is run:
 
 ## Getting the tools (do this first)
 
-This skill needs its own files (`scripts/`, `template/`, `references/`); the README's install
+This skill needs its own files (`scripts/`, `template/`, `docs/`); the README's install
 (a clone) brings them. If `scripts/tools/1-2-baseline/split_asm.py` is not next to this file,
 only `SKILL.md` was installed: fetch the tools yourself, without asking (they are this skill's own
 public code, not third-party material), into a tools folder (default `~/dc-tools`). The tools folder always has to be
@@ -57,7 +58,7 @@ git clone https://github.com/consolesplayingconsoles/dc-decomp-kickoff ~/dc-tool
 Then say one short line, "Tools ready: <version>" (the content of its `VERSION` file, or `git describe --tags --always`),
 with no advice on how the user could avoid it: they cannot.
 
-Then use that copy for every `scripts/...`, `template/...` and `references/...` path below. Do not
+Then use that copy for every `scripts/...`, `template/...` and `docs/...` path below. Do not
 rewrite the tools from this text unless the clone is impossible: they encode fixes that are easy to
 get wrong (multi-track discs, link address, regex blowups, linker quirks).
 
@@ -110,7 +111,7 @@ the output folder, so cleaning outputs never wipes them (ask the user where, if 
 minute or two): tell the user what is running and roughly how long before starting each.
 
 **Evidence:** what the skill did on each game it has been run on (numbers, what broke, what
-changed) is in `references/evidence.md`; the sections below state rules, not games. Everything the
+changed) is in `docs/evidence.md`; the sections below state rules, not games. Everything the
 skill uses is in its own folder.
 
 ## Run it one action at a time
@@ -165,13 +166,13 @@ committed: the repo shares as much as is safe.
 
 Before anything else, ask the user one question: start a new decomp, or upgrade one this skill
 started? Ask it as a real multiple-choice question (the client's question tool, `AskUserQuestion` in Claude Code) with two options, "New decomp" (recommended, first) and "Upgrade an existing decomp"; plain text only when
-there is no such tool. For an upgrade, ask for the repo's folder, then follow `references/upgrade.md` (it asks for
+there is no such tool. For an upgrade, ask for the repo's folder, then follow `docs/upgrade.md` (it asks for
 the target version: the latest tag recommended, `main` offered as the dev version, never recommended) and skip the
 procedure below.
 
 ## Procedure
 
-The nine steps, in order. Each one is announced and closed as the section above says.
+The ten steps, in order. Each one is announced and closed as the section above says.
 
 ### Step 1: Decomp project setup
 
@@ -185,10 +186,10 @@ The nine steps, in order. Each one is announced and closed as the section above 
    instead (a web browser shipped for online registration: `http` strings, a perfect SDK match and
    none of the game's text). A boot file with none of the game's text may only be a core that
    loads the game's code at runtime from other files (relocatable modules): this skill handles one
-   executable at a fixed address, so stop and say so (`references/evidence.md` has an example).
+   executable at a fixed address, so stop and say so (`docs/evidence.md` has an example).
 - **Base and fingerprint**: `scripts/linkbase.py`, `scripts/banners.py`. Note the SDK version the game used.
-   **Which SDK to ask for:** `python3 scripts/sdk_scan.py references/sdk-banners.tsv <1ST_READ.BIN>`
-   (`references/sdk-releases.md` lists every release with the file names it has been seen under, as
+   **Which SDK to ask for:** `python3 scripts/sdk_scan.py docs/sdk-banners.tsv <1ST_READ.BIN>`
+   (`docs/sdk-releases.md` lists every release with the file names it has been seen under, as
    search terms for the user)
    ranks the publicly preserved Katana releases by how many of the game's library builds they
    contain. A full match: ask the user for the path of the folder where they keep that release, and only that. The
@@ -231,7 +232,7 @@ The nine steps, in order. Each one is announced and closed as the section above 
    - SDK-wide: `scripts/sdk_sigs.sh <SDK folder> <out>` -> `<out>/katana-sdk.sigs`. Any SDK layout:
      the Hitachi tools and the `.lib` files are found by name. Build once per SDK and keep the table
      beside the SDK folders (not in a scratch dir): it is minutes to an hour of hashing to rebuild.
-     Details and gotchas: `references/sdk-signatures.md`.
+     Details and gotchas: `docs/sdk-signatures.md`.
      With the 1.55J folder too, run it again into a second folder (`<out155>/katana-sdk.sigs`) and
      apply both tables.
    - **Apply every table you have, all in one Ghidra run**, then `DcReport.java`:
@@ -274,7 +275,7 @@ The nine steps, in order. Each one is announced and closed as the section above 
      `v0.5+1a2b3c4` for a dev version, the commit `1a2b3c4` after tag `v0.5`; in a git checkout it is
      `git describe --tags --exact-match` if that succeeds, otherwise the last tag + `+` + the short commit;
      without git, the content of this skill's `VERSION` file (the last release); also in
-     `KICKOFF`, the version an upgrade starts from: `references/upgrade.md`), and `@PROGRESS@` (after the first `MATCH`: the
+     `KICKOFF`, the version an upgrade starts from: `docs/upgrade.md`), and `@PROGRESS@` (after the first `MATCH`: the
      output of `python3 tools/progress.py` in a ``` fence). No `@...@` may remain in those files
      (`grep -n '@[A-Z_]*@' README.md setup.sh disc.sh Makefile KICKOFF`; `tools/` has its own `@N@` tokens, ignore).
      In `README.md` keep the `<!-- MODE: ... -->` block for the repo's mode (`status.txt`'s `MODE` line; none: equivalent) and
@@ -299,7 +300,7 @@ The nine steps, in order. Each one is announced and closed as the section above 
    Kamui source dump, `--listings <dump folder>`): `python3 scripts/tools/1-2-baseline/sdk_masked.py <repo>
    <repo>/1ST_READ.BIN <table folder>... [--listings <folder>] --apply`, then `split_asm.py`
    and `bash build.sh` (`MATCH`). It names library code the hashes missed (internal library
-   builds, twin stubs, statics, starts the split missed; `references/sdk-signatures.md`).
+   builds, twin stubs, statics, starts the split missed; `docs/sdk-signatures.md`).
    Then `python3 tools/1-2-baseline/missed_funcs.py 1ST_READ.BIN <base> functions.txt`: code the analysis did
    not make into functions (callbacks reached only through tables, getters only through literal
    pools, state handlers merged into a neighbour, whole functions in a big gap when something
@@ -357,6 +358,8 @@ The nine steps, in order. Each one is announced and closed as the section above 
      misses text and flags noise. If a user wants it, warn them of that cost first. A contact sheet
      of all textures, looked at by a person, is the method this skill provides.
 
+The maps open in [Shuriken Explorer](https://github.com/consolesplayingconsoles/dc-shuriken-explorer), which reads them to show the game's models, textures, sounds and text.
+
 ### Step 4: Opportunity-driven optional boosts
 
 - **Extra material: ask the user, one short form.** Open with: "These are optional; the
@@ -388,7 +391,7 @@ The nine steps, in order. Each one is announced and closed as the section above 
    7. **A sibling decomp** (same team: games that link the same in-house library, an engine or maths layer no SDK table knows).
       An offer, never a search: work only with a repo whose path the user gives you, and never look through their other folders for one.
    Record each answer in the game's evidence entry. Only 1, 4, 6 and 7 feed a tool: 1 ->
-   `scripts/cheat_leads.py` (globals candidates, below); 4 -> `references/port-symbols.md`,
+   `scripts/cheat_leads.py` (globals candidates, below); 4 -> `docs/port-symbols.md`,
    symbols check first; 6 -> a symbol scan before anything else, then the strings diff; 7 -> `scripts/sibling_names.py`. 2, 3 and
    5 become references in the repo's docs, and names only when the source is itself a matching
    decomp (`ExportSigs.java`).
@@ -403,11 +406,12 @@ The nine steps, in order. Each one is announced and closed as the section above 
      before applying it. `cheat_leads.py fetch <title>` takes the list from libretro-database.
    - **Sibling decomp** (when the user gave a path): `python3 scripts/sibling_names.py <sibling repo> <repo>` proposes its names for exact
      masked matches that are unique both ways and lists the twins; `--apply`, then `split_asm.py` and `bash build.sh` (`MATCH`).
-   - **A later port, a prototype**: as above (`references/port-symbols.md`; the symbol scan), then `split_asm.py` and `bash build.sh` (`MATCH`).
+   - **A later port, a prototype**: as above (`docs/port-symbols.md`; the symbol scan), then `split_asm.py` and `bash build.sh` (`MATCH`).
    - End the step with `python3 tools/progress.py`: the names the extras added.
 
 ### Step 5: Incremental script-generated decomp
 
+- **Matching mode.** In a project with `MODE: matching` (`status.txt`) this step is matching C, one original source file at a time: `docs/matching-c.md`, `docs/matching-units.md`. The bullets below are the Equivalent mode's.
 - **Library sources (optional).** Ask the user for the Shinobi or Kamui library source dump (a path, or "no"). With it:
   `python3 tools/5-generated/sdk_source.py <source folder>...` in the repo. It
    compiles them with the SDK's own shc and keeps every function whose bytes they reproduce: the exact C goes to
@@ -422,8 +426,9 @@ The nine steps, in order. Each one is announced and closed as the section above 
 
 ### Step 6: Experience-driven agentic decomp
 
+- **Matching C.** Matching C, one source file at a time, is also written here (`docs/matching-c.md`).
 - **Hand over**: `template/AGENTS.md` is the loop and the steps; write the repo's plan into it (what is left, by pocket).
-   **Print the run as an evidence entry** (the format at the top of `references/evidence.md`:
+   **Print the run as an evidence entry** (the format at the top of `docs/evidence.md`:
    game, SDK by banners, counts, MATCH, text-map highlights, and what broke or surprised), and
    tell the user they can send it to the skill's repo as an issue so the next version learns from
    their game. Never write into the skill's own folder.
@@ -488,7 +493,7 @@ code had, so the build of step 8 leaves every other address of the executable wh
 - **Checks before the build**: `make c` first runs `tools/8-build/retcheck.py`: every function's C must return in the register the
   original returns in (`sts fpul,r0` / `mov ...,r0` is r0, a write to `fr0` is fr0); a mismatch stops the build. The pre-commit hook
   runs it too. `cbuild.py` refuses a C call into the middle of another C function, naming the address and the C line.
-- **Before the first build** (each one failed a build from C once; `references/evidence.md` has the cases):
+- **Before the first build** (each one failed a build from C once; `docs/evidence.md` has the cases):
   1. Missed functions: step 2's `missed_funcs.py` has run (`missed.txt`) and its findings are in `functions.txt`; a repo
      that passed step 2 before the tool existed runs it now. Code it misses is built as a data table, its pools break.
      Functions listed this late go back through the steps after 2 like any other: step 5 draws them, the rest is step 6.
@@ -507,13 +512,17 @@ code had, so the build of step 8 leaves every other address of the executable wh
   declaration from step 5), and fixed there, proven again, built again. Nothing is guessed from the symptom: the frame it stops in,
   its call graph from the original, the built image against the original (stale addresses, second copies, result registers), then
   the one function. Flycast's GDB server (program counter samples, memory reads) is the last resort when reading does not settle it.
-- **Known classes** (Crazy Taxi, 2026-10-24; `references/evidence.md`): constants read from the original's literal pools by address
+- **Known classes** (Crazy Taxi, 2026-10-24; `docs/evidence.md`): constants read from the original's literal pools by address
   (`tools/8-build/codeconsts.py --write` puts the values in); a C call into another function's middle from a wrong cut (`cbuild.py`
   refuses it); a result type declared on the wrong register (`tools/8-build/retcheck.py` refuses it).
 - **Badge**: one badge, `badges/progress.svg`. `status.txt` in the repo lists the statuses in order (`[x] BUILDS FROM C`,
   `[ ] BOOTS TO MENU`, `[ ] PLAYABLE`, `[?] STABLE`: `[x]` reached, `[ ]` tested and not reached, `[?]` not tested yet, shown as a question mark); each needs the ones above it, and progress.py stops on a tick under an
   untick. The badge lists the statuses from the first day, so a game that does not build from C yet shows BUILDS FROM C crossed.
-  `status.txt` also says the repo's mode on a line of its own, `MODE: equivalent` (the default, also when the line is missing) or `MODE: matching`: in a matching project a function is done only when its C rebuilds byte for byte, `progress.py` reports "done: matching C" without test coverage, and the repo's `AGENTS.md` says which of its sections apply to each mode. Every layout or build option beyond the default is opt-in (a `+` option in a unit's header, `--overlay` on `build.sh`, the overlay report only when `overlays.tsv` exists): a repo that uses none of them builds and reports as it always did, and `tests/fillopts`, `tests/units` and `tests/progress_mode` guard that. `references/matching-units.md` and `references/overlays.md` describe them.
+  `status.txt` also says the repo's mode on a line of its own, `MODE: equivalent` (the default, also when the line is missing) or `MODE: matching`: in a matching project a function is done only when its C rebuilds byte for byte, `progress.py` reports "done: matching C" without test coverage, and the repo's `AGENTS.md` says which of its sections apply to each mode. Every layout or build option beyond the default is opt-in (a `+` option in a unit's header, `--overlay` on `build.sh`, the overlay report only when `overlays.tsv` exists): a repo that uses none of them builds and reports as it always did, and `tests/fillopts`, `tests/units` and `tests/progress_mode` guard that. `docs/matching-units.md` and `docs/overlays.md` describe them.
+
+### Step 10: Native port
+
+Runs the game on a host from the proven C. It needs nothing from steps 7 to 9, so it can start once enough functions are proven; what it finds goes back to steps 2, 5 and 6.
 
 ## Rules
 
@@ -523,7 +532,7 @@ code had, so the build of step 8 leaves every other address of the executable wh
 
 ## Scripts
 
-Grouped by the step that first needs them (scripts, then templates, then references within each group).
+Grouped by the step that first needs them (scripts, then templates, then docs within each group).
 
 ### Tools for step 1: Decomp project setup
 
@@ -533,15 +542,15 @@ Grouped by the step that first needs them (scripts, then templates, then referen
 | `scripts/linkbase.py`                | pick the import base from self-pointer counts                                                                                                                                                                                                                                                    |
 | `scripts/banners.py`                 | SDK module banners: name, version, build date                                                                                                                                                                                                                                                    |
 | `scripts/sdk_from_iso.py`            | SDK 1.55J folder from its Vol.1 + Vol.2 disc images, checked against Redump                                                                                                                                                                                                                      |
-| `scripts/sdk_scan.py`                | which SDK release built the game: its library banners against `references/sdk-banners.tsv` or a folder of SDKs                                                                                                                                                                                   |
+| `scripts/sdk_scan.py`                | which SDK release built the game: its library banners against `docs/sdk-banners.tsv` or a folder of SDKs                                                                                                                                                                                   |
 | `scripts/is3_extract.py`             | InstallShield 3 installers (SETUP.EXE / .Z) as plain files: directory + PKWARE implode, stdlib                                                                                                                                                                                                   |
 | `scripts/sdk_unpack.sh`              | any SDK image or zip as plain files, InstallShield cabinets unpacked (`unshield-image/`)                                                                                                                                                                                                         |
 | `scripts/iso_extract.py`             | copy every file out of a disc image or zip (Joliet or ISO9660, no mounting)                                                                                                                                                                                                                      |
 | `scripts/tools/docker_check.sh`            | Docker installed vs running vs low memory, and the tools image on first use                                                                                                                                                                                                                      |
 | `scripts/tools/tools-image/Dockerfile`     | the `dc-tools` image: small Linux + pinned, checksum-verified wibo                                                                                                                                                                                                                               |
 | `scripts/tools/1-2-baseline/overlay_scan.py`            | classifies every file of an extracted disc (SH-4 code, ARM code, sound bank, texture, data) and proves whether it holds SH-4 code (`python3 tools/1-2-baseline/overlay_scan.py <dir> [--md]`) |
-| `references/sdk-banners.tsv`         | library banners (module, version, build date) of every preserved Katana release                                                                                                                                                                                                                  |
-| `references/sdk-releases.md`         | every Katana release: date, the file names it circulates under (search terms), what it gave; prototypes and dev kit dumps as material                                                                                                                                                            |
+| `docs/sdk-banners.tsv`         | library banners (module, version, build date) of every preserved Katana release                                                                                                                                                                                                                  |
+| `docs/sdk-releases.md`         | every Katana release: date, the file names it circulates under (search terms), what it gave; prototypes and dev kit dumps as material                                                                                                                                                            |
 
 ### Tools for step 2: Signature-driven baseline
 
@@ -555,10 +564,10 @@ Grouped by the step that first needs them (scripts, then templates, then referen
 | `scripts/tools/apply_bin.py`               | write a modified executable's changes into the repo's asm data words                                                                                                                                                                                                                             |
 | `scripts/tools/1-2-baseline/split_asm.py`               | split an executable into per-function asmsh sources + link order                                                                                                                                                                                                                                 |
 | `scripts/tools/1-2-baseline/units.py`                   | in the repo: the link order with C units in place of the asm files they replace                                                                                                                                                                                                                  |
-| `scripts/tools/1-2-baseline/fill.py`                    | in the repo: lay a C unit out like the original (nop alignment, 0xEE fill, exact size; every other layout is an opt-in `+` option of the unit's header, `references/matching-units.md`) |
+| `scripts/tools/1-2-baseline/fill.py`                    | in the repo: lay a C unit out like the original (nop alignment, 0xEE fill, exact size; every other layout is an opt-in `+` option of the unit's header, `docs/matching-units.md`) |
 | `scripts/tools/1-2-baseline/shc_flags.txt`              | in the repo: the `shc` flags of every C unit, read by `build.sh` and `fcmp.py` (a unit adds its own in its header; `+<x>flags` picks `shc_flags.<x>.txt`) |
 | `scripts/tools/fcmp.py`, `scripts/tools/permute.py`     | in the repo: compare a C unit with the original function by function, instruction by instruction; try meaning-preserving rewrites of one function (matching) |
-| `scripts/tools/overlay/`                                | in the repo: code overlays loaded from the disc (only a game with `overlays.tsv` uses them): survey, decompress and split, function lists, carry a unit to every copy, build and report (`references/overlays.md`) |
+| `scripts/tools/overlay/`                                | in the repo: code overlays loaded from the disc (only a game with `overlays.tsv` uses them): survey, decompress and split, function lists, carry a unit to every copy, build and report (`docs/overlays.md`) |
 | `scripts/sdk_txt.py`                 | mark the SDK's code (boot block, library block, single matches) as `sdk.txt`                                                                                                                                                                                                                     |
 | `scripts/tools/1-2-baseline/sdk_masked.py`              | after the tables: name more SDK functions by masked instructions, library layout and source listings (statics), link order as the check (stdlib)                                                                                                                                                 |
 | `scripts/tools/1-2-baseline/missed_funcs.py`            | list code the analysis did not make into functions                                                                                                                                                                                                                                               |
@@ -567,7 +576,7 @@ Grouped by the step that first needs them (scripts, then templates, then referen
 | `scripts/elf_debug_names.py`         | function names and addresses from an SHC ELF's DWARF 1 debug section (prototype or dev kit ELFs)                                                                                                                                                                                                 |
 | `template/disc.sh`                   | in the repo: build a playable disc image of the user's version                                                                                                                                                                                                                                   |
 | `template/build.sh`                  | assemble, compile C units, link (`start P(<base>)`), `elf2bin`, compare with the original                                                                                                                                                                                                        |
-| `references/sdk-signatures.md`       | naming library code from the SDK's libraries                                                                                                                                                                                                                                                     |
+| `docs/sdk-signatures.md`       | naming library code from the SDK's libraries                                                                                                                                                                                                                                                     |
 
 ### Tools for step 3: Asset mapping
 
@@ -586,8 +595,8 @@ Grouped by the step that first needs them (scripts, then templates, then referen
 | `scripts/sibling_names.py`           | names from a sibling decomp (same team, shared library): exact masked matches unique both ways, twins listed                                                                                                                                                                                     |
 | `scripts/cheat_leads.py`             | cheat codes (CodeBreaker/Xploder list) as named-variable leads                                                                                                                                                                                                                                   |
 | `scripts/ghidra/ExportFeatures.java` | per-function strings, constants, calls and globals, for port matching                                                                                                                                                                                                                            |
-| `scripts/port/*.py`                  | pair functions and globals with a port's symbols (`references/port-symbols.md`)                                                                                                                                                                                                                  |
-| `references/port-symbols.md`         | naming from a later port that kept its symbols (Android, iOS, PC builds)                                                                                                                                                                                                                         |
+| `scripts/port/*.py`                  | pair functions and globals with a port's symbols (`docs/port-symbols.md`)                                                                                                                                                                                                                  |
+| `docs/port-symbols.md`         | naming from a later port that kept its symbols (Android, iOS, PC builds)                                                                                                                                                                                                                         |
 
 ### Tools for step 5: Incremental script-generated decomp
 
@@ -603,9 +612,9 @@ Grouped by the step that first needs them (scripts, then templates, then referen
 | `scripts/tools/5-generated/diverge.py`                 | in the repo: why one function's generated C differs from the original: the first mismatching call and where each argument came from |
 | `scripts/tools/5-generated/overreads.py`               | in the repo: reruns the cases with junk in unused RAM, on the original and on the C, and lists the Equivalent C that reads memory the original does not (a report; it records nothing) |
 | `scripts/tools/5-generated/rawcalls.py`               | in the repo: C that calls original code by a raw address no function in `functions.txt` starts at (`equiv.py` passes it, a build from C has nothing to call): a new one fails, `tests/rawcalls_allowed.txt` is a ratchet that only shrinks; `--update` drops the fixed, `--allow` rewrites the list, `--list` shows every one |
-| `references/matching-units.md`        | matching C units: the `@unit` header (`@data`, `@ddata`, `@bdata`, units in folders), the opt-in `+` options (`+pool32`, `+synth16`, `+<x>flags`, `+r04`, ...), `fcmp.py` and `permute.py`; what changes between the two modes |
-| `references/overlays.md`             | games with code overlays: `overlays.tsv`, `overlays/<name>/`, `build.sh --overlay`, `build_overlays.sh`, `in.sh`, carrying a unit to every copy |
-| `references/equivalent-pipeline.md`  | writing Equivalent C at scale: the three checks, what the check compares, the lock for parallel workers, the worker brief                                                                                                                                                                        |
+| `docs/matching-units.md`        | matching C units: the `@unit` header (`@data`, `@ddata`, `@bdata`, units in folders), the opt-in `+` options (`+pool32`, `+synth16`, `+<x>flags`, `+r04`, ...), `fcmp.py` and `permute.py`; what changes between the two modes |
+| `docs/overlays.md`             | games with code overlays: `overlays.tsv`, `overlays/<name>/`, `build.sh --overlay`, `build_overlays.sh`, `in.sh`, carrying a unit to every copy |
+| `docs/equivalent-pipeline.md`  | writing Equivalent C at scale: the three checks, what the check compares, the lock for parallel workers, the worker brief                                                                                                                                                                        |
 
 ### Tools for step 6: Experience-driven agentic decomp
 
@@ -616,12 +625,12 @@ Grouped by the step that first needs them (scripts, then templates, then referen
 | `scripts/tools/6-agentic/poollist.py`                | in the repo: a function's literal pool as functions, RAM addresses (named, or MISSING) and numbers                                                                                                                                                                                               |
 | `scripts/tools/shdis.py`                   | in the repo: SH-4 disassembly with FPU, pool values and names (stdlib)                                                                                                                                                                                                                           |
 | `scripts/tools/4-boosts/live.py`                    | in the repo, optional: read, watch and write the running game by address or name, screenshots, pad input (RetroArch + Flycast core over its network ports, stdlib)                                                                                                                               |
-| `scripts/gdbsnap.py`                 | in the repo, optional: RAM snapshots of the running game over Flycast's GDB server (a build with `ENABLE_GDB_SERVER`), timelines, and what changed between two snapshots with the nearest global names; live data in `references/agentic-decomp.md` (stdlib)                                              |
+| `scripts/gdbsnap.py`                 | in the repo, optional: RAM snapshots of the running game over Flycast's GDB server (a build with `ENABLE_GDB_SERVER`), timelines, and what changed between two snapshots with the nearest global names; live data in `docs/agentic-decomp.md` (stdlib)                                              |
 | `scripts/tools/6-agentic/handcase.py`                  | in the repo: prove a function on cases written by hand, with the C the generator writes |
 | `scripts/tools/6-agentic/poolconst.py`                 | in the repo: the C's reads of the original's literal pools become constants (or the function's name) |
 | `scripts/tools/6-agentic/codeaddr.py`                  | in the repo: a game function's address written as a number becomes its name; numbers inside a function are listed |
 | `scripts/tools/6-agentic/unpoke_code.py`               | in the repo: takes the code out of what a test case may change (`layout.txt` `code`) |
-| `references/matching-c.md`           | getting a source file to match: units, flags, fill, idioms, compare loop                                                                                                                                                                                                                         |
+| `docs/matching-c.md`           | getting a source file to match: units, flags, fill, idioms, compare loop                                                                                                                                                                                                                         |
 
 ### Tools for step 7: Code size reduction
 
@@ -659,7 +668,7 @@ Grouped by the step that first needs them (scripts, then templates, then referen
 | `template/README.md`                 | the repo's README, with `@PLACEHOLDERS@` to fill                                                                                                                                                                                                                                                 |
 | `template/AGENTS.md`                 | the decompilation loop for whoever works in the repo                                                                                                                                                                                                                                             |
 | `template/gitignore`                 | the repo's `.gitignore`: keeps game and SDK material out of git (asm, executable, disc, build, text map)                                                                                                                                                                                         |
-| `references/evidence.md`             | each game the skill was run on: numbers, what broke, what changed                                                                                                                                                                                                                                |
-| `references/memory-map.md`           | Dreamcast addresses worth labelling on sight                                                                                                                                                                                                                                                     |
-| `references/upgrade.md`              | bringing a repo this skill started to a newer skill version: versions, `KICKOFF`, the steps                                                                                                                                                                                                      |
+| `docs/evidence.md`             | each game the skill was run on: numbers, what broke, what changed                                                                                                                                                                                                                                |
+| `docs/memory-map.md`           | Dreamcast addresses worth labelling on sight                                                                                                                                                                                                                                                     |
+| `docs/upgrade.md`              | bringing a repo this skill started to a newer skill version: versions, `KICKOFF`, the steps                                                                                                                                                                                                      |
 

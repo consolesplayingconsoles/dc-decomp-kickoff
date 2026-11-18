@@ -54,4 +54,4 @@ A difference no rewording moves is worth checking against another compiler relea
 
 ## Code overlays
 
-A game that loads code from the disc at run time (stages, bosses, events) has overlays: `references/overlays.md`.
+A game that loads code from the disc at run time (stages, bosses, events) has overlays: `docs/overlays.md`.
