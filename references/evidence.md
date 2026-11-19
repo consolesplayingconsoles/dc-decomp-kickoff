@@ -266,6 +266,13 @@ as an issue) to add a game.
 - Ruled out on the way: a "578 KB overwrite" in a RAM dump was an artifact of bulk reads through the 8C mirror (read at 0C,
   as `gdbsnap.py` says); the Flycast GDB build boots with reios, not the real BIOS.
 
+### Zombie Revenge (Europe), MK-51038 V1.000
+- Run: skill `unstable` (`KICKOFF`); `status.txt` ticks builds from C, boots to menu, playable, stable
+- Executable: 10299711 bytes, linked at 0C010000
+- Functions: 5848, of which 5197 can be C and 160 have no C form; all 5197 are Equivalent C, total test coverage 68.5%
+- Build: the movable build from the C (`make c`) plays
+- What broke or surprised: "The last few percent" (with Virtua Tennis) and "Step 9 on Zombie Revenge", below
+
 ### Boku Doraemon (Japan), T-41802M V1.003
 - Run: 2026-10-05 (v0.4) and 2026-10-06 (v0.5, on macOS and in Claude: same
   names)
@@ -360,6 +367,22 @@ as an issue) to add a game.
   found by eye on the texture page. The same four were solved on Boku Doraemon
 - What changed in the skill: the text map lists every image (`images.tsv`) instead of guessing
   which ones have text
+
+### Sonic Adventure (Europe), MK-51000 V1.003
+- Run: kicked off 2026-10-15 (skill unstable), on macOS
+- Executable: 6,735,296 bytes, linked at 0x8C010000; SDK by banners: Shinobi 1.41, Kamui 1.06, Ninja 01000081 (Feb-Mar 1999),
+  ntUtl 2.00 (Aug 1999), CRI ADX 5.5x
+- Functions: 6,022 in the executable; named: 4,417 (1,088 at the kick-off); build: MATCH
+- Overlays: 200 of the 232 disc files with code (stages, bosses, events, Chao), 21,074 functions, 12,483 named; 32 files out
+  of scope, each with its reason in `overlays.tsv`
+- C units: a matching decomp. 48.5% of the executable's functions (9.2% of its bytes) and 6,663 overlay functions in 1,045
+  units rebuilt byte for byte; most of the C comes from the matching decompilation of the Japanese release
+  (reshaped/sonic-adventure), ported to this release
+- SDK source: 256 library functions whose bytes the supplied SDK source reproduces (`sdk-verified.txt`)
+- What broke or surprised -> what changed in the skill: the game's own code matches an older compiler than the SDK units
+  (SHC 5.1 Release 4 against Release 13) -> units can name their compiler (`+r04`, `SDK_R04_PATH`); most of the game's code is
+  in overlays on the disc, each linked at its own address -> `overlays.tsv` and `build_overlays.sh`, the overlays
+  counted apart in the progress report (`tools/overlay/progress.py`)
 
 ### Dev kit dumps (sega-dreamcast-info.com, 11 "Set 5" Katana kits on archive.org)
 - Run: 2026-10-08, three kits opened (Tower of Babel 70 MB, Rage Software 0.2 GB, Eurocom 1.4 GB)
