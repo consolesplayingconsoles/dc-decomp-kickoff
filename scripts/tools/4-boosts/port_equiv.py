@@ -68,6 +68,16 @@ def repo(path):
     return r
 
 
+def repo_c_files(path):
+    """the C files of the repo at path, the game's then the SDK's (tools/layout.py), as paths inside it"""
+    import layout
+    cwd = os.getcwd()
+    os.chdir(path)
+    try:
+        return layout.c_files()
+    finally:
+        os.chdir(cwd)
+
 def code(r, a, sz):
     return M.words(r['exe'], a - r['base'], sz // 2)
 
@@ -137,10 +147,11 @@ def main(argv):
     only = set(args[2:])
     # candidates: Equivalent functions by source file
     files = {}
-    for f in sorted(os.listdir(os.path.join(src['path'], 'src'))):
-        if not f.endswith('.c') or (only and 'src/' + f not in only and f not in only):
+    for rel in repo_c_files(src['path']):
+        f = os.path.basename(rel)
+        if only and rel not in only and 'src/' + f not in only and f not in only:
             continue
-        text = open(os.path.join(src['path'], 'src', f), errors='replace').read()
+        text = open(os.path.join(src['path'], rel), errors='replace').read()
         if text.startswith('/* @unit'):
             continue
         _, defs = split_c(text)

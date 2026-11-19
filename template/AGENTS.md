@@ -36,9 +36,9 @@ byte for byte too). Say which step you are in, and end it with `python3 tools/pr
 | 5 | Incremental script-generated decomp | `tools/5-generated/sdk_source.py <folder>`, `python3 tools/5-generated/gen_equiv`, `python3 tools/5-generated/gen_equiv --retest` |
 | 6 | Experience-driven agentic decomp | you: pocket by pocket (library without source, the game's own code, runtime routines and tables), writing cases for the branches `equiv.py` says no case ran; RAM dumps (`"dump"`) for what depends on run-time state |
 | 7 | Code size reduction | `tools/7-reduction/`: `shrink.py <name> ...` writes a function again and keeps the new C only when it compiles smaller and still passes its cases; `hoist.py [--loose] [--apply] <name> ...` holds a value the C reloads at every use in a local, as the original did. The target is the room the original code had: `make c` stops at `layout` while the C does not fit |
-| 8 | Build from C | `make c` (`tools/8-build/retcheck.py` first: every function's result register against its declaration; then the executable from the C, build/cbuild/game.bin), `make disc GDI="<disc>.gdi"` (a disc image with it). The steps are `tools/8-build/cbuild.py` prep, compile, prelim, unity, layout, link; the regions come from `layout.txt` (`tools/layout.py`). The check: the image has the original size, and outside the game code only the pointer words to game functions differ |
+| 8 | Build from C | The SDK and the other libraries stay the original bytes by default; building them from C as well is possible, and is work for the user. `make c` (`tools/8-build/retcheck.py` first: every function's result register against its declaration; then the executable from the C, build/cbuild/game.bin), `make disc GDI="<disc>.gdi"` (a disc image with it). The steps are `tools/8-build/cbuild.py` prep, compile, prelim, unity, layout, link; the regions come from `layout.txt` (`tools/layout.py`). The check: the image has the original size, and outside the game code only the pointer words to game functions differ |
 | 9 | Runtime repairs | Traces each stop to its function and the step that caused it, fixes it there and builds again until the game is stable; Flycast GDB is the last resort when reading does not settle it. `status.txt` records how far it gets: `[x]` reached, `[ ]` tested and not reached, `[?]` not tested yet |
-| 10 | Native port | Runs the game on a host from the proven C; how to debug it is in "Debugging the native port" below. It needs nothing from steps 7 to 9; what it finds goes back to steps 2, 5 and 6 |
+| 10 | Native port | Runs the game on a host from the proven C (experimental). The steps are in `port/README.md`; `port/runtime/game.h` is the only per-game file. The console build and the decomp are complete without the SDK as C; for a port, every SDK function needs C except the hardware drivers (`sdk.txt`'s `hardware` lines); how to debug it is in "Debugging the native port" below. It needs nothing from steps 7 to 9; what it finds goes back to steps 2, 5 and 6 |
 
 If you are the session that ran the kickoff and the user chose to continue, this file is your instructions. If you are a new session,
 you are a guided agent: read this file, run `python3 tools/progress.py` to see where the run stands, and start at the first step not done.
@@ -57,6 +57,7 @@ instruction no case ran is a branch nobody checked. Details: the kickoff skill's
   replaces every asm file in that range (`tools/1-2-baseline/units.py`, `tools/1-2-baseline/fill.py`). A unit with constant
   data (tables, strings) adds `@data <dstart>-<dend>`: the range where the original link put that data. Its ends are
   `D <addr> 0 data_<addr>` lines in `functions.txt` (data boundaries, not counted as functions).
+- `sdk/<library>/<file>.c`: the SDK's C (the bundled libraries of `sdk.txt`), one folder per library (`shinobi/`, `kamui/`, `naomi/`, `runtime/`, `sofdec/`). A file is found by its name without `.c`, which is unique across `src/` and `sdk/`; its cases stay in `tests/<name>/`. The console build compiles `src/` alone and gives the same executable with `sdk/` there or not; a port builds from both.
 - `symbols.txt`: `<addr> <name>` for what the C uses that no file defines yet (RAM, data still inside
   asm); the linker gets them as defines.
 - `sdk.txt`: the bundled Sega SDK's code. `python3 tools/progress.py` reports the state.
@@ -143,7 +144,7 @@ Games differ, so there is no fixed order. Try a tool on a small sample, note wha
 | `tools/5-generated/remaining.py` | Choosing what to take next | Functions and bytes per state, and per cause |
 | `tools/5-generated/diverge.py <function>` | A generated function differs from the original | The first mismatching call and where each side's value came from |
 | `tools/5-generated/overreads.py src/<file>.c [function ...]` | A build from C runs in the emulator but not on the console, or before trusting a file of proven C | Functions whose C differs from the original when unused RAM holds junk instead of 0 (reads memory the original does not); how many cases touched unset memory at all |
-| `tools/consistency.py` (`--fix`) | After several runs overlapped, or before a commit | C defined twice, cases without C, C without a recorded pass, a call without an argument the original sets (`short call`) |
+| `tools/consistency.py` (`--fix`) | After several runs overlapped, or before a commit. It is expensive: it needs the operator's approval each time | C defined twice, cases without C, C without a recorded pass, a call without an argument the original sets (`short call`) |
 | `tools/1-2-baseline/sdk_identical.py` | Functions that look like the SDK's own library code | Functions byte-identical to the compiled SDK libraries |
 | Hand-written C with cases | The tools above have run dry | Functions per hour, in the order below |
 
@@ -200,16 +201,17 @@ check each caller against the registers the original sets before the call.
 ## Debugging the native port (step 10) *(equivalent)*
 The port is an ordinary host program with symbols. Ask the running program; do not rebuild to ask.
 
+For a port, the SDK code at 100% is required: nothing on the host runs the original SDK, so every SDK function without C is a gap. The `SDK` rows of `tools/progress.py` show how many have C.
+
 - **Use the host's tools first.** A debugger stops the game in a function by name and shows its arguments, its locals and
   the call stack; a watchpoint on a record names the function that writes the bad value at the moment it does. Checkers for
   uninitialised reads and out-of-bounds accesses flag lost arguments as they happen. One build answers many questions.
-- **Do not bisect by rebuilding.** Swapping a group of functions and running again costs minutes and answers yes or no. On
-  one game a day of such runs moved nothing; treat a second rebuild for the same question as the sign to stop and look
-  inside the process instead.
+- **Do not bisect by rebuilding.** Swapping a group of functions and running again costs minutes and answers yes or no.
+  Treat a second rebuild for the same question as the sign to stop and look inside the process instead.
 - **The picture is the last symptom, not the instrument.** Before reading frames, have the port print the state the
   picture depends on (the game's mode, the camera's eye and target, the texture memory left, the configuration block) once
-  a second. A "missing world" was, in turn, a hardware register the host left at 0, a renderer that mishandled very large
-  coordinates, and a view from the wrong place: three causes with one picture.
+  a second. A "missing world" was, in turn, a hardware register the host left at 0, an argument order the SH-4 does not care
+  about, and matrix register pairs loaded in the wrong order: three causes with one picture.
 - **A run that ends is not a run that passed.** Read the log's last lines: a fault near the time limit looks like the time
   limit. Have the port print where it was (host stack by function name) whenever it stops.
 - **Take ground truth from the emulator's memory, not from guesses.** The same words read in the emulator and in the port
@@ -221,6 +223,12 @@ The port is an ordinary host program with symbols. Ask the running program; do n
 - **List what the game calls by address.** Have the port report each address it is called at that `functions.txt` does not
   list, once, with a count at exit: the list is short, and it names the unlisted functions and the jumps into the middle of
   one that the C makes.
+- **Read a crash by name.** A fault report's host addresses (`rip=...`, `callers ...`) go through `tools/10-port/where.sh`,
+  which gives the functions and source lines.
+- **Run it unattended.** `--keys FRAME:BUTTON,...` presses buttons at given frames, and `--screenshot-every N FILE` saves the
+  screen, so a path through the menus runs with no one at the keyboard.
+- **A stopped picture is a wait.** The watchdog's "no frame for N s" means the game waits on something the runtime never
+  gives; the game thread's position in the report says what.
 
 What a port finds that `tools/equiv.py` cannot see, because the SH-4 puts the values in the same places either way and the
 host does not. Each goes back to the C of the decomp by its documented step; none is patched in the port:

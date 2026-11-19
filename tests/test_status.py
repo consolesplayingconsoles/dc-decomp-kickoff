@@ -33,11 +33,9 @@ def lift(name):
 
 
 def marks():
-    """The three marks the badge call gives the states, read from the source: {True: tick, False: cross, None: question mark}."""
-    src = open(PROGRESS, encoding='utf-8').read()
-    m = re.search(r"extra=\[\(n, (.*?)\) for n, on in status\]", src)
-    expr = m.group(1)
-    return {state: eval(expr, {}, {'on': state}) for state in (True, False, None)}
+    """The three marks the badge gives the states, from progress.py's mark(): {True: tick, False: cross, None: question mark}."""
+    mark = lift('mark')
+    return {state: mark(state) for state in (True, False, None)}
 
 
 def run(statuses, text):
@@ -88,6 +86,15 @@ class TestStatus(unittest.TestCase):
         out, err = run(statuses, '# comment\n[x] BUILDS FROM C\n\n[x] BOOTS TO MENU\n[ ] PLAYABLE\n[?] STABLE\n')
         if err or out != [('BUILDS FROM C', True), ('BOOTS TO MENU', True), ('PLAYABLE', False), ('STABLE', None)]:
             bad.append('states: expected True, True, False, None, got %s %s' % (out, err or ''))
+        out, err = run(statuses, '[x] BUILDS FROM C\n[x] [ ] BOOTS TO MENU\n[x] [?] PLAYABLE\n[ ] [ ] STABLE\n[ ] NATIVE PORT\n')
+        if err or out != [('BUILDS FROM C', True), ('BOOTS TO MENU', True, False), ('PLAYABLE', True, None), ('STABLE', False, False), ('NATIVE PORT', False)]:
+            bad.append('columns: two marks are Dreamcast then Native, got %s %s' % (out, err or ''))
+        out, err = run(statuses, '[x] BUILDS FROM C\n[x] [ ] BOOTS TO MENU\n[x] [x] PLAYABLE\n')
+        if not err or 'PLAYABLE' not in err:
+            bad.append('columns: a Native tick under a Native cross must be an error naming the tick, got %s %s' % (out, err or ''))
+        out, err = run(statuses, '[x] BUILDS FROM C\n[ ] [x] BOOTS TO MENU\n[ ] [ ] PLAYABLE\n')
+        if err:
+            bad.append('columns: Native may be ahead of Dreamcast (each column has its own order), got %s' % err)
         out, err = run(statuses, '[x] BUILDS FROM C\n[x] BOOTS TO MENU\n[x] PLAYABLE\n[?] STABLE\n')
         if err or out[-1] != ('STABLE', None):
             bad.append('order: a question mark under ticks must pass, got %s %s' % (out, err or ''))
@@ -98,8 +105,8 @@ class TestStatus(unittest.TestCase):
         if not err or 'line 2' not in err:
             bad.append('syntax: an unknown mark must be an error naming its line, got %s %s' % (out, err or ''))
         src = open(PROGRESS, encoding='utf-8').read()
-        if re.search(r"extra=\[\(n, .*? for n, on in status\] if reached", src):
-            bad.append('gate: the badge lists the statuses only once one is ticked; a project whose build still fails must show BUILDS FROM C crossed')
+        if re.search(r"extra=\[.*? if reached\b", src):
+            bad.append('gate: the badge shows the grid only once one is ticked; it must show from the first day')
         mk = marks()
         if len(set(mk.values())) != 3 or mk[True] != '✅' or mk[False] != '❌' or mk[None] != '❓':
             bad.append('marks: expected tick, cross and question mark for True, False, None, got %r' % mk)

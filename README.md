@@ -13,7 +13,7 @@ dc-decomp-kickoff is a **full decomp toolset**, from the disc to a game that pla
 * **Builds the game** and a disc image from the C
 * **Runtime repair** with Flycast GDB and a serial debugger (cable required)
 * **Agent plan, rules and tools** in `AGENTS.md`
-* **Native port tooling**
+* **Native port tooling** (experimental): the build tools of step 10 and a runtime scaffold in `port/`
 
 The process was worked out on real Dreamcast decomps and is refined with every game that goes through it, so each decomp is easier than the last.
 
@@ -34,9 +34,9 @@ follow your own strategy. Every step ends by printing the project's progress.
 | 5  | **Incremental script-generated decomp** | SDK library sources                  | Matches the SDK's own library source against the original bytes, then proves script-generated C, with directed test cases for what it misses. Matching projects do matching C here.           |
 | 6  | **Experience-driven agentic decomp**    |                                      | Takes what is left one pocket at a time, writing C and test cases until each function is proven. The plan is in `AGENTS.md`.                                                                  |
 | 7  | **Code size reduction**                 |                                      | Shrinks the compiled C to the size of the original game code; a smaller function replaces the old one only if still proven.                                                                   |
-| 8  | **Build from C**                        | The disc as a `.gdi`                 | Builds the executable and a disc image from the C (`make disc GDI="your disc.gdi"`).                                                                                                          |
+| 8  | **Build from C**                        | The disc as a `.gdi`                 | Builds the executable and a disc image from the C (`make disc GDI="your disc.gdi"`). The SDK stays the original bytes by default; building it from C too is possible, and is work on your side.                                                                                                          |
 | 9  | **Runtime repairs**                     | Flycast GDB, serial cable (optional) | Traces each stop to its function and step, fixes it there and builds again, until the game is stable (`status.txt`: boots to menu, playable, stable). Flycast GDB and a serial debugger help. |
-| 10 | **Native port**                         |                                      | Native port tooling on top of the proven C, for running the game outside the console.                                                                                                         |
+| 10 | **Native port**                         | Docker, your disc (`.gdi`)           | Native port tooling on top of the proven C, for running the game outside the console as an x86-64 Linux program (experimental). For a port, every SDK function needs C except the hardware drivers. |
 
 **Note:** dc-decomp-kickoff never downloads games, SDKs or any material that contains IP, and the heavy files are yours to hand over. Claude Code is preferred: Claude chat is less automatic and will ask you to run some commands yourself.
 
@@ -88,7 +88,7 @@ Install the whole folder when possible. Where only [SKILL.md](SKILL.md) can be a
 
 **What you provide:** the game disc as a `.gdi` with its track files (only `.gdi`) and a Katana SDK. dc-decomp-kickoff reads the disc and reports which SDK
 release it was built with; that release's library sources, or those of another release, are accepted as well. Python 3 is required
-wherever it runs, and Docker on any OS. Without Docker (Linux x86_64 only), `scripts/setup_tools.sh` installs the tools
+wherever it runs, and Docker on any OS. Without Docker (Linux x86_64 only), [`scripts/setup_tools.sh`](scripts/setup_tools.sh) installs the tools
 dc-decomp-kickoff needs, one step at a time. To debug the running game you need Flycast, or a serial cable for real hardware.
 
 **Optional, and worth having:** each of these saves work, and the earlier it is used the more it saves (the SDK's own source is the clearest case). dc-decomp-kickoff asks for them

@@ -257,7 +257,7 @@ The ten steps, in order. Each one is announced and closed as the section above s
    data words, exported labels, `objects.txt` in link order.
 - **Make the repo publishable and build it.** A pushed repo holds no game bytes, so it must be
    able to regenerate them from each user's own disc. Into the repo:
-   - copy `template/` (`build.sh`, `setup.sh`, `disc.sh`, `textures.sh`, `Makefile`, `models.txt`, `README.md`, `AGENTS.md`, `KICKOFF`, `status.txt`),
+   - copy `template/` (`build.sh`, `setup.sh`, `disc.sh`, `textures.sh`, `Makefile`, `models.txt`, `README.md`, `AGENTS.md`, `KICKOFF`, `status.txt`, `port/` (the native port's runtime, experimental: its README)),
      and `template/gitignore` as **`.gitignore`** (shipped without the dot: some installs drop
      dotfiles);
    - copy `scripts/tools/` whole as **`tools/`** (without `__pycache__`): one folder per step (`1-2-baseline/` to `8-build/`,
@@ -477,7 +477,7 @@ code had, so the build of step 8 leaves every other address of the executable wh
   the file before it), `code` (what the cases may not write to), `spare` (unused RAM, test builds only). Read it off the RAM map:
   the boot code, the entry, the libraries, the data and the SDK stay where they are. **`game` is the game's own code only**: the
   library ranges of `sdk.txt` (SDK, NAOMI, the C runtime) and the data blocks stay outside it, as the original bytes, and are not
-  compiled from the C. A `game` line that spans the whole executable rebuilds the libraries at the C's size for nothing: Virtua
+  compiled from the C by default. The SDK's C, where there is some, lives in `sdk/<library>/`: the console build compiles `src/` alone, a port builds from both. Building the SDK from C as well is possible, but it is not the default and needs work on the user's side. A `game` line that spans the whole executable rebuilds the libraries at the C's size for nothing: Virtua
   Tennis lost about 45 KB of its budget that way (SDK +27 KB, NAOMI and runtime +19 KB by function sizes) and spent a day
   shrinking code that should not have been in the build. The libraries are Sega's: a build takes them as the original bytes, or links them from
   the user's own SDK (bring your own SDK), never from C of ours. A library or data block in the middle of the game code is a `keep`
@@ -515,14 +515,13 @@ code had, so the build of step 8 leaves every other address of the executable wh
 - **Known classes** (Crazy Taxi, 2026-10-24; `docs/evidence.md`): constants read from the original's literal pools by address
   (`tools/8-build/codeconsts.py --write` puts the values in); a C call into another function's middle from a wrong cut (`cbuild.py`
   refuses it); a result type declared on the wrong register (`tools/8-build/retcheck.py` refuses it).
-- **Badge**: one badge, `badges/progress.svg`. `status.txt` in the repo lists the statuses in order (`[x] BUILDS FROM C`,
-  `[ ] BOOTS TO MENU`, `[ ] PLAYABLE`, `[?] STABLE`: `[x]` reached, `[ ]` tested and not reached, `[?]` not tested yet, shown as a question mark); each needs the ones above it, and progress.py stops on a tick under an
-  untick. The badge lists the statuses from the first day, so a game that does not build from C yet shows BUILDS FROM C crossed.
+- **Badge**: one badge, `badges/progress.svg`. The main metrics are large: covered functions and covered bytes; the secondary ones are small: test coverage and the matching percentage. Below them, a grid of four checks (BUILDS FROM C, BOOTS TO MENU, PLAYABLE, STABLE) in two columns, Dreamcast and Native. `status.txt` in the repo lists the statuses in order: `[x] [ ] BUILDS FROM C`, `[ ] [ ] BOOTS TO MENU`, `[ ] [?] PLAYABLE`, `[?] [?] STABLE`, `[ ] NATIVE PORT`. A line with two marks is Dreamcast then Native and is on the badge; a line with one mark is not. `[x]` reached, `[ ]` tested and not reached, `[?]` not tested yet, shown as a question mark. Each needs the ones above it in its own column, and progress.py stops on a tick under an
+  untick. The badge shows the grid from the first day.
   `status.txt` also says the repo's mode on a line of its own, `MODE: equivalent` (the default, also when the line is missing) or `MODE: matching`: in a matching project a function is done only when its C rebuilds byte for byte, `progress.py` reports "done: matching C" without test coverage, and the repo's `AGENTS.md` says which of its sections apply to each mode. Every layout or build option beyond the default is opt-in (a `+` option in a unit's header, `--overlay` on `build.sh`, the overlay report only when `overlays.tsv` exists): a repo that uses none of them builds and reports as it always did, and `tests/fillopts`, `tests/units` and `tests/progress_mode` guard that. `docs/matching-units.md` and `docs/overlays.md` describe them.
 
 ### Step 10: Native port
 
-Runs the game on a host from the proven C. It needs nothing from steps 7 to 9, so it can start once enough functions are proven; what it finds goes back to steps 2, 5 and 6.
+Runs the game on a host from the proven C, as an x86-64 Linux program (experimental). The repo's `port/` is the runtime: fill in `port/runtime/game.h` from `functions.txt` and `globals.txt`, build the container from `port/Dockerfile`, then build, extract the disc's files and run as `port/README.md` lists. The game on the console does not need the SDK decompiled: it stays the original bytes in the build, and the decomp is complete without it. For a port every SDK function needs C, except the hardware drivers (`sdk.txt`'s `hardware` lines), which the runtime replaces (the `SDK` rows of `progress.py` show how many functions have C). It needs nothing from steps 7 to 9, so it can start once enough functions are proven; what it finds goes back to steps 2, 5 and 6. It is reached when `status.txt`'s `NATIVE PORT` is ticked: the game plays on the host.
 
 ## Rules
 
@@ -606,6 +605,7 @@ Grouped by the step that first needs them (scripts, then templates, then docs wi
 | `scripts/tools/equiv.py`                   | in the repo: compiles a C file and checks each function against the original on its test cases (`tests/<file>/<function>.json`); the Equivalent tier, written to `tests/equivalent.txt`; each result also says how many of the original's instructions the cases ran (coverage)                  |
 | `scripts/tools/5-generated/gen_equiv/`                 | in the repo as `tools/5-generated/gen_equiv`: writes Equivalent C for functions that need no thinking (script-generated: report it apart from hand C); `--regen <name> ...` writes generated functions again after a generator fix, keeping the old C unless the new is proven; `--retest` draws the cases again, guided by the original's instruction coverage, and lists functions whose C fails on them; `--draw src/<file>.c` draws coverage-guided cases for C you wrote by hand (arguments from the prototype, memory behind pointers, answers for calls) |
 | `scripts/tools/5-generated/sdk_source.py`              | in the repo: compiles the library sources the user supplied with the SDK's shc; the functions whose bytes they reproduce go to `sdk-source/` (exact C, git-ignored) and `sdk-verified.txt` (names, counted by `progress.py`)                                                                     |
+| `scripts/tools/5-generated/sdk_dups.py`                | in the repo: one C per function: lists the C in `src/` for functions the SDK's own source already reproduces; `--fix` removes the second C, its cases and its record                                                                                                                              |
 | `scripts/tools/5-generated/audit_equivalent.py`        | in the repo: every function in `tests/equivalent.txt` has C behind it (or is SDK-verified); `--fix` removes the rest (the pre-commit hook runs it)                                                                                                                                               |
 | `scripts/tools/4-boosts/port_equiv.py`              | in the repo: carries Equivalent C for shared library code from a sibling decomp into this one (masked-code match, pool-word mapping, ported cases), every function re-checked by this repo's `equiv.py`                                                                                          |
 | `scripts/tools/5-generated/remaining.py`               | in the repo: every function not done yet, by its current state and the cause it shares with others (`--table`) |

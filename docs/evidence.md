@@ -1100,3 +1100,47 @@ BupFailDialog compare only up to the step limit; _div64 and emotFaceMorph rest o
   0C10BC48 and 0C10DB4C, stale in the same way); on Crazy Taxi and Virtua Tennis none. Test `tests/pointers`: fails on the old code.
   Lesson: the checks that came out clean compared the build with the original only for words some instruction loads; a data
   word inside a "function" that is only read by address was invisible to all of them.
+
+### Step 10 on Crazy Taxi: a native port whose play frames lacked the world (2026-11-18)
+- The port: the game's C built for x32 through LLVM IR, RAM mapped at the console's addresses, an SH-4 interpreter for the 157
+  functions with no C, the disc read from the .gdi, and the PowerVR emulated on the host (the polygon stream and the textures in
+  video memory) and drawn with OpenGL. Title, menus and driver select drew correctly; play showed the HUD and some terrain, and the
+  road and buildings were black or missing.
+- **Three causes, each found by looking inside the running program:**
+  1. *A hardware register the host left at 0.* `nlInitLibrary0` reads SB_SBREV (`0xA05F689C`); at 8 or more it records the graphics
+     configuration (vertex buffer, list sizes) before the graphics system starts. At 0 it takes the other path silently, the first
+     4 MB texture pool is used up at boot and play runs out of texture memory (road and buildings get the dummy texture). Found by
+     reading the same words in Flycast and in the port at the same screen: pool counters (`0C177FCC`, `0C177FE0`), the configuration
+     block (`0C2AECD0`) and a guard flag (`0C2AED40`). With the register at 0x0B the port's pools match Flycast's (622,752 and
+     620,672 bytes free in the attract demo, against 622,784 and 620,640). The SDK's mode set then also waits on the scanline counter
+     (`0xA05F810C`), which the host has to move.
+  2. *Argument order with a structure by value.* `technicalBonusExec` called `Model_Put_Sprite3D` through hand-written casts that
+     put the model pointer before the 6-byte angle; the definition takes the angle before the model. The SH-4 puts every value in
+     the same register or stack word in either order, so the Equivalent check could not see it; on x86-64 the order picks the
+     register, the model pointer arrived as the angle (0), and `nlObjPut` read address 4 about 40 s into play. Found from the crash
+     (host backtrace, resolved to function names). The casts now follow the definition and two stale declarations were corrected; the
+     function is still EQUIVALENT and the build still MATCH. Of the twelve definitions that take a structure by value, nine are
+     declared with another parameter list in some caller; only this one is reached in play.
+  3. *Matrix register pairs loaded in the wrong order.* The C of `nlPopMatrix` and `nlLoadMatrix8` had been generated before the
+     simulator's pair order was corrected (a pair move keeps the singles' order: the first register of the pair at the lower address,
+     as `tools/sh4sim.py` says, "hardware and Flycast"). The port runs those two as C and `nlPushMatrix` (no C) in the interpreter,
+     so a pushed matrix was popped with each pair swapped: `nlProjectScreen3D` returned a screen x of -2,231,000 for a piece 1,600
+     units away, and `PutCourse_CheckPiece` rejected every course piece (about 34 asked per frame). Found with gdb on the port
+     binary, stopped in play at `camUpdate` (MainMode 1, SubMode 1): the camera was sane; the task list was complete; `PutCourse`
+     found its section and asked for the pieces; each piece's projected value was garbage; a conditional watchpoint on the current
+     matrix caught `nlPopMatrix` loading it pair-swapped. The two functions were regenerated (36 cases each, build MATCH). Play
+     frames went from about a tenth filled to full: the taxi, its driver, the road.
+- Findings about the decomp on the way:
+  - `nlPow` was listed as two entries: the first's branches land inside the second, which holds the rest of the same function after
+    a literal pool. Merged into one entry (build MATCH); it is a float function.
+  - Twenty-four functions in `src/` call a code address that is not a function's start. The ones the game reaches in play: `0C0784A0`
+    (inside `nlRotateAxe`, reached through `nlRotateV`, 31,150 calls in one run) and `0C07AE10` (16 bytes into
+    `nlObjPutSetLightDirectionV`, once).
+  - 118 functions take fewer arguments than their callers pass; completing the arguments of every call in 184 source files in a
+    build copy changed no frame, so they are not what hid the world.
+- Ruled out as the cause of the missing world: taking the ten ground-collision functions, and the course-loading (63), car (38) and
+  course/area/grid (66) functions, from the original code instead of their C changed nothing in play.
+- Still open: the HUD is not drawn in play. Its translucent polygons do reach the emulation's buffer (131 opaque polygons grow to
+  192, 61 of them translucent, once the second block of 36,224 bytes is parsed); whether that buffer is the one rendered is not
+  established. The play camera looks down more steeply than the real game, and nothing presses the accelerator in the hands-free
+  test, so movement is untested.

@@ -93,7 +93,7 @@ class TestShrink(unittest.TestCase):
                 if needle not in src:
                     bad.append('next: shrink.py does not try the next form after a failure (missing %s)' % needle)
             # file: a function that passes alone but differs in the file it was written into is restored, not logged as shrunk
-            for needle in ("the written file differs", "tools/equiv.py', 'src/%s.c' % ns, fn"):
+            for needle in ("the written file differs", "tools/equiv.py', layout.c_path(ns), fn"):
                 if needle not in src:
                     bad.append('file: shrink.py does not check the written file (missing %s)' % needle)
             for needle in ("ledger.last_failure(fn, since)", "'shrink-failed'", "new C failed, old restored"):
