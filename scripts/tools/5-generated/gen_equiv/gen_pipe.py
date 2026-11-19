@@ -7,7 +7,16 @@ import gen_drv,gen_core
 Skip=gen_core.Skip
 def variants(name,passthru):
     c=gen_core.run(name,passthru)
-    if c.tail: return ['void'] if any(r=='None' for r,f in c.rets) else ['r0','void']      # a return that leaves r0 to a helper (unknown) cannot be written as a value
+    if c.tail:
+        out=['void'] if any(r=='None' for r,f in c.rets) else ['r0','void']      # a return that leaves r0 to a helper (unknown) cannot be written as a value
+        # a tail call into a function that returns a float (or into one that tail-calls such a function): the result is the float
+        # the end of the chain returns, tried first. Written void, the callers read a value the C never returned
+        try:
+            import retcheck
+            if retcheck.tail_returns_in(gen_core.SPANS[name][0],gen_core.SPANS[name][1],gen_core.SPANS)=='fr0': out.insert(0,'fr0')
+        except Exception:
+            pass
+        return out
     lit=lambda x:re.match(r'^(-?\d+|0x[0-9A-F]+|-?[\d.e+-]+f)$',x)
     out=[]
     if c.rets and all(f!='None' for r,f in c.rets) and not all(lit(f) for r,f in c.rets): out.append('fr0')

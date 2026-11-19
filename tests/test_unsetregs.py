@@ -15,6 +15,9 @@ r8-r14: when what it does differs, the case depends on them and is dropped.
                   aftercall  stores r5 after a call (a caller-saved register the callee may change: entryGridDrawCursors, Virtua
                            Tennis, a colour from r5 after mathLerp on a path that never sets it): dependent
                   result   stores r0 after a call (the call's result): not dependent
+                  leftarg  calls a function after another call without setting r6, r7 or a float register: what is in them is the
+                           first callee's leftover, not an argument. Told the callee takes two integers and no float (argc, fargc),
+                           the case is not dependent; told nothing, every argument register counts, as before
 """
 import unittest
 from unittest import mock
@@ -130,6 +133,54 @@ class TestUnsetregs(unittest.TestCase):
             shutil.rmtree(d, ignore_errors=True)
         if bad:
             self.fail('[ERROR] unsetregs check failed:\n' + '\n'.join(bad))
+
+    @staticmethod
+    def _two_calls(d):
+        """sts.l pr / bsr g / mov #1,r4 / mov #2,r5 / bsr f / mov #3,r4 / lds.l @r15+,pr / rts / nop / nop / g: rts / nop / f: rts / nop:
+        f is called with r4 and r5 set, and with r6, r7 and the float registers as g left them."""
+        code = [0x4F22, 0xB007, 0xE401, 0xE502, 0xB006, 0xE403, 0x4F26, 0x000B, 0x0009, 0x0009,
+                0x000B, 0x0009,      # g
+                0x000B, 0x0009]      # f
+        body = b''.join(struct.pack('<H', w) for w in code)
+        with open(os.path.join(d, 'leftarg.bin'), 'wb') as fp:
+            fp.write(body + b'\x00' * (0x200 - len(body)))
+        return lambda c: sh4sim.run(dict(c, exe='leftarg.bin', base='%08X' % BASE, entry='%08X' % BASE, end='%08X' % (BASE + 0x14), steps=2000), d)
+
+    def test_leftover_argument_registers_are_not_a_dependence(self):
+        with tempfile.TemporaryDirectory() as d:
+            run = self._two_calls(d)
+            self.assertEqual([c['to'] for c in run({})['calls']], ['%08X' % (BASE + 0x14), '%08X' % (BASE + 0x18)],
+                             'the synthetic function calls g, then f')
+            self.assertFalse(directed.unset_dependent({}, run, argc=lambda target: 2, fargc=lambda target: 0),
+                             'a callee that takes two integers and no float does not make the case depend on what r6, r7 and fr4-fr11 hold')
+
+    def test_argument_register_the_callee_takes_is_still_a_dependence(self):
+        with tempfile.TemporaryDirectory() as d:
+            run = self._two_calls(d)
+            self.assertTrue(directed.unset_dependent({}, run, argc=lambda target: 4, fargc=lambda target: 0),
+                            'a callee that takes four integers is handed a leftover in r6 and r7: the case depends on it')
+
+    def test_float_argument_the_callee_takes_is_still_a_dependence(self):
+        with tempfile.TemporaryDirectory() as d:
+            run = self._two_calls(d)
+            self.assertTrue(directed.unset_dependent({}, run, argc=lambda target: 2, fargc=lambda target: 1),
+                            'a callee that takes one float is handed a leftover in fr4: the case depends on it')
+
+    def test_unknown_argument_count_compares_every_register(self):
+        with tempfile.TemporaryDirectory() as d:
+            run = self._two_calls(d)
+            self.assertTrue(directed.unset_dependent({}, run), 'with no argument counts every one of r4-r7 and fr4-fr11 is compared')
+            self.assertTrue(directed.unset_dependent({}, run, argc=lambda target: None, fargc=lambda target: 0),
+                            'a callee whose integer count is not known keeps all of r4-r7')
+            self.assertTrue(directed.unset_dependent({}, run, argc=lambda target: 2, fargc=lambda target: None),
+                            'a callee whose float count is not known keeps all of fr4-fr11')
+
+    def test_argument_registers_given_as_a_set(self):
+        with tempfile.TemporaryDirectory() as d:
+            run = self._two_calls(d)
+            none = lambda target: 0
+            self.assertFalse(directed.unset_dependent({}, run, argc=lambda target: frozenset((4, 5)), fargc=none), 'the callee reads r4 and r5 only')
+            self.assertTrue(directed.unset_dependent({}, run, argc=lambda target: frozenset((4, 6)), fargc=none), 'the callee reads r6, a leftover')
 
 
 if __name__ == '__main__':
