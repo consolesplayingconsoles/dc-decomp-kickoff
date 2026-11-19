@@ -16,6 +16,7 @@ sizes, and this runtime stands in for the hardware and the boot ROM. The tools t
 | [runtime/files.c](runtime/files.c) | The disc's files from a folder (`--data DIR`): ADXF and the gdFs calls the game makes. |
 | [runtime/vmu.c](runtime/vmu.c) | The memory card as a folder of files (the backup library, `bu*`). |
 | [runtime/platform.c](runtime/platform.c) | The window, the controller (SDL gamepad or keyboard), the sound thread, the peripheral API (`pd*`). |
+| [runtime/boot.c](runtime/boot.c) | The debug log: with `PORT_BOOT_LOG` set, each change of the game's mode and sub-mode, with the frame. |
 | [runtime/bios.c](runtime/bios.c), [system.c](runtime/system.c) | The boot ROM's system calls (system information, flash, GD-ROM vector) and the system settings. |
 | [runtime/nlib.c](runtime/nlib.c) | The NAOMI library's model kernel and matrix calls, for a game built on that library. |
 | [runtime/sh4.c](runtime/sh4.c), [interp.h](runtime/interp.h) | An SH-4 interpreter for the functions that have no C. |
@@ -42,7 +43,7 @@ sizes, and this runtime stands in for the hardware and the boot ROM. The tools t
    docker build -t mygame-port port
    ```
 
-5. **Build** the program (`build/native/<name>`, the repo's folder without `-decomp`). With `--keep-objects`, a later build
+5. **Build** the program, `build/native/game`. With `--keep-objects`, a later build
    compiles again only the files whose text changed:
 
    ```
@@ -58,14 +59,14 @@ sizes, and this runtime stands in for the hardware and the boot ROM. The tools t
 7. **Run** it. On x86-64 Linux with SDL 3, directly:
 
    ```
-   build/native/<name> --data build/native/data
+   build/native/game --data build/native/data
    ```
 
    Anywhere else, in the container on a virtual screen, with a screenshot every 300 frames (`--seconds` ends the run):
 
    ```
    docker run --rm --security-opt seccomp=unconfined -v "$PWD":/work -w /work "$PORT_IMAGE" \
-       xvfb-run -a -s "-screen 0 1280x960x24" build/native/<name> --data build/native/data --seconds 60 \
+       xvfb-run -a -s "-screen 0 1280x960x24" build/native/game --data build/native/data --seconds 60 \
        --screenshot-every 300 build/native/shot
    ```
 

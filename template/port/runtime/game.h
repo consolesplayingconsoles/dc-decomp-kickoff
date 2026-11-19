@@ -30,4 +30,13 @@
    (Crazy Taxi 0x8C2B8CBC) */
 #define GAME_NL_LIST_PTRS      0x00000000u
 
+/* the NAOMI library's near plane, which nlPerspective and nlFrustum set (nlib.c's clip when a model's lighting context
+   holds none; Crazy Taxi 0x8C2B7BDC) */
+#define GAME_NL_NEAR           0x00000000u
+
+/* the game's main mode and sub-mode words, which boot.c logs with PORT_BOOT_LOG (0: no log). Crazy Taxi's MainLoop
+   mode 0x8C1EE234 (0 attract, 1 the game, 3 menu) and its sub-mode 0x8C1EE238 */
+#define GAME_MAIN_MODE         0x00000000u
+#define GAME_SUB_MODE          0x00000000u
+
 #endif

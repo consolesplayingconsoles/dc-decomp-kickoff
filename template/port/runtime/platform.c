@@ -394,9 +394,13 @@ static void screenshot(int w, int h)
 }
 
 /* the end of a frame (pvr.c's render start): draw, show, read the controller */
+void port_boot_step(void) __attribute__((weak));   /* boot.c, where a game has one: its debug step, once a frame */
+
 void port_frame_end(void)
 {
     unsigned game = port_host_fp_enter();
+    if (port_boot_step)
+        port_boot_step();
     {
         /* PORT_DEBUG_LISTS: each list's lowest and highest pointer at frame ends, every 600 frames (a buffer that is not
            reset each scene shows as a lowest value that climbs) */

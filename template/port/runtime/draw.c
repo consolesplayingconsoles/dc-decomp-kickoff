@@ -33,40 +33,47 @@ static const char *vs_src =
     "layout(location=3) in vec4 ofs;\n"
     "layout(location=4) in float flatw;\n"
     "uniform vec2 screen;\n"
-    "out vec2 v_uv; out vec4 v_col; out vec4 v_ofs; noperspective out float v_invw; flat out float v_flat;\n"
+    "noperspective out vec2 v_uv; noperspective out vec4 v_col; noperspective out vec4 v_ofs; noperspective out float v_invw;\n"
+    "flat out float v_flat;\n"
     "void main() {\n"
-    /* pos.z is W. The vertices are in screen space already (the TA takes them projected): nothing is clipped by depth
-       (clip z 0), W only makes the interpolation perspective-correct; the depth is written per fragment */
+    /* pos.z is W. The vertices are in screen space already (the TA takes them projected), and OpenGL gets them with W 1:
+       cutting a triangle at the screen's edge is then plain 2D. The PowerVR's way: 1/W and every attribute over W are
+       linear in screen space, and each pixel divides by its 1/W. Given to OpenGL with the vertex's W instead, a far
+       triangle it cut at the edge (W in the thousands) came out with a 1/W near the cut that made it the nearest thing
+       on the screen: the sky over the road and the HUD */
     "  float w = clamp(pos.z, 1e-6, 1e9);\n"
-    "  vec2 ndc = vec2(pos.x / screen.x * 2.0 - 1.0, 1.0 - pos.y / screen.y * 2.0);\n"
-    "  gl_Position = vec4(ndc * w, 0.0, w);\n"
-    "  v_uv = uv; v_col = col; v_ofs = ofs; v_invw = 1.0 / w; v_flat = flatw;\n"
+    "  gl_Position = vec4(pos.x / screen.x * 2.0 - 1.0, 1.0 - pos.y / screen.y * 2.0, 0.0, 1.0);\n"
+    "  float iw = 1.0 / w;\n"
+    "  v_uv = uv * iw; v_col = col * iw; v_ofs = ofs * iw; v_invw = iw; v_flat = flatw;\n"
     "}\n";
 
 static const char *fs_src =
     "#version 330 core\n"
-    "in vec2 v_uv; in vec4 v_col; in vec4 v_ofs; noperspective in float v_invw; flat in float v_flat;\n"
+    "noperspective in vec2 v_uv; noperspective in vec4 v_col; noperspective in vec4 v_ofs; noperspective in float v_invw;\n"
+    "flat in float v_flat;\n"
     "uniform sampler2D tex;\n"
     "uniform int alpha_test, shade, textured, ignore_tex_alpha;\n"
     "uniform float alpha_ref;\n"
     "out vec4 o;\n"
     "void main() {\n"
-    "  vec4 t = texture(tex, v_uv);\n"
+    "  float pw = 1.0 / v_invw;\n"                  /* this pixel's W: the attributes over W, back to themselves */
+    "  vec2 uv = v_uv * pw; vec4 col = v_col * pw; vec4 ofs = v_ofs * pw;\n"
+    "  vec4 t = texture(tex, uv);\n"
     "  if (ignore_tex_alpha != 0) t.a = 1.0;\n"
     "  vec4 c;\n"
     /* the PowerVR's shading instructions: decal, modulate, decal alpha, modulate alpha */
-    "  if (textured == 0) c = v_col;\n"
+    "  if (textured == 0) c = col;\n"
     "  else if (shade == 0) c = t;\n"
-    "  else if (shade == 1) c = vec4(t.rgb * v_col.rgb, t.a);\n"
-    "  else if (shade == 2) c = vec4(mix(v_col.rgb, t.rgb, t.a), v_col.a);\n"
-    "  else c = t * v_col;\n"
-    "  c.rgb += v_ofs.rgb;\n"
+    "  else if (shade == 1) c = vec4(t.rgb * col.rgb, t.a);\n"
+    "  else if (shade == 2) c = vec4(mix(col.rgb, t.rgb, t.a), col.a);\n"
+    "  else c = t * col;\n"
+    "  c.rgb += ofs.rgb;\n"
     "  if (alpha_test != 0 && c.a < alpha_ref) discard;\n"
     "  o = c;\n"
     /* nearness as a logarithm of W, 0 at W = 2^20 and 1 at W = 2^-20: even relative steps in W over the whole range */
     /* a screen sprite has one W over the whole triangle: its constant, not an interpolation that rounding can tilt (two
        sprites at the same depth, the menu's text over its shadow, would otherwise win by triangle halves) */
-    "  float w = v_flat > 0.0 ? v_flat : 1.0 / v_invw;\n"
+    "  float w = v_flat > 0.0 ? v_flat : pw;\n"
     "  gl_FragDepth = clamp((20.0 - log2(max(w, 1e-6))) / 40.0, 0.0, 1.0);\n"
     "}\n";
 

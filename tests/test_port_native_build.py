@@ -23,8 +23,8 @@ Stdlib only.
     globals    a data name the game's C uses is placed at its console address whether symbols.txt or globals.txt names it
                (colliKindTail, 0c26ec24 in globals.txt only: left out, it got storage of its own that the code clearing
                the list at its address never reached); symbols.txt wins where both name it
-    name       the program is named after the repo's folder without -decomp (crazy-taxi-decomp: crazy-taxi), for its file,
-               its window and its messages; nothing else in the repo (a .recomp.json saying another name) changes it
+    name       the program is build/native/game in every repo, whatever folder the build runs in (the container mounts the
+               repo at /work: a name from the folder came out as "work"); its window and messages say "game" too
 """
 import importlib.util
 import os
@@ -96,13 +96,11 @@ class NativeBuild(unittest.TestCase):
         self.assertEqual(syms['colliKindHead'], 0x0C26EBCC)
 
     def test_name(self):
-        parent = tempfile.mkdtemp(prefix='name')
-        self.addCleanup(shutil.rmtree, parent, True)
-        d = os.path.join(parent, 'crazy-taxi-decomp')
-        os.makedirs(d)
-        with open(os.path.join(d, '.recomp.json'), 'w') as f:
-            f.write('{"game": "Another Name"}')
-        self.assertEqual(self.nb.program_name(d), ('crazy-taxi', 'crazy-taxi'))
+        for folder in ('crazy-taxi-decomp', 'work'):
+            d = os.path.join(tempfile.mkdtemp(prefix='name'), folder)
+            os.makedirs(d)
+            self.addCleanup(shutil.rmtree, os.path.dirname(d), True)
+            self.assertEqual(self.nb.program_name(d), ('game', 'game'))
 
     def test_ready(self):
         for a in (0xA080005C, 0x0080005C):

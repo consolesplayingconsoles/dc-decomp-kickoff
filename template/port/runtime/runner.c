@@ -394,8 +394,7 @@ static void wd_sigstate(void)
 }
 
 /* the watchdog: when no frame ends for 3 seconds, it logs the state and samples where the game thread is every 2
-   seconds (a loop shows as the same few addresses); after 12 seconds without a frame the game is frozen for good and
-   it exits, so the window does not hang */
+   seconds (a loop shows as the same few addresses); it never ends the program: a frozen game stays to be read */
 static void *watchdog(void *arg)
 {
     (void)arg;
@@ -457,12 +456,6 @@ static void *watchdog(void *arg)
                 wd_write(line, n);
                 wd_sigstate();
             }
-        }
-        if (still >= 12) {
-            char line[120];
-            int n = snprintf(line, sizeof line, PORT_NAME ": FROZEN: no frame for %d s at frame %lu; exiting\n", still, port_frames);
-            wd_write(line, n);
-            _exit(5);
         }
     }
     return 0;

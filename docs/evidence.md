@@ -1144,3 +1144,100 @@ BupFailDialog compare only up to the step limit; _div64 and emotFaceMorph rest o
   192, 61 of them translucent, once the second block of 36,224 bytes is parsed); whether that buffer is the one rendered is not
   established. The play camera looks down more steeply than the real game, and nothing presses the accelerator in the hands-free
   test, so movement is untested.
+
+### Step 10 on Crazy Taxi: the port built the Virtua Tennis way, from boot to play (2026-11-19)
+- The port: Virtua Tennis's runtime (`port/runtime/`), its addresses moved to Crazy Taxi's, the SDK's C placed in `sdk/<library>/`,
+  the hardware drivers marked in `sdk.txt` (`hardware` lines) and left to the runtime. 1,588 files compile, 50 console functions are
+  stubbed (47 hardware), no function without C is called. It runs on Batocera (x86-64, SDL 3, Mesa) and in the build container.
+- Reached: the boot, the save screen, the title, the attract demo, the menus, driver select with textures and models, music, and the
+  start of play. Play itself once `nlFloor` was fixed (below).
+- What stopped it, in order, and what fixed each:
+  - "AICADRV ERR" at boot: `nlsndInit` counts reads of the sound driver's ready word; the emulated sound CPU runs in real time and
+    the count ran out first -> the runtime answers that read once the driver has had its time.
+  - a fault in `ConvertSwitch` after "Now Loading": the pad record's device-name pointer was 0 -> it points at the product name.
+  - a fault in `SetColliObj` at the start of play: the build placed data names from `symbols.txt` only, and the collision lists
+    named in `globals.txt` got storage of their own that the code clearing them at their address never reached -> the build reads
+    `globals.txt` too (`native_build.py` `read_symbols`, with a test).
+  - one file that did not compile: the calling-convention pass copied a definition's pointer type the caller's file does not
+    have -> such a pointer becomes `void *` (`sh4abi.py`, with a test).
+  - Japanese text: the boot ROM's settings copy (`syBtCfgSet`) was a no-op, so the language byte stayed 0 -> it writes English.
+  - "LOAD failed" at the save screen: `buIsReady`, `buIsFormat`, `vmsio_isready` and `vmsio_ismount` ran the SDK's C against a
+    card driver the port does not have -> the runtime answers them. A save still writes no file.
+  - lines between the pieces of the title's logo: texture smoothing wrapped at piece edges -> a draw whose coordinates stay inside
+    its texture is clamped.
+- The nose dive, found: while the game holds the taxi at its start point before the drop, `carGroundCheck` puts it back at
+  height 1530 each frame, `GetCollision2D` finds no surface under it (its flag at 0x0C26E494 is -1; the buffer it
+  returns then still holds an earlier lookup, which read at first as ground at 1500), the wheels hang, and
+  `carWheelCollision` adds about 45 to the pitch every frame until the cap (8448, 46 degrees). On the console the drop is
+  imperceptible: the ground found there is at the taxi's height. The hang came about 210 frames into the race, when the pitch
+  reached the cap.
+- The nose dive's cause: `nlFloor`'s C (`sdk/naomi/gen_ai.c`) returned `(float)(0xFFFFFFFF - (int)|x|)` for a negative number
+  with a fraction: the constant is unsigned in C, so -1.587 came out as about 4.29e9 instead of -2.0, and `GetCollision2D`
+  (`(int)nlFloor(x / cell)`) looked in a cell far outside the grid wherever x < 0. The console never runs it (its SDK stays
+  the original bytes), so only the port fell. The C is the generator's (batch gen_ai) and lacks the `(int)` the generator has
+  put before such a conversion since 2026-11-07 (`0cdc3ac`: a constant above 0x7FFFFFFF converted to float goes through
+  `(int)`): it was generated before that fix and not regenerated. The generator needs no change. It was proven Equivalent all
+  the same: its 36 cases ran 22 of its 28 instructions, none a negative fraction, and the checker records the coverage without
+  acting on it. Fixed to `-1 - (int)|x|`; eight negative fractions added to its cases (now 28 of 28 instructions, Equivalent).
+  With it the operator played the race.
+- Stray triangles over the world and the HUD in play (the operator's report), found in the renderer (`draw.c`), not in the game:
+  - The near clip was ruled out first. The library's kernel (`displaypolygondata_sidx`, its strip routines and
+    `nl_objasm_clip_send_vtx_sidx`) clips meshes whose bounding sphere crosses the near plane, at the fourth row of the matrix
+    against -0.3, and gives a clipped corner 1/W = 3.33 (the context's word 8); the runtime clips at W = 0.3 and gives the
+    same 1/W. The projection matrix in race RAM (`0x8C2B34A8`) has a W row of -z and a fourth row of +z, so both test the
+    same value for every model.
+  - The frame itself, read from the running game: the renderer's polygon records (`bufs` in `pvr.c`, at its symbol's host
+    address from `nm`) through `/proc/<pid>/mem`, with the console RAM, eight times in a race, no ptrace stop. Clipped
+    corners land up to 15 million pixels off the screen, but where those triangles cross the screen their exact depth is
+    W 9.5 or farther: correct.
+  - The same frame redrawn without the game, through `draw.c` alone, each polygon in a colour that is its number: far
+    translucent polygons (W 3,900-5,700) came out on top of the road (W 10) in the screen's corners. Two polygons were
+    enough to show it, and one triangle was enough to fail: at pixels near its on-screen corner (47, 383) it wrote W 1e-6,
+    the nearest possible, where its own depth is about W 5,700.
+  - The cause: the vertex shader gave OpenGL each vertex at its W and passed 1/W to the pixel without perspective. For this
+    far triangle, which crosses the screen's edge, the 1/W that reached some of its pixels made it the nearest thing on the
+    screen. The fix: positions go to OpenGL with W 1, so the cut is plain 2D, and 1/W and every attribute over W are
+    interpolated linearly and divided per pixel, as the PowerVR does. The first C unit test of the runtime
+    (`tests/c/test_draw.c`, `make -C tests/c` in the port image) fails on the old shader and passes on the new: three
+    triangles from the race frame and one plain one, every pixel inside drawn, none outside, depth within 0.01%. In the game:
+    the operator saw the triangles gone (the build container on the Mac).
+  - A first theory (OpenGL losing precision on corners millions of pixels away) was wrong: the test drew those triangles
+    exactly. The first version of the test only checked the pixels that were drawn; it now also counts the ones that
+    should be and are not.
+- The runtime's watchdog no longer ends the program after 12 s without a frame: it logs where the game is stuck and leaves
+  it running, so a frozen game can be read (`/proc/<pid>/mem`) instead of disappearing with its state. A run ends when the
+  operator ends it.
+- How the debugging went wrong, and the method that worked (a session cost the operator a drive through the menus each time):
+  - **The operator drives, the program reports.** Do not script the menus or guess their timing; do not force the game's
+    mode words to skip screens (that reached screens that are not on the normal path, and a skipped driver select left the
+    driver unloaded). The operator plays to the point; everything else is automatic.
+  - **The game says where it is.** A debug log in the runtime (`PORT_BOOT_LOG`, after the Power Stone port's): each change of
+    main mode and sub-mode, with the frame. A watcher follows it in the container's log and acts on the mode it needs (the
+    race: main mode 1, sub-mode 1). Guessed triggers (a word taken for a frame counter, a fixed delay) missed every time.
+  - **One session, everything from it.** At the trigger, one gdb attach collects all that run can show: the record of the
+    object under study in full, the words each candidate function changes in it (a copy before the call, a
+    FinishBreakpoint after), the calls of the functions they lean on with their arguments and results and one call stack,
+    the renderer's state; then it detaches by itself, at a count or a time limit. Asking one question per session, the
+    operator drove a dozen times.
+  - **Attach without killing the game.** The runtime routes console-address calls through SIGSEGV: gdb must be told to
+    pass the signals before it attaches (`gdb -batch -ex "handle SIGSEGV SIGBUS SIGALRM SIGUSR1 SIG34 SIG35 SIG36 nostop
+    noprint pass" -ex "attach PID" -x script`). With `gdb -p PID` and `handle` after, every session ended seconds later.
+  - **Find the process by its command line** (`pgrep -f "^build/native/game --data"`): its name is `exe` in one container
+    and `game` in another; a pattern that also matches the shell running it picks the shell.
+  - **Test the capture on a run of one's own first** (at the title: the attach, the reads, the detach, the game still
+    running after), before the operator drives.
+  - **Keep the log past the container**: the game's output to a file (`build/native/play_session.log`), or the reason a
+    session ended goes with `docker run --rm`.
+  - **Do not start a second copy of the play script over the operator's session** (it removes the container by name), and
+    do not build while asked only to debug.
+  - **Read the original first**: a freeze in the attract demo looked like the hang and was the original's own loading
+    pause; an address taken for a missed translation was already the game's. A wrong lead cost runs each time.
+  - Under gdb every console-address call is a signal, so attach late to a running program rather than starting it under
+    gdb, and keep breakpoint conditions off hot paths. gdb's hardware watchpoints crashed gdb itself here (an internal error).
+  - **Read without stopping**: `/proc/<pid>/mem` reads the console RAM and the runtime's own data (at the addresses `nm`
+    gives) while the game runs; no attach, nothing to lose. A run captured that way can then be replayed offline: a
+    frame's polygons redrawn through the renderer alone found the stray triangles with no further runs.
+  - **A proof is only as wide as its cases**: a pass with coverage below all instructions (`nlFloor`, 22 of 28) left the
+    branch with the bug unrun. And a test of drawn pixels missed pixels never drawn.
+  - **Every runtime change comes with a test**, C for the runtime's C (`tests/c/`, one `test_<file>.c` per file, built
+    against the template's file and run in the port image), as Python tests cover the tools.

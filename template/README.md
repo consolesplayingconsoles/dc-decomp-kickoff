@@ -44,7 +44,7 @@ Updated on every commit by `tools/hooks/pre-commit` (enable once per clone:
 
 ## The steps
 
-This decomp follows the steps of the dc-decomp-kickoff skill: six from the disc to proven C for every function, then three to build, run and stabilise the game from that C. `AGENTS.md` has the detail.
+This decomp follows the steps of the dc-decomp-kickoff skill: six from the disc to proven C for every function, then three to build, run and stabilise the game from that C, then the native port. `AGENTS.md` has the detail.
 
 | # | Step                                    | Decomp completion                              | You provide                        | What it does                                                                                                                                                                                                                                                                                                               |
 |---|-----------------------------------------|------------------------------------------------|------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -57,6 +57,7 @@ This decomp follows the steps of the dc-decomp-kickoff skill: six from the disc 
 | 7 | **Code size reduction**                 | -                                              |                                    | Shrinks the code compiled from the proven C to the size of the original game code. A smaller version of a function replaces the old one only if it is still equivalent to the original.                                                                                                                                    |
 | 8 | **Build from C**                        | -                                              | The disc as a `.gdi`               | Builds the executable from the C and a disc image with it (`make disc GDI="your disc.gdi"`). Libraries, data and SDK stay as they are; pointers to game functions follow them.                                                                                                                                             |
 | 9 | **Runtime repairs**                     | BOOTS TO MENU, PLAYABLE, STABLE (`status.txt`) | Flycast GDB                        | Runs the game using Flycast GDB, locates and tracks bugs and iterates builds until the game is stable.                                                                                                                                                                                                                     |
+| 10 | **Native port**                         | Native column (`status.txt`)                   | Docker, the disc as a `.gdi`       | Builds the game from the proven C as an x86-64 Linux program and runs it outside the console (experimental). Every SDK function needs C except the hardware drivers.                                                                                                                                                       |
 
 ## Build
 

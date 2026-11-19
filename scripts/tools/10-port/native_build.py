@@ -6,7 +6,7 @@ Steps:
   stubs    a stub for each function the game needs and no object defines (it reports itself once and returns 0);
            symbols.txt's data names become absolute symbols at their console addresses
   table    the dispatch table: console address -> host function, for calls through pointers and addresses
-  link     build/native/<name>, the repo's folder without -decomp (program_name), with port/runtime and the play math
+  link     build/native/game, with port/runtime and the play math
 
 The game's C runs unchanged. It is compiled for x32 (x86-64 instructions and register calling convention, 32-bit int, long
 and pointers: the SH-4's sizes, so every record keeps its console layout), then converted to ELF64 and linked with the
@@ -540,10 +540,9 @@ def host_libc():
 
 
 def program_name(root):
-    """(file name, title) of the native program: the repo's folder without -decomp (crazy-taxi-decomp: crazy-taxi), for
-    both. The runtime gets them as PORT_NAME (its messages, its save folder) and PORT_TITLE (its window)"""
-    name = re.sub(r'-decomp$', '', os.path.basename(os.path.abspath(root)))
-    return name, name
+    """(file name, title) of the native program: build/native/game in every repo. The runtime gets them as PORT_NAME (its
+    messages, its save folder) and PORT_TITLE (its window)"""
+    return 'game', 'game'
 
 
 def host_compile(src, quiet=False):

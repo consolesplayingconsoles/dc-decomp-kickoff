@@ -39,6 +39,23 @@ The tests follow Python's conventions and nothing of our own:
   working directory, `sys.path` and the environment are put back (`setUp` and `addCleanup`).
 - A test does not depend on the order it runs in or on another test's output.
 
+## The C tests (the port's runtime)
+
+The runtime's C (`template/port/runtime/`) is tested in C, the same way:
+
+- One program for a file: `tests/c/test_<file>.c` tests `template/port/runtime/<file>.c`, built against that
+  file alone (and the headers it includes).
+- Each check is `CHECK(condition, "what was wanted ...")`: a failure prints its file, line and message and the
+  test goes on. The exit code is the result: 0 every check passed, 1 one failed, 2 the test could not run.
+- The file's comment says what is protected and why, as a module docstring does.
+- Run all: `docker run --rm -v "$PWD":/work -w /work <port image> make -C tests/c`, with the port image built
+  from `template/port/Dockerfile` (clang 16, SDL 3, Mesa, Xvfb). Run one:
+  `make -C tests/c TESTS=build/test_<file>` in the same container. A new test is added to `TESTS` in
+  `tests/c/Makefile`.
+- They are the one exception to "no compiler": they need the port image. Still no game data: inputs are
+  written in the test (a triangle's vertices, a register value).
+- Their builds go to `tests/c/build/` (git-ignored); `make -C tests/c clean` removes them.
+
 ## The older tests
 
 The tests written before this standard were moved to it by name and shape (`test_<subject>.py`,
@@ -60,5 +77,6 @@ assertions. New tests are written that way from the start.
 ## Before a change is done
 
 1. The new test failed before the change and passes after it.
-2. `python3 -m unittest discover -s tests` passes.
+2. `python3 -m unittest discover -s tests` passes, and for a change to `template/port/runtime/`,
+   `make -C tests/c` in the port image passes too.
 3. The test and the change belong together: one change carries both.

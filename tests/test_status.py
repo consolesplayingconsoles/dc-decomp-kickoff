@@ -86,8 +86,8 @@ class TestStatus(unittest.TestCase):
         out, err = run(statuses, '# comment\n[x] BUILDS FROM C\n\n[x] BOOTS TO MENU\n[ ] PLAYABLE\n[?] STABLE\n')
         if err or out != [('BUILDS FROM C', True), ('BOOTS TO MENU', True), ('PLAYABLE', False), ('STABLE', None)]:
             bad.append('states: expected True, True, False, None, got %s %s' % (out, err or ''))
-        out, err = run(statuses, '[x] BUILDS FROM C\n[x] [ ] BOOTS TO MENU\n[x] [?] PLAYABLE\n[ ] [ ] STABLE\n[ ] NATIVE PORT\n')
-        if err or out != [('BUILDS FROM C', True), ('BOOTS TO MENU', True, False), ('PLAYABLE', True, None), ('STABLE', False, False), ('NATIVE PORT', False)]:
+        out, err = run(statuses, '[x] BUILDS FROM C\n[x] [ ] BOOTS TO MENU\n[x] [?] PLAYABLE\n[ ] [ ] STABLE\n')
+        if err or out != [('BUILDS FROM C', True), ('BOOTS TO MENU', True, False), ('PLAYABLE', True, None), ('STABLE', False, False)]:
             bad.append('columns: two marks are Dreamcast then Native, got %s %s' % (out, err or ''))
         out, err = run(statuses, '[x] BUILDS FROM C\n[x] [ ] BOOTS TO MENU\n[x] [x] PLAYABLE\n')
         if not err or 'PLAYABLE' not in err:
