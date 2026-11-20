@@ -5,6 +5,8 @@ pvr.c lays them (struct tabuf, struct poly, struct rvert), built here in a fake 
     last       of the four buffers, the one before the newest is read (the newest may still be filling)
     polygons   each polygon's list, control words and vertices come out as stored
     text       the text form: a header line, then one line per polygon with its vertices
+    empty      a frame with no polygons (a loading screen) reads as empty, nothing read past the records
+    short      a polygon whose vertices run past the buffer's count (a frame cut while it filled) keeps only the ones there
 """
 import importlib.util
 import os
@@ -77,6 +79,23 @@ class FrameCapture(unittest.TestCase):
         self.assertTrue(lines[1].startswith('poly 0 list 0 pcw 808C002C isp 93000000 tsp 2008246C tcw 080BF9B8 n 3  (248.3 362.6 w36.8)'),
                         'a polygon line: %s' % lines[1])
         self.assertEqual(len(lines), 3, 'a header and one line per polygon')
+
+    def test_empty(self):
+        mem = FakeMemory()
+        mem.put(0x1000, b''.join(struct.pack('<I4xQIIQIIQ', 0, 0, 0, 0, 0, 0, 0, f) for f in (3, 4, 1, 2)))
+        frame, buf, polys = self.fc.last_frame(mem.read, 0x1000)
+        self.assertEqual((frame, buf, polys), (3, 0, []), 'the buffer before the newest, no polygons, nothing read beyond')
+
+    def test_short(self):
+        mem = FakeMemory()
+        tabs = b''
+        for i, frame in enumerate((2, 1, 3, 0)):              # buffer 0 (frame 2) is read: one polygon of 3 vertices, 2 there
+            tabs += struct.pack('<I4xQIIQIIQ', 0, 0x3000, 2 if i == 0 else 0, 8, 0x2000, 1 if i == 0 else 0, 8, frame)
+        mem.put(0x1000, tabs)
+        mem.put(0x2000, struct.pack('<4IIIi', 1, 2, 3, 4, 0, 3, 0))
+        mem.put(0x3000, struct.pack('<5fIIfI', 10, 20, 5, 0, 0, 0, 0, 0, 0) * 2)
+        frame, buf, polys = self.fc.last_frame(mem.read, 0x1000)
+        self.assertEqual(len(polys[0][6]), 2, 'only the vertices the buffer holds')
 
 
 if __name__ == '__main__':

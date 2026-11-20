@@ -1,5 +1,5 @@
 /* test_draw.c: template/port/runtime/draw.c, the port's renderer, with an OpenGL 3.3 context and a 640x480 target.
-   Run with the other C tests: make -C tests/c (in the port image; see tests/c/Makefile).
+   Run with the other C tests: make -C tests/c.
 
    Each case is one triangle as the console's tile accelerator takes it (screen x, y in pixels, and W per vertex), drawn
    as an opaque polygon with depth writes. The depth read back at every pixel must be the triangle's own: 1/W is linear
@@ -14,28 +14,22 @@
    renderer's 1/W, passed to the pixel without perspective, came out wrong there, so it wrote the nearest possible depth
    and the sky covered the road (W 10) and the HUD. */
 #define GL_GLEXT_PROTOTYPES
+#ifdef __APPLE__
+#define GL_SILENCE_DEPRECATION
+#include <OpenGL/gl3.h>
+#else
 #include <GL/gl.h>
 #include <GL/glext.h>
+#endif
 #include <SDL3/SDL.h>
 #include <math.h>
-#include <stdio.h>
 #include <string.h>
-#include <sys/mman.h>
 
+#include "check.h"
 #include "render.h"
 
 extern int render_target_w, render_target_h;
 
-static int failures;
-#define CHECK(cond, ...)                                                                                               \
-    do {                                                                                                               \
-        if (!(cond)) {                                                                                                 \
-            failures++;                                                                                                \
-            printf("FAIL %s:%d: ", __FILE__, __LINE__);                                                                \
-            printf(__VA_ARGS__);                                                                                       \
-            printf("\n");                                                                                              \
-        }                                                                                                              \
-    } while (0)
 
 struct tri {
     const char *name;
@@ -125,10 +119,7 @@ static void test_case(const struct tri *t)
 int main(void)
 {
     /* PT_ALPHA_REF, which draw.c reads at its console address */
-    if (mmap((void *)0xA05F8000ul, 4096, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0) == MAP_FAILED) {
-        perror("mmap");
-        return 2;
-    }
+    console_map(0xA05F8000u, 0x1000);
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         printf("SDL_Init: %s\n", SDL_GetError());
         return 2;
@@ -136,6 +127,9 @@ int main(void)
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+#ifdef __APPLE__
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);   /* macOS gives a core profile only so */
+#endif
     SDL_Window *win = SDL_CreateWindow("test_draw", 640, 480, SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN);
     if (!win || !SDL_GL_CreateContext(win)) {
         printf("OpenGL context: %s\n", SDL_GetError());
@@ -154,6 +148,5 @@ int main(void)
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rb[1]);
     for (unsigned c = 0; c < sizeof cases / sizeof cases[0]; c++)
         test_case(&cases[c]);
-    printf("test_draw: %s\n", failures ? "FAILED" : "OK");
-    return failures ? 1 : 0;
+    return check_done("test_draw");
 }

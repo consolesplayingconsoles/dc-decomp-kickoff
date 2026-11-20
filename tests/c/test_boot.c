@@ -1,26 +1,16 @@
 /* test_boot.c: template/port/runtime/boot.c, the debug log a watcher follows (tools/10-port/capture.sh waits for its
-   "main mode M, sub-mode S" line). Run with the other C tests: make -C tests/c (in the port image).
+   "main mode M, sub-mode S" line). Run with the other C tests: make -C tests/c.
 
     first      the first frame prints the game's mode and sub-mode, with the frame
     quiet      a frame where neither changed prints nothing
     change     a change of either prints a new line, with that frame's number
 
    The game's two words sit at addresses this test maps (test_boot_game.h stands in for the game's game.h). */
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/mman.h>
 
-static int failures;
-#define CHECK(cond, ...)                                                                                               \
-    do {                                                                                                               \
-        if (!(cond)) {                                                                                                 \
-            failures++;                                                                                                \
-            printf("FAIL %s:%d: ", __FILE__, __LINE__);                                                                \
-            printf(__VA_ARGS__);                                                                                       \
-            printf("\n");                                                                                              \
-        }                                                                                                              \
-    } while (0)
+#include "check.h"
+
 
 unsigned long port_frames;
 void port_boot_step(void);
@@ -46,10 +36,7 @@ static const char *frame(unsigned long n, int mode, int sub)
 
 int main(void)
 {
-    if (mmap((void *)(GAME_MAIN_MODE & ~0xFFFul), 4096, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0) == MAP_FAILED) {
-        perror("mmap");
-        return 2;
-    }
+    console_map(GAME_MAIN_MODE, 8);
     setenv("PORT_BOOT_LOG", "1", 1);
     const char *s = frame(4, 3, 0);
     CHECK(strcmp(s, "test: boot: frame 4, main mode 3, sub-mode 0\n") == 0, "first: the first frame's state, got \"%s\"", s);
@@ -60,6 +47,5 @@ int main(void)
     s = frame(942, 1, 1);
     CHECK(strcmp(s, "test: boot: frame 942, main mode 1, sub-mode 1\n") == 0, "change: the sub-mode's change, got \"%s\"", s);
     remove("build/test_boot.err");
-    printf("test_boot: %s\n", failures ? "FAILED" : "OK");
-    return failures ? 1 : 0;
+    return check_done("test_boot");
 }
