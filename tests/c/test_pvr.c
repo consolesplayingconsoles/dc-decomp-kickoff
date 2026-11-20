@@ -14,6 +14,9 @@
 
    And a render into a texture (Crazy Taxi's pause: the race drawn into a 512x512 RGB565 texture, then shown over the
    screen), with the registers read at it:
+    kind       a polygon whose control word has the group bit (23) clear is the game's 2D (flat2d: the HUD, menus, their
+               text); one with it set is 3D, the camera-facing models included (the passengers' dollar marker); an
+               untextured one is a plain fill
     texture    every pixel of the clip area is written, 512 wide and 481 high, whatever the region array holds (there,
                an entry early in it had other words, with the last-entry bit: the pause was black past 96 pixels) */
 #include <string.h>
@@ -78,6 +81,15 @@ int main(void)
     frame(0x4BBC80, 0x49FB00);                    /* the registers as read in the frozen race */
     feed(4);
     CHECK(err_bit2 == 2, "below: a limit under the base raises nothing, got %d", err_bit2);
+    struct poly p2d = {0}, p3d = {0};
+    struct rdraw d;
+    p2d.pcw = 0x82000000u, p2d.list = 2;                         /* the pause text's word, untextured */
+    p3d.pcw = 0x828C0024u, p3d.list = 2;                         /* the dollar marker's word, untextured */
+    mode_of(&p2d, &d);
+    CHECK(d.flat2d && d.fill, "kind: group bit clear, 2D (%d), untextured, a fill (%d)", d.flat2d, d.fill);
+    mode_of(&p3d, &d);
+    CHECK(!d.flat2d, "kind: group bit set, 3D");
+
     console_map(0xA4000000u, 0x800000);               /* video memory, 64- and 32-bit paths */
     console_map(0xA5000000u, 0x800000);
     REG(PVR + 0x02C) = 0x4D33C8;                     /* the region array, as read at the pause */

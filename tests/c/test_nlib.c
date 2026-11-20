@@ -7,6 +7,10 @@
     behind     a triangle wholly behind the plane goes out as nothing
     culled     a bounding sphere wholly behind the plane, or wholly off the screen, is culled; one across the plane or on the
                screen is drawn (drawing them all filled a stadium's translucent list)
+    aspect     the game's projections (nlPerspective, nlPerspectiveX) reach the game's own as they were at 4:3; at 16:9
+               (test_nlib_wide: the same test built with PORT_WIDESCREEN's 16:9) nlPerspective's aspect is 4/3 wider, and
+               nlPerspectiveX's horizontal angle is wider (tan of its half times 4/3) with its aspect 4/3 wider, so the
+               vertical stays the console's (Crazy Taxi's race camera)
 
    The game's addresses come from test_nlib_game.h; the kernel's output goes to a list buffer in mapped RAM. */
 #include <string.h>
@@ -28,6 +32,21 @@ float test_log(float x) __asm__("nlLog");          /* the game's own, which nlPo
 float test_log(float x) { return logf(x); }
 float test_exp(float x) __asm__("nlExp");
 float test_exp(float x) { return expf(x); }
+/* the game's own projections, which the wrappers reach: what they were given */
+static int32_t got_fov;
+static float got_aspect;
+int32_t __real_nlPerspective(int32_t fov, float aspect, float near_z, float far_z)
+{
+    (void)near_z, (void)far_z;
+    got_fov = fov, got_aspect = aspect;
+    return 0;
+}
+int32_t __real_nlPerspectiveX(int32_t fov, float aspect, float near_z, float far_z)
+{
+    (void)near_z, (void)far_z;
+    got_fov = fov, got_aspect = aspect;
+    return 0;
+}
 
 #define LIST 0x8C100000u          /* list 0's buffer */
 #define NEAR 0.3f
@@ -84,5 +103,15 @@ int main(void)
     CHECK(sphere_unseen(id, 0.5f, 0, 0, 1, NEAR) == 0, "culled: a sphere across the plane is drawn (clipped, not culled)");
     CHECK(sphere_unseen(id, 10, 100000, 0, 1, NEAR) == 1, "culled: a sphere far off the screen's right");
     CHECK(sphere_unseen(id, 10, 3200, 2400, 1, NEAR) == 0, "culled: a sphere at the screen's middle is drawn");
-    return check_done("test_nlib");
+
+    __wrap_nlPerspective(0x1D28, 4.0f / 3.0f, 0.3f, 300.0f);
+    CHECK(got_fov == 0x1D28 && fabsf(got_aspect - 4.0f / 3.0f * PORT_WIDE) < 1e-5f, "aspect: nlPerspective's aspect %g, got %g (fov %X)",
+          4.0f / 3.0f * PORT_WIDE, got_aspect, got_fov);
+    __wrap_nlPerspectiveX(0x2000, 1.25f, 0.3f, 300.0f);       /* 45 degrees across */
+    double half = 0x2000 * 3.14159265358979 / 65536.0, want = atan(tan(half) * PORT_WIDE) * 65536.0 / 3.14159265358979;
+    CHECK(abs(got_fov - (int)(want + 0.5)) <= 1 && fabsf(got_aspect - 1.25f * PORT_WIDE) < 1e-5f,
+          "aspect: nlPerspectiveX's angle %.0f and aspect %g, got %d and %g", want, 1.25f * PORT_WIDE, got_fov, got_aspect);
+    if (PORT_WIDE == 1.0f)
+        CHECK(got_fov == 0x2000, "aspect: at 4:3 nlPerspectiveX's angle as it was, got %X", got_fov);
+    return check_done(PORT_WIDE == 1.0f ? "test_nlib" : "test_nlib_wide");
 }

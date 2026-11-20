@@ -38,5 +38,8 @@
    mode 0x8C1EE234 (0 attract, 1 the game, 3 menu) and its sub-mode 0x8C1EE238 */
 #define GAME_MAIN_MODE         0x00000000u
 #define GAME_SUB_MODE          0x00000000u
+/* the main mode whose 2D is the play HUD: with PORT_WIDESCREEN=1 its pieces at the top and bottom go to the screen's sides
+   (draw.c mark_hud). Left undefined, the HUD stays in the 4:3 middle (Crazy Taxi: 1) */
+/* #define GAME_HUD_MODE       1 */
 
 #endif

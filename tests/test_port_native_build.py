@@ -26,6 +26,8 @@ Stdlib only.
     name       the program is named after the disc image in the repo's .env (GDI), without its folder and .gdi, whatever
                folder the build runs in (the container mounts the repo at /work: a name from the folder came out as "work");
                without quotes and with .GDI in capitals too; no GDI stops the build
+    widescreen PORT_WIDESCREEN in the repo's .env: 1 builds the runtime at 16:9, 0 at the console's 4:3; missing, or any other
+               value ("yes", "16:9"), stops the build with the key named and what it is for: no default
 """
 import importlib.util
 import os
@@ -116,6 +118,25 @@ class NativeBuild(unittest.TestCase):
         self.addCleanup(shutil.rmtree, d, True)
         with self.assertRaises(SystemExit, msg='no GDI in .env stops the build'):
             self.nb.program_name(d)
+
+    def widescreen_env(self, text):
+        d = tempfile.mkdtemp(prefix='wide')
+        self.addCleanup(shutil.rmtree, d, True)
+        with open(os.path.join(d, '.env'), 'w') as f:
+            f.write(text)
+        return d
+
+    def test_widescreen(self):
+        on = self.widescreen_env('GDI=/discs/game.gdi\n# the picture\nPORT_WIDESCREEN=1\n')
+        off = self.widescreen_env('PORT_WIDESCREEN="0"\n')
+        self.assertEqual(self.nb.aspect_defines(on), ['-DPORT_ASPECT_W=16', '-DPORT_ASPECT_H=9'], '1: 16:9')
+        self.assertEqual(self.nb.aspect_defines(off), ['-DPORT_ASPECT_W=4', '-DPORT_ASPECT_H=3'], '0, quoted: 4:3')
+
+    def test_widescreen_missing(self):
+        for text in ('GDI=/discs/game.gdi\n', 'PORT_WIDESCREEN=yes\n', 'PORT_WIDESCREEN=16:9\n', 'PORT_WIDESCREEN=\n'):
+            with self.assertRaises(SystemExit, msg=repr(text)) as e:
+                self.nb.aspect_defines(self.widescreen_env(text))
+            self.assertIn('PORT_WIDESCREEN', str(e.exception), 'the key is named')
 
     def test_ready(self):
         for a in (0xA080005C, 0x0080005C):
