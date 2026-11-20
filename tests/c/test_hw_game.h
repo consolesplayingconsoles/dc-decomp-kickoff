@@ -4,4 +4,5 @@
 #define GAME_H
 #define GAME_INTEVT_COPY       0x8C00F200u
 #define GAME_DEFAULT_HANDLER   0x8C00F210u
+#define GAME_NL_LIST_PTRS      0x00000000u   /* no NAOMI library: hw.c's flush check stays off */
 #endif

@@ -23,7 +23,7 @@ RUN     := xvfb-run -a -s "-screen 0 1280x960x24"
 endif
 
 TESTS := $(BUILD)/test_draw $(BUILD)/test_boot $(BUILD)/test_system $(BUILD)/test_bios $(BUILD)/test_vmu $(BUILD)/test_nlib \
-         $(BUILD)/test_hw $(BUILD)/test_platform
+         $(BUILD)/test_hw $(BUILD)/test_platform $(BUILD)/test_pvr
 
 .PHONY: test clean
 test: $(TESTS)
@@ -37,6 +37,9 @@ $(BUILD)/test_boot: test_boot.c test_boot_game.h check.h $(RUNTIME)/boot.c | $(B
 
 $(BUILD)/test_platform: test_platform.c test_platform_game.h check.h $(RUNTIME)/platform.c | $(BUILD)
 	$(CC) $(CFLAGS) -o $@ test_platform.c $(SDL) $(GL) -lm $(LDMAP)
+
+$(BUILD)/test_pvr: test_pvr.c test_platform_game.h check.h $(RUNTIME)/pvr.c | $(BUILD)
+	$(CC) $(CFLAGS) -o $@ test_pvr.c $(SDL) $(GL) -lm $(LDMAP)
 
 # the tests that include their runtime file whole (to reach its static functions) build from the test alone
 $(BUILD)/test_%: test_%.c check.h $(RUNTIME)/%.c | $(BUILD)

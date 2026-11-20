@@ -23,8 +23,9 @@ Stdlib only.
     globals    a data name the game's C uses is placed at its console address whether symbols.txt or globals.txt names it
                (colliKindTail, 0c26ec24 in globals.txt only: left out, it got storage of its own that the code clearing
                the list at its address never reached); symbols.txt wins where both name it
-    name       the program is build/native/game in every repo, whatever folder the build runs in (the container mounts the
-               repo at /work: a name from the folder came out as "work"); its window and messages say "game" too
+    name       the program is named after the disc image in the repo's .env (GDI), without its folder and .gdi, whatever
+               folder the build runs in (the container mounts the repo at /work: a name from the folder came out as "work");
+               without quotes and with .GDI in capitals too; no GDI stops the build
 """
 import importlib.util
 import os
@@ -96,11 +97,25 @@ class NativeBuild(unittest.TestCase):
         self.assertEqual(syms['colliKindHead'], 0x0C26EBCC)
 
     def test_name(self):
-        for folder in ('crazy-taxi-decomp', 'work'):
-            d = os.path.join(tempfile.mkdtemp(prefix='name'), folder)
-            os.makedirs(d)
-            self.addCleanup(shutil.rmtree, os.path.dirname(d), True)
-            self.assertEqual(self.nb.program_name(d), ('game', 'game'))
+        d = tempfile.mkdtemp(prefix='name')
+        self.addCleanup(shutil.rmtree, d, True)
+        with open(os.path.join(d, '.env'), 'w') as f:
+            f.write('SDK_PATH="/sdk"\nGDI="/Volumes/discs/Crazy Taxi (Europe) (En,Ja).gdi"\n')
+        self.assertEqual(self.nb.program_name(d), ('Crazy Taxi (Europe) (En,Ja)', 'Crazy Taxi (Europe) (En,Ja)'),
+                         'the disc image\'s name, whatever folder the build runs in')
+
+    def test_name_unquoted(self):
+        d = tempfile.mkdtemp(prefix='name')
+        self.addCleanup(shutil.rmtree, d, True)
+        with open(os.path.join(d, '.env'), 'w') as f:
+            f.write('GDI=/discs/mygame.GDI\n')
+        self.assertEqual(self.nb.program_name(d)[0], 'mygame', 'no quotes, and .GDI in capitals')
+
+    def test_name_missing(self):
+        d = tempfile.mkdtemp(prefix='name')
+        self.addCleanup(shutil.rmtree, d, True)
+        with self.assertRaises(SystemExit, msg='no GDI in .env stops the build'):
+            self.nb.program_name(d)
 
     def test_ready(self):
         for a in (0xA080005C, 0x0080005C):

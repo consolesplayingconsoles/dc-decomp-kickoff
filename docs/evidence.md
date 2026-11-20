@@ -1241,3 +1241,40 @@ BupFailDialog compare only up to the step limit; _div64 and emotFaceMorph rest o
     branch with the bug unrun. And a test of drawn pixels missed pixels never drawn.
   - **Every runtime change comes with a test**, C for the runtime's C (`tests/c/`, one `test_<file>.c` per file, built
     against the template's file and run in the port image), as Python tests cover the tools.
+
+### Step 10 on Crazy Taxi: stalls, the save file, the pause screen and the street objects (2026-11-20)
+- Stalls in the race (frames given up again and again, more than half the play time): the list-end mask of each stalled frame
+  lacked the translucent list. The opaque modifier list (the cars' shadows) went 32 bytes out of step and its end was read as
+  data. The NAOMI library closes a shadow volume by flushing both store queues again at the next address without storing to
+  them: on the SH-4 a queue keeps its 32 bytes after a flush, so the last triangle goes out once more. The runtime had the
+  queue area as plain memory and sent what lay there. -> `hw.c` models the two queues and what each keeps (a word not stored
+  since the last flush is the queue's); `tests/c/test_hw.c`. Found by recording the stalls from `/proc/<pid>/mem` (the Kamui
+  frame words every 10 ms, the RAM at each stall) and parsing the recorded lists offline with the runtime's own parser.
+- The pause screen black past its left edge: the race is drawn into a 512x512 texture; the runtime sized that render from the
+  region array's tiles, whose entries 37-38 held other words with the last-entry bit, so 96 pixels wide. -> the size comes
+  from the clip registers; `tests/c/test_pvr.c`.
+- No save file ("Load failed" after "press A to create a new file"): `SaveBackupData` passed its save record to
+  `buMakeBackupFileImage` unfilled. The generated C kept the record's five fields in locals: the frame pass took the slots for
+  locals because the address passed on was given a short reach (the pass now defaults to the whole frame, after Zombie Revenge,
+  and this function predated it). Regenerated with the current generator. It had been proven Equivalent: the checker compared
+  only the words stored right from a passed frame address since the last call, and the fields lie 0x44 on, after the record's
+  `memmove`. -> sh4sim runs the real callee on a copy of the memory at each mocked call with a frame address and records the
+  frame words it reads before writing them; equiv compares those where either side stored them (`tests/test_equiv_reach.py`).
+  The new check fails the old C on its first case (the callee reads the icon pointer at +0x44: original `0C0EEC83`, C a leftover).
+- Street objects (boxes, signs) tumbling and bouncing without being hit, never at rest (the port only: the Dreamcast build
+  links the SDK's original `nlOuterProduct`, the port compiles its C). Found by recording every object at 120 consecutive
+  frames, then running `SetObjFly` from a recorded state three ways: the original in sh4sim, the C compiled for the Dreamcast
+  in sh4sim, the native build's function called under gdb in a headless copy loaded with the recorded RAM (the game's stack
+  set first: the C is built for x32). `GetCollision2D` agreed on all 576 points; `SetObjFly`'s spin did not. The cause:
+  `nlOuterProduct`'s C wrote `out[2]` before reading `b[1]` and `b[2]`, and `SetObjFly` calls it with the result over its
+  second operand. Every proof case had its own output. -> reads first, as the original; equiv runs each case again with an
+  output pointer set to each input pointer (`alias_variants`, same test file). The old C fails on the first variant.
+- Both checker changes alter what a pass means: earlier passes are not carried over, so a game's Equivalent functions are
+  checked again on the next run of equiv.
+- Method notes:
+  - Record against a trigger the game sets, never against a guessed moment: two RAM recordings missed (one covered a pause,
+    one started at the race's end). A ring of the last 10 s of RAM, stopped on the operator's word, caught the moment at once.
+  - gdb's `call` into the native game runs on the host stack: set `$rsp` into the game's stack first (x32 code faults otherwise),
+    pass SIGSEGV through, and never print an optimised-out local from a `dprintf` inside the call (gdb abandons the call, and
+    the cut-short run looks like the game leaving a loop).
+  - The port's `--fast` does not switch the exact FPU path (`port_fast_fpu`); set it directly to compare with the simulator.
