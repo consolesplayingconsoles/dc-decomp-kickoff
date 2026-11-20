@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="770" height="680" viewBox="0 0 770 680" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#222">
+  <title>dc-decomp-kickoff: the ten steps and where each one goes back to</title>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#222" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="back" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#c0392b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+  <rect width="770" height="680" fill="#fff"/>
+
+  <!-- groups -->
+  <g fill="none" stroke="#999" stroke-width="1.2" stroke-dasharray="4 3">
+    <rect x="65" y="260" width="330" height="148" rx="8"/>
+    <rect x="65" y="448" width="330" height="212" rx="8"/>
+  </g>
+  <g font-size="12" fill="#555">
+    <text x="75" y="277">Prove the C</text>
+    <text x="75" y="465">Build and run</text>
+  </g>
+
+  <!-- steps -->
+  <g fill="#f4f4f4" stroke="#222" stroke-width="1.2">
+    <rect x="85" y="20" width="290" height="44" rx="6"/>
+    <rect x="85" y="84" width="290" height="44" rx="6"/>
+    <rect x="85" y="148" width="290" height="44" rx="6"/>
+    <rect x="450" y="148" width="280" height="44" rx="6"/>
+    <rect x="450" y="212" width="280" height="44" rx="6"/>
+    <rect x="85" y="288" width="290" height="44" rx="6"/>
+    <rect x="85" y="352" width="290" height="44" rx="6"/>
+    <rect x="85" y="476" width="290" height="44" rx="6"/>
+    <rect x="85" y="540" width="290" height="44" rx="6"/>
+    <rect x="85" y="604" width="290" height="44" rx="6"/>
+    <rect x="450" y="540" width="280" height="44" rx="6"/>
+  </g>
+  <g stroke="none">
+    <text x="99" y="47"><tspan font-weight="bold">1</tspan>&#160;&#160;Decomp project setup</text>
+    <text x="99" y="111"><tspan font-weight="bold">2</tspan>&#160;&#160;Signature-driven baseline</text>
+    <text x="99" y="175"><tspan font-weight="bold">3</tspan>&#160;&#160;Asset mapping</text>
+    <text x="464" y="175">Shuriken Explorer</text>
+    <text x="464" y="239"><tspan font-weight="bold">4</tspan>&#160;&#160;Opportunity-driven optional boosts</text>
+    <text x="99" y="315"><tspan font-weight="bold">5</tspan>&#160;&#160;Incremental script-generated decomp</text>
+    <text x="99" y="379"><tspan font-weight="bold">6</tspan>&#160;&#160;Experience-driven agentic decomp</text>
+    <text x="99" y="503"><tspan font-weight="bold">7</tspan>&#160;&#160;Code size reduction</text>
+    <text x="99" y="567"><tspan font-weight="bold">8</tspan>&#160;&#160;Build from C</text>
+    <text x="99" y="631"><tspan font-weight="bold">9</tspan>&#160;&#160;Runtime repairs</text>
+    <text x="464" y="567"><tspan font-weight="bold">10</tspan>&#160;&#160;Native port</text>
+  </g>
+  <text x="590" y="604" text-anchor="middle" font-size="12" fill="#555">Can start once enough C is proven</text>
+
+  <!-- forward -->
+  <g stroke="#222" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)">
+    <path d="M230 64V84"/>
+    <path d="M230 128V148"/>
+    <path d="M230 192V288"/>
+    <path d="M375 184H410V234H450"/>
+    <path d="M590 256V274H330V288"/>
+    <path d="M375 170H450"/>
+    <path d="M230 332V352"/>
+    <path d="M230 396V476"/>
+    <path d="M230 520V540"/>
+    <path d="M230 584V604"/>
+    <path d="M395 334H590V540"/>
+    <!-- loops on 5 and 6 -->
+    <path d="M375 300C395 300 395 320 375 320"/>
+    <path d="M375 364C395 364 395 384 375 384"/>
+  </g>
+
+  <!-- back -->
+  <g stroke="#c0392b" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="5 4" marker-end="url(#back)">
+    <path d="M65 600H36V350H65"/>
+    <path d="M85 632H14V106H85"/>
+    <path d="M450 562H420V350H395"/>
+    <path d="M730 562H750V106H375"/>
+  </g>
+</svg>

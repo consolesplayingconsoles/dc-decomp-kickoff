@@ -1,6 +1,7 @@
 import os as _tp_os, sys as _tp_sys  # noqa: E401  every tools folder on the import path (tools/toolpath.py)
 _tp_sys.path.insert(0, _tp_os.path.normpath(_tp_os.path.join(_tp_os.path.dirname(_tp_os.path.abspath(__file__)), '../..')))
 import toolpath  # noqa: E402,F401
+import layout  # noqa: E402
 import sys,re,json,os,subprocess,shutil
 sys.path.insert(0,os.path.dirname(__file__))
 import gen_drv,gen_core
@@ -54,10 +55,10 @@ def run_file(stem,items):
             protos.update(it[3]); use.append(it)
         else: deferred.append(it)
     head='/* scratch */\n'+gen_drv.protos_text(protos)+'\n\n'
-    open('src/%s.c'%stem,'w').write(head+'\n'.join(i[1] for i in use))
+    open(layout.c_path(stem),'w').write(head+'\n'.join(i[1] for i in use))
     shutil.rmtree('tests/%s'%stem,ignore_errors=True); os.makedirs('tests/%s'%stem)
     for it in use: json.dump(it[2],open('tests/%s/%s.json'%(stem,it[0]),'w'),indent=1)
-    r=subprocess.run(['python3','tools/equiv.py','src/%s.c'%stem],capture_output=True,text=True); out=r.stdout+r.stderr
+    r=subprocess.run(['python3','tools/equiv.py',layout.c_path(stem)],capture_output=True,text=True); out=r.stdout+r.stderr
     passed=[];failed=[]
     if 'compile failed' in out or 'ERROR' in out[:200]:
         return [],[i[0] for i in use],deferred,out[:400]
@@ -130,10 +131,10 @@ def run_file_robust(stem,items):
             spans.append((line,line+n,it[0])); text+=it[1]+'\n'; line+=n
         import rewrites
         text=rewrites.narrow_unit(text)                 # the spans stay: narrowing changes no line count
-        open('src/%s.c'%stem,'w').write(text)
+        open(layout.c_path(stem),'w').write(text)
         shutil.rmtree('tests/%s'%stem,ignore_errors=True); os.makedirs('tests/%s'%stem)
         for it in use: json.dump(it[2],open('tests/%s/%s.json'%(stem,it[0]),'w'),indent=1)
-        r=subprocess.run(['python3','tools/equiv.py','--full','src/%s.c'%stem],capture_output=True,text=True); out=r.stdout+r.stderr
+        r=subprocess.run(['python3','tools/equiv.py','--full',layout.c_path(stem)],capture_output=True,text=True); out=r.stdout+r.stderr
         LAST['out']=out
         if 'compile failed' in out:
             lines=[int(x) for x in re.findall(r'gen_\w+\.c\((\d+)\)',out)]

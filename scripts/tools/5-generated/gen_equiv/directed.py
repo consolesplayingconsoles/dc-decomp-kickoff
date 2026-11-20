@@ -12,6 +12,7 @@ Whatever the old case file held is archived (state/cases-history/).
 import os as _tp_os, sys as _tp_sys  # noqa: E401  every tools folder on the import path (tools/toolpath.py)
 _tp_sys.path.insert(0, _tp_os.path.normpath(_tp_os.path.join(_tp_os.path.dirname(_tp_os.path.abspath(__file__)), '../..')))
 import toolpath  # noqa: E402,F401
+import layout  # noqa: E402
 import copy
 import glob
 import json
@@ -795,7 +796,7 @@ def main(names, runtime, funcs):
                 ledger.archive_cases(n, path, 'directed-before')
                 sets['dev'] += new[0::2]; sets['holdout'] += new[1::2]
                 json.dump(sets, open(path, 'w'), indent=1)
-            r = subprocess.run(['python3', 'tools/equiv.py', '-q', 'src/%s.c' % stem], capture_output=True, text=True)
+            r = subprocess.run(['python3', 'tools/equiv.py', '-q', layout.c_path(stem)], capture_output=True, text=True)
             out = r.stdout + r.stderr
             for n, path, sets, new in changed:
                 line = next((l for l in out.splitlines() if l.startswith(n + ' ')), '')
@@ -804,7 +805,7 @@ def main(names, runtime, funcs):
                 ledger.record('direct', n, word, line[len(n):].strip())
                 if word == 'DIFFERS' and out_only(line):       # the return value alone: written again with another return kind, on these cases
                     import gen_drv
-                    src = 'src/%s.c' % stem
+                    src = layout.c_path(stem)
                     def check_(n=n):
                         r_ = subprocess.run(['python3', 'tools/equiv.py', src], capture_output=True, text=True)      # every line: -q leaves out a pass
                         return re.search(r'^%s\s+EQUIVALENT\b' % re.escape(n), r_.stdout + r_.stderr, re.M) is not None

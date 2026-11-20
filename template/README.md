@@ -44,7 +44,7 @@ Updated on every commit by `tools/hooks/pre-commit` (enable once per clone:
 
 ## The steps
 
-This decomp follows the steps of the dc-decomp-kickoff skill: six from the disc to proven C for every function, then three to build, run and stabilise the game from that C. `AGENTS.md` has the detail.
+This decomp follows the steps of the dc-decomp-kickoff skill: six from the disc to proven C for every function, then three to build, run and stabilise the game from that C, then the native port. `AGENTS.md` has the detail.
 
 | # | Step                                    | Decomp completion                              | You provide                        | What it does                                                                                                                                                                                                                                                                                                               |
 |---|-----------------------------------------|------------------------------------------------|------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -57,6 +57,7 @@ This decomp follows the steps of the dc-decomp-kickoff skill: six from the disc 
 | 7 | **Code size reduction**                 | -                                              |                                    | Shrinks the code compiled from the proven C to the size of the original game code. A smaller version of a function replaces the old one only if it is still equivalent to the original.                                                                                                                                    |
 | 8 | **Build from C**                        | -                                              | The disc as a `.gdi`               | Builds the executable from the C and a disc image with it (`make disc GDI="your disc.gdi"`). Libraries, data and SDK stay as they are; pointers to game functions follow them.                                                                                                                                             |
 | 9 | **Runtime repairs**                     | BOOTS TO MENU, PLAYABLE, STABLE (`status.txt`) | Flycast GDB                        | Runs the game using Flycast GDB, locates and tracks bugs and iterates builds until the game is stable.                                                                                                                                                                                                                     |
+| 10 | **Native port**                         | Native column (`status.txt`)                   | Docker, the disc as a `.gdi`       | Builds the game from the proven C as an x86-64 Linux program and runs it outside the console (experimental). Every SDK function needs C except the hardware drivers.                                                                                                                                                       |
 
 ## Build
 
@@ -134,7 +135,7 @@ Other releases are different builds: `setup.sh` refuses them rather than produce
 |---|---|
 | [tests/<file>/<function>.json](tests/) | The test cases of each function |
 | [tests/equivalent.txt](tests/equivalent.txt) | The functions found Equivalent |
-| [badges/](badges) | The progress badge, written by [tools/progress.py](tools/progress.py): `progress.svg`. It also lists the statuses in [status.txt](status.txt) (BUILDS FROM C, BOOTS TO MENU, PLAYABLE, STABLE), ticked, crossed, or a question mark where not tested yet (`[?]`); each needs the ones above it |
+| [badges/](badges) | The progress badge, written by [tools/progress.py](tools/progress.py): `progress.svg`. It also shows the statuses of [status.txt](status.txt) that have two marks (BUILDS FROM C, BOOTS TO MENU, PLAYABLE, STABLE) as a grid, Dreamcast and Native, ticked, crossed, or a question mark where not tested yet (`[?]`); each needs the ones above it in its column |
 
 **Scripts and tools**
 
@@ -197,7 +198,7 @@ nobody ran). There is no pass mark: a function that passes is done, and the tota
 runs each function in an SH-4 interpreter twice per test case, the original bytes and your compiled C,
 and they must agree on calls, memory writes and the result. Passing functions are listed in
 `tests/equivalent.txt` and counted as done. The loop, and how to write many of them quickly, is in
-`AGENTS.md` and the kickoff skill's `references/equivalent-pipeline.md`.
+`AGENTS.md` and the kickoff skill's `docs/equivalent-pipeline.md`.
 
 ## Matching C units (the build tier)
 
@@ -214,7 +215,7 @@ original source file: all its functions share literal pools, so it goes in only 
 matches. A unit can sit in a folder of `src/` (`src/<dir>/<file>.c`) and name pieces of its own (`@ddata`, `@bdata`); options starting with `+` in the header
 (`+pool32`, `+synth16`, `+r04`, ...) are opt-in layouts and compilers for the files that need them; a unit that asks for none gets the default layout.
 `tools/fcmp.py` and `tools/permute.py` compare and rewrite a unit function by function. A game with code overlays builds them with
-`bash build_overlays.sh`. The options and overlays are described in the kickoff skill's `references/matching-units.md` and `references/overlays.md`.
+`bash build_overlays.sh`. The options and overlays are described in the kickoff skill's `docs/matching-units.md` and `docs/overlays.md`.
 `python3 tools/progress.py` reports the state,
 each function in one bucket: done (equivalent C; matching C and SDK source part of it), named only (a name is
 not done work), unnamed; plus documented functions and named globals. `docs/equivalent.md` holds

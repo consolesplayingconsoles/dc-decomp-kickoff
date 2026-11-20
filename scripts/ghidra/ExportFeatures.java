@@ -1,5 +1,5 @@
 // ExportFeatures.java <out.jsonl>: per-function features for matching a Katana executable against
-// a later port of the same game that kept its symbols (references/port-symbols.md). Run it on both
+// a later port of the same game that kept its symbols (docs/port-symbols.md). Run it on both
 // programs (-process <program> -noanalysis -readOnly).
 // One JSON object per function: entry, name, size, calls (ordered target entries), strings,
 // constants (scalars and literal-pool values, ints and floats as raw bits).

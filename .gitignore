@@ -2,3 +2,6 @@
 dist/
 __pycache__/
 *.pyc
+
+# C test builds (tests/c/Makefile)
+tests/c/build/

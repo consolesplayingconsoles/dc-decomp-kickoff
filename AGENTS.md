@@ -12,7 +12,7 @@ nothing.
 - Bug fix: the test reproduces the bug with the smallest synthetic input that shows it, and says in its
   docstring what behaviour it protects. It names no game, function or address of a game.
 - Evidence is not test text. Which game exposed a bug, what it looked like there and how it was found are
-  written in `references/evidence.md`, in the entry for that technique, never in a test or in this file.
+  written in `docs/evidence.md`, in the entry for that technique, never in a test or in this file.
 - New behaviour: one test method for each thing it must do, named for that thing.
 - A change that cannot be tested (a doc, a comment) needs no test; a change to what a tool prints or
   writes is behaviour, and does.
@@ -39,6 +39,25 @@ The tests follow Python's conventions and nothing of our own:
   working directory, `sys.path` and the environment are put back (`setUp` and `addCleanup`).
 - A test does not depend on the order it runs in or on another test's output.
 
+## The C tests (the port's runtime)
+
+The runtime's C (`template/port/runtime/`) is tested in C, the same way:
+
+- One program for a file: `tests/c/test_<file>.c` tests `template/port/runtime/<file>.c`, built against that
+  file alone (and the headers it includes).
+- Each check is `CHECK(condition, "what was wanted ...")`: a failure prints its file, line and message and the
+  test goes on. The exit code is the result: 0 every check passed, 1 one failed, 2 the test could not run.
+- The file's comment says what is protected and why, as a module docstring does.
+- Run all: `make -C tests/c`, on the Mac (Xcode's command-line tools and SDL 3: `brew install sdl3`) or on
+  Linux. Run one: `make -C tests/c TESTS=build/test_<file>`. A new test is added to `TESTS` in `tests/c/Makefile`.
+- A test reaches a file's static functions by including the file (`#include "nlib.c"`), and gives the few
+  functions it calls from the rest of the runtime as stand-ins in the test. `tests/c/check.h` has `CHECK`,
+  `check_done` and `console_map`, which maps memory at a console address (0x8C000000 ...): on the Mac the
+  tests link with a small page zero so the low 4 GB can be mapped.
+- They are the one exception to "no compiler". Still no game data: inputs are written in the test (a
+  triangle's vertices, a file name, a register value).
+- Their builds go to `tests/c/build/` (git-ignored); `make -C tests/c clean` removes them.
+
 ## The older tests
 
 The tests written before this standard were moved to it by name and shape (`test_<subject>.py`,
@@ -60,5 +79,6 @@ assertions. New tests are written that way from the start.
 ## Before a change is done
 
 1. The new test failed before the change and passes after it.
-2. `python3 -m unittest discover -s tests` passes.
+2. `python3 -m unittest discover -s tests` passes, and for a change to `template/port/runtime/`,
+   `make -C tests/c` passes too.
 3. The test and the change belong together: one change carries both.

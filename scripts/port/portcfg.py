@@ -1,4 +1,4 @@
-"""Shared setup for the port-symbol scripts (see references/port-symbols.md). Stdlib only.
+"""Shared setup for the port-symbol scripts (see docs/port-symbols.md). Stdlib only.
 
 Run the scripts in a work folder holding dc_features.jsonl and port_features.jsonl (from
 ghidra/ExportFeatures.java). Settings come from the environment:
