@@ -6,9 +6,12 @@ not yet tested is not "unstable"). No game data. Stdlib only.
 
     check.py      statuses() alone, lifted from progress.py (the rest of that module needs a repo):
                     states    [x] -> True, [ ] -> False, [?] -> None, in file order, comments and blank lines skipped
+                    columns   three marks are Flycast, Dreamcast, Native (the badge's grid), each column in its own order;
+                              two marks, the older form, are Dreamcast and Native with Flycast not tested
                     order     a tick under a question mark is an error; a question mark or a cross under a tick is not
                     syntax    any other mark is an error that names the line
-                    gate      the badge lists the statuses whenever status.txt has any, a first cross included (build red)
+                    hidden    a grid column shows only when its BUILDS FROM C (the grid's first line) is ticked; none
+                              ticked, no grid
                     marks     the badge's marks for the three states are a tick, a cross and a question mark
 """
 import unittest
@@ -86,15 +89,21 @@ class TestStatus(unittest.TestCase):
         out, err = run(statuses, '# comment\n[x] BUILDS FROM C\n\n[x] BOOTS TO MENU\n[ ] PLAYABLE\n[?] STABLE\n')
         if err or out != [('BUILDS FROM C', True), ('BOOTS TO MENU', True), ('PLAYABLE', False), ('STABLE', None)]:
             bad.append('states: expected True, True, False, None, got %s %s' % (out, err or ''))
+        out, err = run(statuses, '[x] [x] [ ] BUILDS FROM C\n[x] [ ] [?] BOOTS TO MENU\n[?] [ ] [ ] PLAYABLE\n')
+        if err or out != [('BUILDS FROM C', True, True, False), ('BOOTS TO MENU', True, False, None), ('PLAYABLE', None, False, False)]:
+            bad.append('columns: three marks are Flycast, Dreamcast, Native, got %s %s' % (out, err or ''))
         out, err = run(statuses, '[x] BUILDS FROM C\n[x] [ ] BOOTS TO MENU\n[x] [?] PLAYABLE\n[ ] [ ] STABLE\n')
-        if err or out != [('BUILDS FROM C', True), ('BOOTS TO MENU', True, False), ('PLAYABLE', True, None), ('STABLE', False, False)]:
-            bad.append('columns: two marks are Dreamcast then Native, got %s %s' % (out, err or ''))
-        out, err = run(statuses, '[x] BUILDS FROM C\n[x] [ ] BOOTS TO MENU\n[x] [x] PLAYABLE\n')
+        if err or out != [('BUILDS FROM C', True), ('BOOTS TO MENU', None, True, False), ('PLAYABLE', None, True, None), ('STABLE', None, False, False)]:
+            bad.append('columns: two marks (the older form) are Dreamcast then Native, Flycast not tested, got %s %s' % (out, err or ''))
+        out, err = run(statuses, '[ ] [x] [ ] BUILDS FROM C\n[x] [x] [ ] BOOTS TO MENU\n')
+        if not err or 'BOOTS TO MENU' not in err:
+            bad.append('columns: a Flycast tick under a Flycast cross must be an error naming the tick, got %s %s' % (out, err or ''))
+        out, err = run(statuses, '[x] [x] [ ] BUILDS FROM C\n[x] [x] [ ] BOOTS TO MENU\n[x] [x] [x] PLAYABLE\n')
         if not err or 'PLAYABLE' not in err:
             bad.append('columns: a Native tick under a Native cross must be an error naming the tick, got %s %s' % (out, err or ''))
-        out, err = run(statuses, '[x] BUILDS FROM C\n[ ] [x] BOOTS TO MENU\n[ ] [ ] PLAYABLE\n')
+        out, err = run(statuses, '[ ] [ ] [x] BUILDS FROM C\n[ ] [ ] [x] BOOTS TO MENU\n')
         if err:
-            bad.append('columns: Native may be ahead of Dreamcast (each column has its own order), got %s' % err)
+            bad.append('columns: Native may be ahead of Flycast and Dreamcast (each column has its own order), got %s' % err)
         out, err = run(statuses, '[x] BUILDS FROM C\n[x] BOOTS TO MENU\n[x] PLAYABLE\n[?] STABLE\n')
         if err or out[-1] != ('STABLE', None):
             bad.append('order: a question mark under ticks must pass, got %s %s' % (out, err or ''))
@@ -104,9 +113,17 @@ class TestStatus(unittest.TestCase):
         out, err = run(statuses, '[x] BUILDS FROM C\n[-] BOOTS TO MENU\n')
         if not err or 'line 2' not in err:
             bad.append('syntax: an unknown mark must be an error naming its line, got %s %s' % (out, err or ''))
-        src = open(PROGRESS, encoding='utf-8').read()
-        if re.search(r"extra=\[.*? if reached\b", src):
-            bad.append('gate: the badge shows the grid only once one is ticked; it must show from the first day')
+        grid = lift('grid_columns')
+        mark = lift('mark')
+        heads, rows = grid([('BUILDS FROM C', True, True, False), ('BOOTS TO MENU', True, False, None), ('PLAYABLE', None, False, False)], mark)
+        if heads != ['FLYCAST', 'DREAMCAST'] or [r[1] for r in rows] != [['✅', '✅'], ['✅', '❌'], ['❓', '❌']]:
+            bad.append('hidden: a column whose BUILDS FROM C is not ticked must not show, got %s %s' % (heads, rows))
+        heads, rows = grid([('BUILDS FROM C', None, False, False), ('BOOTS TO MENU', None, False, False)], mark)
+        if heads or rows:
+            bad.append('hidden: no BUILDS FROM C ticked, no grid, got %s %s' % (heads, rows))
+        heads, rows = grid([('A ONE-MARK LINE', True), ('BUILDS FROM C', False, False, True)], mark)
+        if heads != ['NATIVE'] or rows != [('BUILDS FROM C', ['✅'])]:
+            bad.append('hidden: one-mark lines are not on the grid; Native alone shows, got %s %s' % (heads, rows))
         mk = marks()
         if len(set(mk.values())) != 3 or mk[True] != '✅' or mk[False] != '❌' or mk[None] != '❓':
             bad.append('marks: expected tick, cross and question mark for True, False, None, got %r' % mk)
