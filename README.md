@@ -9,11 +9,22 @@ dc-decomp-kickoff is a **full decomp toolset**, from the disc to a game that pla
 * **Byte-identical rebuild**, one assembly file per function
 * **Functions named** from SDK signatures and your optional sources
 * **Text, model, texture and audio maps**, browsable in [Shuriken Explorer](https://github.com/consolesplayingconsoles/dc-shuriken-explorer)
+  * Visualizations of model skeletons and animations
+  * Custom per-game plugin support for models, text, textures and audio
+  * Side by side C/SH-4 assembly comparison per function
+  * Text visualization for translators (translators please reach out with feature requests)
 * **Equivalent C** proven in an SH-4 simulator, or **matching C** that rebuilds the original bytes
+* **SH-4 simulator** trained on a real Dreamcast over serial cable (future versions)
 * **Builds the game** and a disc image from the C
-* **Runtime repair** with Flycast GDB and a serial debugger (cable required)
+* **Runtime repair** with Flycast GDB, and a serial debugger (cable required, future versions)
 * **Agent plan, rules and tools** in `AGENTS.md`
-* **Native port tooling** (experimental): the build tools of step 10 and a runtime scaffold in `port/`
+* **Layered mod support**
+* **Native port tooling** (experimental)
+  * Build tools
+  * Runtime scaffold
+  * 16:9 widescreen
+  * Increased framerate (future versions)
+  * Video and mod settings support (future versions)
 
 The process was worked out on real Dreamcast decomps and is refined with every game that goes through it, so each decomp is easier than the last.
 
