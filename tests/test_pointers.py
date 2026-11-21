@@ -21,6 +21,8 @@ a listed size, tables of low pointers, byte tables that look like addresses.
                               an address is P dataref; its neighbour of the same shape, whose address nothing loads, is no candidate
                               (Zombie Revenge 0C20B184: the end of the heap inside the C library; left a number, the heap lost 170 KB)
                     words     words.txt N on a word the rules take as an address makes it N words
+                    arm       every word inside layout.txt's `arm <start> <end>` (code for the sound CPU, not the SH-4) is N arm, also
+                              the ones the rules would take as 0c / 8c addresses
 """
 import unittest
 from unittest import mock
@@ -62,6 +64,8 @@ F3 = (W(0xD201, 0x000B, 0x0009, 0x0009) +             # C00 mov.l @(C08),r2 / rt
       L(0x0C010700) +                                 # C10 a variable inside f3 that other code reads by address: holds an address
       L(0x0C010704))                                  # C14 the same shape, but nothing loads its address: two instructions
 IMAGE = IMAGE[:0xC00] + F3 + IMAGE[0xC00 + len(F3):]
+ARM = L(0x0C220C9A, 0, 0x8C036A84, 0)                 # 200 code for the sound CPU (layout.txt arm): words that only look like 0C / 8C addresses
+IMAGE = IMAGE[:0x200] + ARM + IMAGE[0x200 + len(ARM):]
 
 
 class TestPointers(unittest.TestCase):
@@ -104,7 +108,7 @@ class TestPointers(unittest.TestCase):
             open(os.path.join(tmp, '1ST_READ.BIN'), 'wb').write(IMAGE)
             open(os.path.join(tmp, 'BASE'), 'w').write('%08X\n' % BASE)
             open(os.path.join(tmp, 'functions.txt'), 'w').write('F %08x 12 f1\nD %08x 0 data_10\nF %08x 56 f2\nF %08x 58 f3\nF %08x 20 f4\n' % (BASE, BASE + 0x10, BASE + 0x40, BASE + 0xC00, BASE + 0xC3A))
-            open(os.path.join(tmp, 'layout.txt'), 'w').write('game 0C010000 0C010D00\nfixed 0C500000\n')
+            open(os.path.join(tmp, 'layout.txt'), 'w').write('game 0C010000 0C010D00\nfixed 0C500000\narm 0C010200 0C010210\n')
             open(os.path.join(tmp, 'words.txt'), 'w').write('N 0C01002C   # a test override\n')
             r = subprocess.run([sys.executable, 'tools/1-2-baseline/pointers.py'], cwd=tmp, stdout=subprocess.PIPE,
                                stderr=subprocess.STDOUT, universal_newlines=True)
@@ -118,7 +122,7 @@ class TestPointers(unittest.TestCase):
                     0x100: ('N', 'halves'), 0x104: ('N', 'halves'), 0x108: ('N', 'halves'), 0x10C: ('N', 'halves'), 0x110: ('N', 'halves'),
                     0x118: ('N', 'halves'), 0x124: ('P', '0c'), 0x128: ('P', '0c'), 0x130: ('P', '0c'), 0x134: ('P', '0c'),
                     0x40: ('P', 'codefn'), 0x48: ('P', 'coderun'), 0x50: ('P', 'coderun'), 0x58: ('P', 'coderun'),
-                    0xC08: ('P', 'pool'), 0xC10: ('P', 'dataref')}
+                    0xC08: ('P', 'pool'), 0xC10: ('P', 'dataref'), 0x200: ('N', 'arm'), 0x208: ('N', 'arm')}
             for at, w in sorted(want.items()):
                 if rows.get(at) != w:
                     bad.append('+%02X: %r, want %r' % (at, rows.get(at), w))

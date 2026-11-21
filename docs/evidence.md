@@ -1278,3 +1278,61 @@ BupFailDialog compare only up to the step limit; _div64 and emotFaceMorph rest o
     pass SIGSEGV through, and never print an optimised-out local from a `dprintf` inside the call (gdb abandons the call, and
     the cut-short run looks like the game leaving a loop).
   - The port's `--fast` does not switch the exact FPU path (`port_fast_fpu`); set it directly to compare with the simulator.
+
+### Step 9 on Power Stone: from a disc that restarts at boot to playable on Flycast and the Dreamcast (2026-11-21)
+- Start: the movable build from C (3,826 C functions) showed the licence screens and then hung or restarted. One day, seven causes,
+  none in the game's C logic: four were wrong or missing entries in `functions.txt` and `words.txt`, two were tool gaps, one was an
+  address in hand-written inline assembly. Result: boots to menu and
+  playable on Flycast and on the console (the first disc tried there), STABLE not tested yet.
+- Causes, in the order found, each with what showed it:
+  1. *An interrupt routine cut in two.* `functions.txt` listed an entry in the middle of straight-line code (the SDK's interrupt entry:
+     it saves the stack pointer, loads the interrupt stack and pushes the registers; the entry began at the pushes). The first half,
+     after the previous function's literal pool, was listed nowhere, so its three pc-relative accesses into the second half were seen
+     by no tool, and the build put the two halves in different units: 32 bytes apart with the unit pad, 4 without (unit alignment).
+     The interrupt stack pointer was then loaded from a neighbouring word holding 0. Seen as: the program counter fixed on the
+     dispatcher's `rte`; later, with the pad off, a stack pointer of 0 at a breakpoint; in a RAM dump, the nest counter's increment on
+     the saved interrupt code (0x320 read back as 0x321). Fixed by one entry covering the whole routine.
+  2. *A literal's half read as a load.* `shift._listed()` took every halfword of a function's listed bytes as an instruction, its own
+     pool included: the low half of a pool long (0xD92C) reads as `mov.l @(disp,pc)`, and the word it points at, two instructions of the
+     next function, became a pool word and was rewritten as an address. Seen as an undecodable word at the hang. Fixed in the tool: a
+     literal that walked code loads is data (`tests/test_shiftpool.py`; 516 false pool words on this game, 2 new ones).
+  3. *The sound CPU's driver rewritten.* 29 words of the ARM driver the game uploads to the sound CPU start with 0C, 8C or AC and were
+     moved as SH-4 addresses. Fixed in the tool: `layout.txt` `arm <start> <end>`, every word inside is a number (`tests/test_pointers.py`).
+     Real, and not what restarted this game: the restart was cause 1 all along.
+  4. *Unlisted routines and a short size in the kept library.* Three small routines after a function's pool and one after another's,
+     and a function listed 26 bytes short: each reads a pool in a piece the build moved by a different amount. Found by a scan of the
+     map, not by a symptom. Fixed by four entries and one size; the four were then proven Equivalent by the generator.
+  5. *Data listed as functions.* A 2,028-byte run of pointer tables whose first word decodes as `bra`, and 14 entries in the data block
+     that are single pointer words or a pointer table. Inside a listed function only tight runs of addresses are candidates, so 62
+     pointers were left as numbers; one was the texture descriptor handed to Kamui (error 4, and the library parks itself on its own
+     `bra .`). Fixed by `D` lines.
+  6. *Numbers taken for addresses.* 47 words of byte or packed data whose value falls inside the game code at no function's start
+     (0C080408, 0C0C0C0C ...) were relocated. Fixed by `N` lines in `words.txt`. The newer classifier disagrees with the repo's on 3 of them.
+  7. *An address written as a number in inline assembly.* A hand-written helper called the block mover through `.DATA.L H'0C0E7080`;
+     the build rewrites C numbers (`0x0C...`), not the assembler form, so the call went to the old address, the middle of a C function
+     in the new layout, where a `jsr @r3` called itself for ever (r3 = its own address) while interrupts kept the music playing. Fixed
+     with the symbol (`.IMPORT __quick_mvn`, `.DATA.L __quick_mvn`) and the function proven again. 88 more such lines are in the kept
+     library's C, which the console build does not compile.
+- What was wrong on the way, so nobody repeats it:
+  - The unit pad (each asm unit at its original address modulo 32) was blamed first, switched off, and made a setting. It was never
+    the cause: it only made cause 1 miss by 32 bytes instead of 4. With the pad off the controller stopped answering (24 Maple
+    addresses lost their 32-byte alignment), which is what the pad is for. The setting was removed again; the pad stays as it was.
+  - "The repo's tools are older than the skill's" was the first theory and explained nothing: the file with cause 2 was identical in
+    the repo and the skill.
+  - A frozen map screen with tiles in a different order at every build was read as corrupt tile data. It was a transition effect
+    stopped part-way by cause 7.
+  - Sampling the program counter slows the emulator enough that a moment a few seconds in is never reached; a snapshot that polls
+    every 10 ms missed twice. What worked: breakpoints placed once the game's own code is running (`bp --in <a range the start-up
+    passes through>`), one on each call of the suspect function and on its return points, read as "which was reached last".
+    A GDB-enabled Flycast shows "Starting" until a client connects.
+  - The emulator's own log said `System reset requested`, so the restart was the game's choice (a failed file load ends in the
+    shutdown routine), not a fault: read it first, as the Zombie Revenge entry says.
+- Checks that found causes without a symptom, not yet tools (each would stop a build): a listed function holding address-looking
+  words that are not candidates, or any `F` entry inside the data block (5); a pc-relative read from bytes no entry lists as code into
+  a piece the build moved by a different amount (4, and 1 after the fact); relocated data words that point into game code at no
+  function's start (6). The second, run without the map, lists about 110 more runs of unlisted code on this game: the same defect
+  waiting for a layout change, and the function count is that much short of the truth. Generating entries for them automatically gave
+  literal pools as functions; that needs `missed_funcs.py`, not a scan.
+- -> the skill: `shift._listed()` and the `arm` region (done, with tests); Step 2 should refuse an entry whose first instruction is
+  reached by falling through from unlisted code that is not filler; the build should rewrite, or refuse, an image address written
+  as `H'...` in inline assembly.
