@@ -134,6 +134,21 @@ class TestEquivReach(unittest.TestCase):
         regs = {'r4': '0C800000', 'r5': '0C800100', 'r6': '0C800000'}
         self.assertEqual(self.variants(regs, writes=[0x0C800000], reads=[0x0C800100], alias='output r6 over r4'), [])
 
+    # --- an aliased variant the original cannot run on ---
+
+    def test_variant_the_original_stops_on_has_no_verdict(self):
+        aliased = {'regs': {}, 'alias': 'output r6 over r4'}
+        self.assertTrue(self.equiv.alias_unusable(aliased, {'error': 'more than 2000000 instructions'}),
+                        'the original looped on the aliased input: the case says nothing about the C')
+        self.assertTrue(self.equiv.alias_unusable(aliased, {'error': 'unaligned 4-byte read at 0C800001'}))
+
+    def test_variant_the_original_runs_on_is_compared(self):
+        self.assertFalse(self.equiv.alias_unusable({'regs': {}, 'alias': 'output r6 over r4'}, {'error': None}))
+
+    def test_a_plain_case_the_original_stops_on_still_fails(self):
+        self.assertFalse(self.equiv.alias_unusable({'regs': {}}, {'error': 'more than 2000000 instructions'}),
+                         'only an aliased variant is dropped: the original stopping on a real case is still a failure')
+
 
 if __name__ == '__main__':
     unittest.main()
