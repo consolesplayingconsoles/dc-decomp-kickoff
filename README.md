@@ -125,5 +125,8 @@ determining whether you are entitled to obtain and use any such material.
 
 ## About the author
 
-- 📸 **Instagram:** [@consolesplayingconsoles](https://www.instagram.com/consolesplayingconsoles/)
-- 🔗 **Everything else:** [beacons.ai/consolesplayingconsoles](https://beacons.ai/consolesplayingconsoles)
+📸 **Instagram:** [@consolesplayingconsoles](https://www.instagram.com/consolesplayingconsoles/)
+
+🔗 **Everything else:** [beacons.ai/consolesplayingconsoles](https://beacons.ai/consolesplayingconsoles)
+
+☕ **buymeacoffee:** [@consolesplayingconsoles](https://buymeacoffee.com/consolesplayingconsoles)

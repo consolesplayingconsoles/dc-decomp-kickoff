@@ -591,7 +591,7 @@ static void game_main(void)
     call_console(GAME_INITSCT, 0);                /* _INITSCT: the bss cleared, the initial data copied */
     call_console(GAME_INITLIBH, 0);               /* _INITLIBH: the library modules' entries */
     call_console(GAME_MAIN, 0);                   /* what the start code calls: main, or the game's own main loop */
-    fprintf(stderr, "crazytaxi: MainLoop returned\n");
+    fprintf(stderr, PORT_NAME ": main returned\n");
 }
 
 static void on_alarm(int sig)
