@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""How the shrink measures the current C (scripts/tools/sizes.py c_size_any), with no game data and no compiler. Stdlib only.
+"""How the shrink measures the current C (scripts/tools/7-reduction/sizes.py c_size_any), with no game data and no compiler. Stdlib only.
 
     check.py      c_size is replaced by a stand-in that fails for one set of prototypes, as the compiler does when a set written
                   for the new C declares a float where the current C uses an int ("Scalar required for !", Crazy Taxi camUpdate

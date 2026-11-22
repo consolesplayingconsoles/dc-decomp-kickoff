@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""C that calls a function without an argument the original gives it (scripts/tools/consistency.py, short_calls; the check itself is
+"""C that calls a function without an argument the original gives it (scripts/tools/common/consistency.py, short_calls; the check itself is
 scripts/tools/8-build/protocheck.py scan_lost). Virtua Tennis uniformPreviewFree called nlObjPutFreeTextureOnce() under an old prototype
 `(void)` after the callee was found to take the model in r4: Exhibition went black on the console once the court was picked, and the
 proof passed, the call being compared on the caller's own prototype. charaTexReloadAll and strmBgmFadeOut were the same, and Zombie
@@ -24,7 +24,7 @@ import sys
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-TOOL = os.path.join(os.path.dirname(HERE), 'scripts', 'tools', 'consistency.py')
+TOOL = os.path.join(os.path.dirname(HERE), 'scripts', 'tools', 'common', 'consistency.py')
 
 FUNCTIONS = "F 8c010000 16 f_short\nF 8c010020 16 f_noset\nF 8c010040 16 f_full\nF 8c010060 16 f_hand\nF 8c010100 4 g\n"
 FILES = {'gen_a': "int g(void);\nint f_short(void)\n{\n    return g();\n}\nint f_noset(void)\n{\n    return g();\n}\n",

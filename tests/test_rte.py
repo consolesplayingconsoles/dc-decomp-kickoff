@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""rte in the simulator (scripts/tools/sh4sim.py): the instruction of an exception or interrupt handler. Stdlib only, no compiler, no game data.
+"""rte in the simulator (scripts/tools/sim/sh4sim.py): the instruction of an exception or interrupt handler. Stdlib only, no compiler, no game data.
 
 rte returns to SPC and loads SR from SSR once its delay slot has run. The simulator has no exceptions: a run starts with SPC = the
 return address and SSR = the entry SR, so a handler ends the run like rts and gives SR back. Virtua Tennis FUN_8c1fc7cc / 7d0 / 77c (the
@@ -20,6 +20,7 @@ import tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL = os.path.dirname(HERE)
 sys.path.insert(0, os.path.join(SKILL, "scripts", "tools"))
+import toolpath  # noqa: E402,F401  (every tools folder on the import path: sim/, common/, the steps)
 import sh4sim  # noqa: E402
 
 BASE = 0x0C010000

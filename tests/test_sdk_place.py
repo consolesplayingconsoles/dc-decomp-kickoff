@@ -20,7 +20,7 @@ No game data, no compiler. Stdlib only.
     start      the start code's _INITSCT is Shinobi's although it is the first function of its block, before any Kamui name
     helper     a helper whose name only looks like the C library's (memcpy2, between two ADX functions) goes with the
                library around it; memcpy itself is the runtime's
-    names      afterwards every C file's name is still unique across the folders (tools/layout.py)
+    names      afterwards every C file's name is still unique across the folders (tools/common/layout.py)
 """
 import os
 import shutil
@@ -33,6 +33,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 TOOLS = os.path.join(os.path.dirname(HERE), 'scripts', 'tools')
 TOOL = os.path.join(TOOLS, '5-generated', 'sdk_place.py')
 sys.path.insert(0, TOOLS)
+import toolpath  # noqa: E402,F401  (every tools folder on the import path: sim/, common/, the steps)
 import layout  # noqa: E402
 
 FUNCS = '''F 0c020100 20 gameThing

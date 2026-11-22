@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The SDK code that drives hardware a host does not have: sdk.txt's `hardware` lines (scripts/tools/layout.py).
+"""The SDK code that drives hardware a host does not have: sdk.txt's `hardware` lines (scripts/tools/common/layout.py).
 No game data, no compiler. Stdlib only.
 
     lines      `hardware <start> <end> <what>` in sdk.txt gives a range and what it is: the Maple bus driver, the GD-ROM file
@@ -17,6 +17,7 @@ import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(HERE), 'scripts', 'tools'))
+import toolpath  # noqa: E402,F401  (every tools folder on the import path: sim/, common/, the steps)
 import layout  # noqa: E402
 
 SDK = '''# Katana SDK code

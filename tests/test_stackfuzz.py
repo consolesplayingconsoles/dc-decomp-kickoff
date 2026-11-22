@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""STACKFUZZ=<seed> equiv.py runs a function's cases again with distinct nonzero words at the entry stack (scripts/tools/equiv.py).
+"""STACKFUZZ=<seed> equiv.py runs a function's cases again with distinct nonzero words at the entry stack (scripts/tools/sim/equiv.py).
 No game data, no compiler. Stdlib only.
 
 The cases hold zeros in the words past the declared parameters, where a C that reads its own frame for a word the caller pushed gives the

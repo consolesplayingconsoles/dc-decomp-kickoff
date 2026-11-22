@@ -21,7 +21,7 @@ executables on a disc are often bundled applications (a web browser), not the ga
 arcade original rather than of the Dreamcast version shares no code with it. Without symbols, a
 port is still a reading reference (x86 decompiles more readably), not a naming source.
 
-## Steps (scripts in `scripts/port/`, `scripts/ghidra/ExportFeatures.java`)
+## Steps (scripts in `scripts/tools/1-2-baseline/setup/port/`, `scripts/tools/1-2-baseline/setup/ghidra/ExportFeatures.java`)
 
 1. Get the library: an `.apk`/`.xapk` is a zip; the native code is `lib/<abi>/*.so` (a split
    `.xapk` keeps it in `config.<abi>.apk`). `nm -D --defined-only` should list the game's names.

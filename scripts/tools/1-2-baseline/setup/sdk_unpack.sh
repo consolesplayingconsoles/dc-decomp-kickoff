@@ -8,7 +8,7 @@
 # Discs older than InstallShield 5 (.z archives, no data1.hdr) are left as copied: say so.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
-. "$HERE/docker_check.sh"
+. "$HERE/../../common/docker_check.sh"
 SRC="${1:?usage: sdk_unpack.sh <SDK image | zip | folder> <out folder>}"
 mkdir -p "${2:?usage: sdk_unpack.sh <SDK image | zip | folder> <out folder>}"; OUT="$(cd "$2" && pwd)"
 if [ -d "$SRC" ]; then FILES="$(cd "$SRC" && pwd)"

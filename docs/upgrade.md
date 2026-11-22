@@ -43,7 +43,7 @@ or an upgrade never does, and a missing or unreadable `KICKOFF` is never taken t
    target (or `git archive`). Every action below compares `<tmp>/from` with `<tmp>/to`, never with
    the working copy of the skill.
 4. **Tools** (the repo's copies must be identical to the skill's): the target's `scripts/tools/` tree is copied over the repo's
-   `tools/` (from v2 the whole tree: step folders, `toolpath.py`, `hooks/`, `tools-image/`; before v2 a list in SKILL.md step 2).
+   `tools/`, without `1-2-baseline/setup/` (the kickoff's own scripts stay in the skill) (from v2 the whole tree: step folders, `toolpath.py`, `hooks/`, `tools-image/`; before v2 a list in SKILL.md step 2).
    A tool the target no longer has is removed from `tools/`; one it adds is copied in. From a version before v2, the repo's flat
    `tools/*.py` are removed after the tree is in (each one now lives in its step folder), and every script, hook and document
    of the repo that names a tool by path is updated to the new path.

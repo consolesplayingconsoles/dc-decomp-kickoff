@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ldc sr and the SR block bit (scripts/tools/sh4sim.py set_sr). Stdlib only, no compiler, no game data.
+"""ldc sr and the SR block bit (scripts/tools/sim/sh4sim.py set_sr). Stdlib only, no compiler, no game data.
 
 The simulator has no exceptions and no interrupts, so SR.BL (bit 28, "block exceptions") changes nothing it could show: a function that
 sets it (stc sr / or #0x10000000 / ldc sr) must run, and `stc sr` must read the bit back. SR.RB (bit 29, register bank) selects a bank of
@@ -21,6 +21,7 @@ import tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL = os.path.dirname(HERE)
 sys.path.insert(0, os.path.join(SKILL, "scripts", "tools"))
+import toolpath  # noqa: E402,F401  (every tools folder on the import path: sim/, common/, the steps)
 import sh4sim  # noqa: E402
 
 BASE = 0x0C010000

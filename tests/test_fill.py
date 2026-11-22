@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""What a mocked call writes through its argument registers (scripts/tools/sh4sim.py poke_arg), with the real simulator on synthetic
+"""What a mocked call writes through its argument registers (scripts/tools/sim/sh4sim.py poke_arg), with the real simulator on synthetic
 code. No game data, no compiler. Stdlib only.
 
 A case answers a call with words the callee writes through an argument register (an output buffer). The register may hold a value,

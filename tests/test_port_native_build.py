@@ -54,7 +54,8 @@ class NativeBuild(unittest.TestCase):
             fp.write('int f(void) { return 0; }\n')
         os.makedirs(os.path.join(cls.tmp, 'tools'))
         shutil.copy(os.path.join(TOOLS, 'toolpath.py'), os.path.join(cls.tmp, 'tools'))
-        shutil.copy(os.path.join(TOOLS, 'layout.py'), os.path.join(cls.tmp, 'tools'))                  # the build asks it where the C lives
+        os.makedirs(os.path.join(cls.tmp, 'tools', 'common'), exist_ok=True)
+        shutil.copy(os.path.join(TOOLS, 'common', 'layout.py'), os.path.join(cls.tmp, 'tools', 'common'))                  # the build asks it where the C lives
         os.makedirs(os.path.join(cls.tmp, 'tools', '5-generated'))
         shutil.copy(os.path.join(TOOLS, '5-generated', 'sdk_place.py'), os.path.join(cls.tmp, 'tools', '5-generated'))   # the function reader
         shutil.copytree(os.path.join(TOOLS, '10-port'), os.path.join(cls.tmp, 'tools', '10-port'),
@@ -78,6 +79,29 @@ class NativeBuild(unittest.TestCase):
             if v is not None:
                 sys.modules[k] = v
         shutil.rmtree(cls.tmp, True)
+
+    def test_no_source_patch(self):
+        # the port compiles src/ as the decomp has it: a fix to the C is made in src/, never as a port-side patch
+        root = self.nb.ROOT
+        patch = os.path.join(root, 'port', 'src_fixes.patch')
+        with open(patch, 'w') as f:
+            f.write('--- a/src/a.c\n+++ b/src/a.c\n@@ -1 +1 @@\n-int f(void) { return 0; }\n+int f(void) { return 1; }\n')
+        self.addCleanup(os.remove, patch)
+        out = self.nb.fixed_src()
+        with open(os.path.join(out, 'a.c')) as f:
+            self.assertEqual(f.read(), 'int f(void) { return 0; }\n', 'src/ compiled as it is, the patch ignored')
+        self.assertFalse(os.path.exists(os.path.join(TOOLS, '10-port', 'mkpatch.sh')), 'no tool writes a source patch')
+
+    def test_functions_come_from_functions_txt_only(self):
+        # a function the game calls is listed in functions.txt, never in a port-side list (port/extra_functions.txt)
+        root = self.nb.ROOT
+        with open(os.path.join(root, 'functions.txt'), 'w') as f:
+            f.write('F 8c010000 16 f1\n')
+        with open(os.path.join(root, 'port', 'extra_functions.txt'), 'w') as f:
+            f.write('8c010008 inner  # called by address\n')
+        self.addCleanup(os.remove, os.path.join(root, 'functions.txt'))
+        self.addCleanup(os.remove, os.path.join(root, 'port', 'extra_functions.txt'))
+        self.assertEqual(self.nb.read_functions(), {'f1': 0x8C010000})
 
     def test_mmio(self):
         for a in (0xA05F689C, 0xA05F8068, 0x005F8068, 0xFFD80008, 0xFFA00020, 0xA0710000):

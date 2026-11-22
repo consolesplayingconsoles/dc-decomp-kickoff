@@ -8,7 +8,7 @@
                               the typedef, and the prototype follows
                     structform `int f(Stk1 s, float f4)` with `stk[5] = s.w[0];`: `Stk4 p`, four spills
                     nospill   a function with no spill of a stack word is not rewritten
-                    search    main() with a stand-in tools/equiv.py that passes the fuzzed run from K=5 up: it writes K=3, 4, 5 in turn
+                    search    main() with a stand-in tools/sim/equiv.py that passes the fuzzed run from K=5 up: it writes K=3, 4, 5 in turn
                               (the default list), stops at 5 with exit 0 and leaves the file at K=5; a named list (6 7) starts there
                     restore   a stand-in that never passes: every K is tried, the file is put back byte for byte, exit 2
                     skip      a function with no spill line: exit 1, the file untouched, equiv.py never run
@@ -105,7 +105,7 @@ class TestStackwiden(unittest.TestCase):
                     bad.append('structform lacks %r:\n%s' % (need, b))
             if '@@C None no spill line of a stack word' not in out:
                 bad.append('nospill: ' + out[-200:])
-            open(os.path.join(tmp, 'tools', 'equiv.py'), 'w').write(STUB)
+            open(os.path.join(tmp, 'tools', 'sim', 'equiv.py'), 'w').write(STUB)
             rc, out, text, log = widen(tmp, INTFORM, env={'STUB_PASS_FROM': '5'})
             if rc != 0 or 'Stk5 p' not in text or log != ['3 1', '3 plain', '4 1', '4 plain', '5 1', '5 plain']:
                 bad.append('search: want exit 0 at K=5 after trying 3, 4, 5; got exit %s, log %s:\n%s%s' % (rc, log, out, text))

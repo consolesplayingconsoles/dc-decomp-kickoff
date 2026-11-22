@@ -59,8 +59,9 @@ class LeakFallback(unittest.TestCase):
                 fp.write(text)
         os.makedirs(os.path.join(self.tmp, 'port', 'runtime'))
         os.makedirs(os.path.join(self.tmp, 'tools'))
-        for f in ('toolpath.py', 'layout.py'):
-            shutil.copy(os.path.join(TOOLS, f), os.path.join(self.tmp, 'tools'))
+        shutil.copy(os.path.join(TOOLS, 'toolpath.py'), os.path.join(self.tmp, 'tools'))
+        os.makedirs(os.path.join(self.tmp, 'tools', 'common'))
+        shutil.copy(os.path.join(TOOLS, 'common', 'layout.py'), os.path.join(self.tmp, 'tools', 'common'))
         for d in ('10-port', '5-generated'):
             shutil.copytree(os.path.join(TOOLS, d), os.path.join(self.tmp, 'tools', d), ignore=shutil.ignore_patterns('__pycache__', 'gen_equiv'))
         saved_path, saved_env = list(sys.path), dict(os.environ)

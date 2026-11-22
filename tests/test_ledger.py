@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Nothing cuts the reason a function failed (scripts/tools/ledger.py, gen_equiv). Stdlib only, a scratch folder, no game data.
+"""Nothing cuts the reason a function failed (scripts/tools/common/ledger.py, gen_equiv). Stdlib only, a scratch folder, no game data.
 
     check.py      detail    record() keeps a detail of any length: it cut each at 400 characters, and a DIFFERS line on a long call list
                             lost the call that differs (Virtua Tennis playerInit, 46 functions whose difference could not be sorted)
@@ -18,6 +18,7 @@ import tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 TOOLS = os.path.join(os.path.dirname(HERE), 'scripts', 'tools')
 sys.path.insert(0, TOOLS)
+import toolpath  # noqa: E402,F401  (every tools folder on the import path: sim/, common/, the steps)
 import ledger  # noqa: E402
 
 

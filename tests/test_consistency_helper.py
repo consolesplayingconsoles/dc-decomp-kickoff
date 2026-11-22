@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generated C that calls one of the compiler's register helpers by name (scripts/tools/consistency.py). The helpers take their operands in
+"""Generated C that calls one of the compiler's register helpers by name (scripts/tools/common/consistency.py). The helpers take their operands in
 r0-r2, so a C call runs on whatever those registers hold. Zombie Revenge: 36 functions were generated while _quick_odd_mvn and _divls had
 FUN_ names and were renamed later; FUN_0c07f340's 12-byte copy jumped into a texture through the helper's `braf r0` as the player took
 control, and its proof had passed because no case reached the call. No game data, no compiler. Stdlib only.
@@ -21,7 +21,7 @@ import sys
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-TOOL = os.path.join(os.path.dirname(HERE), 'scripts', 'tools', 'consistency.py')
+TOOL = os.path.join(os.path.dirname(HERE), 'scripts', 'tools', 'common', 'consistency.py')
 
 FUNCTIONS = "F 8c010000 32 f_mvn\nF 8c010100 32 f_div\nF 8c010200 32 f_copy\nF 8c010300 32 f_named\n"
 C = """int _quick_odd_mvn(int, int, int, int, float, float);

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A function whose code begins before its entry (functions.txt `B <start> <size> <name>`; scripts/tools/sh4sim.py body_before,
+"""A function whose code begins before its entry (functions.txt `B <start> <size> <name>`; scripts/tools/sim/sh4sim.py body_before,
 scripts/tools/5-generated/gen_equiv/gen_core.py BODY). SHC can lay a loop's body out above the function's address and enter at the loop
 test: Zombie Revenge FUN_0c016d20 has its body at 0C016CE0 and its entry at 0C016D20. Listed from the entry only, the `bt` back up read as
 a jump out of the function: the generated C called its own loop body as another function, the check passed it (the original jumped out
@@ -22,6 +22,7 @@ import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(HERE), 'scripts', 'tools'))
+import toolpath  # noqa: E402,F401  (every tools folder on the import path: sim/, common/, the steps)
 import sh4sim  # noqa: E402
 
 BASE = 0x0C010000

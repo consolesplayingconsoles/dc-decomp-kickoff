@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The check compiles the file it was given, wherever it lives (scripts/tools/equiv.py).
+"""The check compiles the file it was given, wherever it lives (scripts/tools/sim/equiv.py).
 No game data, no compiler. Stdlib only.
 
     game      src/camera.c is handed to the compiler as src\\camera.c
@@ -15,6 +15,7 @@ import unittest
 HERE = os.path.dirname(os.path.abspath(__file__))
 TOOLS = os.path.join(os.path.dirname(HERE), 'scripts', 'tools')
 sys.path.insert(0, TOOLS)
+import toolpath  # noqa: E402,F401  (every tools folder on the import path: sim/, common/, the steps)
 import equiv  # noqa: E402
 
 
@@ -30,7 +31,7 @@ class EquivPath(unittest.TestCase):
         self.assertEqual(equiv.compiler_path(os.path.join(os.getcwd(), 'src', 'camera.c')), 'src\\camera.c')
 
     def test_command(self):
-        with open(os.path.join(TOOLS, 'equiv.py')) as fp:
+        with open(os.path.join(TOOLS, 'sim', 'equiv.py')) as fp:
             text = fp.read()
         self.assertNotIn('shc.exe" "src\\\\%s.c"', text)
         self.assertIn('compiler_path(cfile)', text)

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """The disc's files into the folder the native game reads (scripts/tools/10-port/extract_disc.py). The disc is a stand-in
-for tools/gdi_read.py's reader (its files and their bytes). No game data, no compiler. Stdlib only.
+for tools/1-2-baseline/gdi_read.py's reader (its files and their bytes). No game data, no compiler. Stdlib only.
 
     extract     every file is written under the folder, subfolders kept, with its bytes
     version     an ISO 9660 version suffix (`;1`) is not part of the file's name

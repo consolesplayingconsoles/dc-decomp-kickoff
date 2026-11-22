@@ -2,12 +2,12 @@
 # setup_tools.sh: install the tools DC_LOCAL=1 runs on, one step at a time, for a machine without Docker.
 # Linux x86_64 only (wibo is a Linux program; Ghidra's decompiler is x86_64): on macOS or Windows use Docker.
 #
-#   bash scripts/setup_tools.sh --check     only report what is installed and what is missing
-#   bash scripts/setup_tools.sh             install what is missing, then write <tools>/env.sh
+#   bash scripts/tools/1-2-baseline/setup/setup_tools.sh --check     only report what is installed and what is missing
+#   bash scripts/tools/1-2-baseline/setup/setup_tools.sh             install what is missing, then write <tools>/env.sh
 #   source <tools>/env.sh                   in every shell that runs the skill's scripts
 #
 # <tools> is $DC_TOOLS_DIR (default ~/dc-tools). Each download is pinned and checked against its SHA-256:
-# wibo and Ghidra read theirs from the Dockerfiles in this folder (scripts/tools/tools-image, scripts/ghidra), so there
+# wibo and Ghidra read theirs from the Dockerfiles in this folder (scripts/tools/tools-image, scripts/tools/1-2-baseline/setup/ghidra), so there
 # is one place to update them; JDK 21 is pinned below. unshield comes from the system's package manager.
 # Every step prints what it does; the first failure stops the run with the reason.
 set -euo pipefail
@@ -21,7 +21,7 @@ JDK_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21
 JDK_SHA256="ce79869e1307ed8ee1e2baa86a412b1eb5b75d10a01006d788a6f968bcfaee94"
 
 arg() { sed -n "s/^ARG $2=//p" "$HERE/$1" | head -1; }       # an ARG default of a Dockerfile here
-WIBO_URL="$(arg tools/tools-image/Dockerfile WIBO_URL)";   WIBO_SHA256="$(arg tools/tools-image/Dockerfile WIBO_SHA256)"
+WIBO_URL="$(arg ../../tools-image/Dockerfile WIBO_URL)";   WIBO_SHA256="$(arg ../../tools-image/Dockerfile WIBO_SHA256)"
 GHIDRA_URL="$(arg ghidra/Dockerfile GHIDRA_URL)";    GHIDRA_SHA256="$(arg ghidra/Dockerfile GHIDRA_SHA256)"
 [ -n "$WIBO_URL$WIBO_SHA256$GHIDRA_URL$GHIDRA_SHA256" ] && [ -n "$WIBO_URL" ] && [ -n "$WIBO_SHA256" ] && [ -n "$GHIDRA_URL" ] && [ -n "$GHIDRA_SHA256" ] \
   || { echo "[ERROR] could not read the pinned URLs and checksums from the Dockerfiles in $HERE" >&2; exit 1; }

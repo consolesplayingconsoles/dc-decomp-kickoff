@@ -98,7 +98,7 @@ class TestDecode(unittest.TestCase):
             out = subprocess.run([sys.executable, "-c", script], cwd=tmp, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                  universal_newlines=True).stdout
             verdict = dict(l.split(' ', 1) for l in out.strip().split('\n') if ' ' in l)
-            dis = subprocess.run([sys.executable, "tools/shdis.py", "--func", "poolclaimfn"], cwd=tmp, stdout=subprocess.PIPE,
+            dis = subprocess.run([sys.executable, "tools/sim/shdis.py", "--func", "poolclaimfn"], cwd=tmp, stdout=subprocess.PIPE,
                                  stderr=subprocess.STDOUT, universal_newlines=True).stdout
             bad = []
             if verdict.get('jumptablefn', '?').strip() != '[]':

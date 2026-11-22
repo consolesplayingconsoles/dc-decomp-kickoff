@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""C that reads memory through a variable just set to a small constant (scripts/tools/consistency.py, low_address). Virtua Tennis
+"""C that reads memory through a variable just set to a small constant (scripts/tools/common/consistency.py, low_address). Virtua Tennis
 FUN_8c01219e: the stack word holding 0x8C287ACC came out of the generator as the constant 0x12, so each player's CPU flag was read from
 0x26 + 4i and the CPU opponent counted as player 2: P2 paused the exhibition. Its two cases never ran that path, so the proof passed.
 No compiler. Stdlib only.
@@ -27,7 +27,7 @@ import sys
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-TOOL = os.path.join(os.path.dirname(HERE), 'scripts', 'tools', 'consistency.py')
+TOOL = os.path.join(os.path.dirname(HERE), 'scripts', 'tools', 'common', 'consistency.py')
 
 GEN_A = """int f_comma(int a4)
 {

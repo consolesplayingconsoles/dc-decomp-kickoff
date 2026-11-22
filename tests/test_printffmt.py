@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """A call to nlPrintf is compared on its format string and the words the format consumes, not on all four words its definition declares
-(scripts/tools/equiv.py, callview). No game data, no compiler. Stdlib only.
+(scripts/tools/sim/equiv.py, callview). No game data, no compiler. Stdlib only.
 
 nlPrintf is declared `Stk4 s`, so a call was compared on four stack words. A format with two conversions reads two arguments; the fourth
 word is a leftover: in Zombie Revenge FUN_0c0c381c it is a local of the caller's own at [sp] (0 in the original, an unwritten word in the

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A tail jump into a runtime helper the checker runs (scripts/tools/sh4sim.py, `deep`): the helper runs to its return like one
+"""A tail jump into a runtime helper the checker runs (scripts/tools/sim/sh4sim.py, `deep`): the helper runs to its return like one
 reached by a call, and its own branches are not calls out. Stdlib only, no compiler.
 
     check.py      a two-function image: a helper that branches inside itself and returns 5, and a function that tail-jumps
@@ -18,6 +18,7 @@ import tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL = os.path.dirname(HERE)
 sys.path.insert(0, os.path.join(SKILL, "scripts", "tools"))
+import toolpath  # noqa: E402,F401  (every tools folder on the import path: sim/, common/, the steps)
 import sh4sim  # noqa: E402
 
 BASE = 0x0C010000

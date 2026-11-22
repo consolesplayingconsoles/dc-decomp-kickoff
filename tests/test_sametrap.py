@@ -1,4 +1,4 @@
-"""A case marked same_trap accepts the same trapa stop on both sides (scripts/tools/equiv.py same_trap). No game data, no compiler.
+"""A case marked same_trap accepts the same trapa stop on both sides (scripts/tools/sim/equiv.py same_trap). No game data, no compiler.
 Stdlib only.
 
 An error trap (`trapa #48`) is a stop the original reaches by design. Both sides stop on it, but not at the same address: the

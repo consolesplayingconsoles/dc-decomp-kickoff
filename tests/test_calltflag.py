@@ -1,4 +1,4 @@
-"""A simulated call can answer in the T flag (scripts/tools/sh4sim.py run). No game data, no compiler. Stdlib only.
+"""A simulated call can answer in the T flag (scripts/tools/sim/sh4sim.py run). No game data, no compiler. Stdlib only.
 
 A case answers each call the function makes outside its own range with a dict (`"calls": [{"r0": hex, "fr0": float, ...}]`).
 A hand-written callee may answer in the T flag instead of, or as well as, a register. A call's `"t": 0|1` sets T on return; without

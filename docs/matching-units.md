@@ -3,7 +3,7 @@
 A matching unit is a file under `src/` whose first line is an `@unit` header. `build.sh` compiles it with the SDK's `shc`, lays the result out
 like the original (`tools/1-2-baseline/fill.py`), assembles it and links it in place of the asm files in its range; the build must still
 print `MATCH`. In a project with `MODE: matching` (`status.txt`) this is what "done" means. In an `equivalent` project it is the bonus
-tier next to the cases (`tools/equiv.py`). The same tools serve both; nothing here changes a unit that does not ask for it.
+tier next to the cases (`tools/sim/equiv.py`). The same tools serve both; nothing here changes a unit that does not ask for it.
 
 ## The header
 
@@ -47,9 +47,9 @@ A difference no rewording moves is worth checking against another compiler relea
 
 ## Tools
 
-- `python3 tools/fcmp.py src/<file>.c [function ...] -v`: compiles the file with the build's flags and compares each function with the
+- `python3 tools/common/fcmp.py src/<file>.c [function ...] -v`: compiles the file with the build's flags and compares each function with the
   original instruction by instruction. `--score` prints the number the permuter uses.
-- `python3 tools/permute.py src/<file>.c <function>`: tries rewrites that keep the meaning, kept when the score gets no worse.
+- `python3 tools/7-reduction/permute.py src/<file>.c <function>`: tries rewrites that keep the meaning, kept when the score gets no worse.
 - `shc` flags live in one file, `tools/1-2-baseline/shc_flags.txt`; `build.sh` and `fcmp.py` read it.
 
 ## Code overlays

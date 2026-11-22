@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""C that addresses its stack-argument structure `StkN s` outside it (scripts/tools/consistency.py, args_outside). Below &s are the
+"""C that addresses its stack-argument structure `StkN s` outside it (scripts/tools/common/consistency.py, args_outside). Below &s are the
 registers the compiled function saved on entry, its return address among them; past its 4N bytes is the caller's frame. Zombie Revenge
 FUN_0c0a6928, a hand draft, kept the original's locals at &s - 52 .. &s - 4 and wrote results at &s + 20 .. &s + 32 (a Stk4): it overwrote
 its saved pr and the game ran the stack; three more functions had the same form. Their proofs passed: writes below the entry stack pointer
@@ -22,7 +22,7 @@ import sys
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-TOOL = os.path.join(os.path.dirname(HERE), 'scripts', 'tools', 'consistency.py')
+TOOL = os.path.join(os.path.dirname(HERE), 'scripts', 'tools', 'common', 'consistency.py')
 
 FUNCTIONS = "F 8c010000 32 f_below\nF 8c010100 32 f_past\nF 8c010200 32 f_inside\nF 8c010300 32 f_none\n"
 C = """typedef struct { int w[4]; } Stk4;

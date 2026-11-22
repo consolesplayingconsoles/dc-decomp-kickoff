@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A function that ends with a forward `bra` to another listed function is a function (scripts/tools/boundaries.py, reach(tails=)).
+"""A function that ends with a forward `bra` to another listed function is a function (scripts/tools/common/boundaries.py, reach(tails=)).
 The bra is a tail jump into that function, not more of this one. Zombie Revenge 0C04179C ends with `bra FUN_0c041f2a`, a function after it:
 the walk followed it, ran into that entry, and seven hidden functions the C calls stayed unlisted; the build ran data copies of them.
 No game data, no compiler. Stdlib only.
@@ -94,7 +94,7 @@ class TestBoundariesTail(unittest.TestCase):
             open(os.path.join(tmp, 'BASE'), 'w').write('%08X\n' % BASE)
             open(os.path.join(tmp, 'functions.txt'), 'w').write('F %08x %d f1\nF %08x 4 f2\n' % (BASE, len(f1), f2_at))
             open(os.path.join(tmp, 'cands.txt'), 'w').write('%08x\n%08x\n%08x\n%08x\n%08x\n%08x\n' % (g_at, fall_at, h_at, k_at, d_at, c_at))
-            r = subprocess.run([sys.executable, 'tools/boundaries.py', 'cands.txt'], cwd=tmp, capture_output=True, text=True, timeout=120)
+            r = subprocess.run([sys.executable, 'tools/common/boundaries.py', 'cands.txt'], cwd=tmp, capture_output=True, text=True, timeout=120)
             out = r.stdout + r.stderr
             by = {}
             for line in out.splitlines():

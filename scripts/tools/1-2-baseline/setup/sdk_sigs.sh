@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 # sdk_sigs.sh <SDK folder> <out dir>
 # Build a signature table for every exported function in a Katana SDK's libraries:
-# <out dir>/katana-sdk.sigs, for scripts/ghidra/ApplySigs.java. Any SDK layout: lbr.exe, lnk.exe
+# <out dir>/katana-sdk.sigs, for scripts/tools/1-2-baseline/setup/ghidra/ApplySigs.java. Any SDK layout: lbr.exe, lnk.exe
 # and the *.lib files are found by name. Keep the output local (derived from the SDK) and somewhere
 # durable beside the SDK folders, not a scratch dir: the hashing takes minutes to an hour.
 #   1. lbr lists each library's modules; lnk links all of them into one ELF + a symbol map.
 #   2. Headless Ghidra hashes every code symbol of the map (map_names.py: ENT, and the DAT symbols
 #      inside code sections, i.e. the hand-written runtime routines; ExportSigs.java, folder mode).
-# Containers by default (this skill's dc-tools image + scripts/ghidra/dghidra.sh); DC_LOCAL=1 runs
+# Containers by default (this skill's dc-tools image + scripts/tools/1-2-baseline/setup/ghidra/dghidra.sh); DC_LOCAL=1 runs
 # wibo directly (Linux x86_64 only). Any failure stops with an error: never an empty table.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
-. "$HERE/docker_check.sh"
+. "$HERE/../../common/docker_check.sh"
 SDK="$(cd "${1:?usage: sdk_sigs.sh <SDK folder> <out dir>}" && pwd)"
 mkdir -p "${2:?usage: sdk_sigs.sh <SDK folder> <out dir>}"; OUT="$(cd "$2" && pwd)"
 LBR="$(find "$SDK" -iname lbr.exe -print -quit)"
@@ -49,7 +49,7 @@ if [ "${DC_LOCAL:-0}" = 1 ]; then
   command -v wibo >/dev/null || { echo "[ERROR] DC_LOCAL=1 needs wibo on PATH" >&2; exit 1; }
   (cd "$OUT" && T="$SDK/$TOOLS_REL" bash -c "$STEPS") </dev/null
 else
-  docker_ready "$HERE/tools-image"
+  docker_ready "$HERE/../../tools-image"
   docker run --rm -v "$SDK":/sdk:ro -v "$OUT":/out -w /out -e T="/sdk/$TOOLS_REL" \
     "${DC_TOOLS_IMAGE:-dc-tools}" bash -c "$STEPS" </dev/null
 fi

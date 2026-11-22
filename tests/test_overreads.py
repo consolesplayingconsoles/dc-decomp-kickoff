@@ -17,6 +17,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL = os.path.dirname(HERE)
 sys.path.insert(0, os.path.join(SKILL, 'scripts', 'tools'))
+import toolpath  # noqa: E402,F401  (every tools folder on the import path: sim/, common/, the steps)
 sys.path.insert(0, os.path.join(SKILL, 'scripts', 'tools', '5-generated'))
 import sh4sim  # noqa: E402
 import overreads  # noqa: E402

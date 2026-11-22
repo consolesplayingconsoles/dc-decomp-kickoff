@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The proof cache across a checker change (scripts/tools/equiv.py proof_keys) in a scratch folder, no game data. Stdlib only.
+"""The proof cache across a checker change (scripts/tools/sim/equiv.py proof_keys) in a scratch folder, no game data. Stdlib only.
 
     check.py      a pass stored with the checker as it was, then the checker changes:
                     frozen    with the old equiv.py and sh4sim.py in state/proof-key-frozen/, the old key is one of the keys looked up

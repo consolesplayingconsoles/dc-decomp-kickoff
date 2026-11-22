@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A device register gives back what was last written to it (scripts/tools/sh4sim.py Memory). No game data, no compiler. Stdlib only.
+"""A device register gives back what was last written to it (scripts/tools/sim/sh4sim.py Memory). No game data, no compiler. Stdlib only.
 
 The SDK's sys_init writes 8201 to the DMAC's DMAOR (FFA00040), reads it back and retries, 0x10000 counts a time, until it matches:
 with every unscripted device read answering 0 the boot never left that loop in the simulator, and every boot comparison stopped
@@ -19,6 +19,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(HERE), 'scripts', 'tools'))
+import toolpath  # noqa: E402,F401  (every tools folder on the import path: sim/, common/, the steps)
 
 
 class TestDevlatch(unittest.TestCase):

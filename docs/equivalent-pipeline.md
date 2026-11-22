@@ -8,7 +8,7 @@ in the repo's `AGENTS.md`; this is what makes it fast.
 
 ## All steps: the check
 
-### What the check compares (tools/equiv.py)
+### What the check compares (tools/sim/equiv.py)
 Calls by target and by the arguments the callee takes, read from the prototype the C file declares for
 it: registers a call leaves over are not arguments. A pointer into the simulator's stack is "the stack":
 a local's address is the compiler's frame layout. The compiler's own helpers (`_divls`, `_quick_odd_mvn`,
@@ -110,7 +110,7 @@ Functions the compiler has no C for (control registers the SDK headers have no i
 double precision under `-fpu=single`) are counted apart as "No C form" and leave the denominator.
 
 ### Not losing work between runs
-- `state/results.jsonl` (`tools/ledger.py`) records every outcome; a case set is archived before it is replaced.
+- `state/results.jsonl` (`tools/common/ledger.py`) records every outcome; a case set is archived before it is replaced.
 - `state/kept/<function>.json` keeps the C, the cases and the first difference of everything that reached the check and did not pass.
   `gen_equiv --recheck [--rebuild]` checks it again in seconds after a fix to the checker or the C writer, with no new draw; cases
   are reused only while the draw is the version that made them.
@@ -119,7 +119,7 @@ double precision under `-fpu=single`) are counted apart as "No C form" and leave
   one slow function never holds the rest back and an interrupted run loses only the draws in flight. The log has one line per
   function with its bytes and seconds. Give a slow machine more time with `GEN_TIME_FACTOR`, and do not start a whole-game run
   while other work needs the machine.
-- `tools/consistency.py [--fix]` reports and repairs C defined twice, cases without C, C without a recorded pass; run it after runs
+- `tools/common/consistency.py [--fix]` reports and repairs C defined twice, cases without C, C without a recorded pass; run it after runs
   overlapped and before a commit.
 
 Coverage is also what to raise by hand: a function under its target gets cases written for the branches that no case ran.
@@ -131,7 +131,7 @@ Coverage is also what to raise by hand: a function under its target gets cases w
    the middle ends at its last `rts` and delay slot, not at the pool; listings made by a linear sweep stop
    too early, and the C then "stops" or jumps to an address just past the function. Fix the `F` line
    (`functions.txt`), re-run `split_asm.py` and `build.sh` (still `MATCH`). Read the function first:
-   `python3 tools/shdis.py --func <name>`.
+   `python3 tools/sim/shdis.py --func <name>`.
    `python3 tools/1-2-baseline/checksizes.py --hidden` is the other direction: an entry listed longer than its code has another function inside it, which
    counts as proven with the entry though no case runs it. Split it (`functions.txt`, `split_asm.py`, build `MATCH`) before counting.
 
@@ -180,7 +180,7 @@ for what coverage shows nobody reached.
   failure branch is what shows a wrong prototype that passed by luck.
 - A loop that polls millions of times cannot be covered (the mocked calls are a finite list): leave that
   path out of the cases and say so.
-- `tools/shdis.py --func` on a compiled file: copy `build/equiv/<file>.bin` into a scratch dir as
+- `tools/sim/shdis.py --func` on a compiled file: copy `build/equiv/<file>.bin` into a scratch dir as
   `1ST_READ.BIN` beside a `BASE` holding `0E100000` to see what the compiler made of your C.
 - Pass one name to `checksizes.py`, `classify.py` and `poollist.py` per call when scripting in zsh: an
   unquoted variable holding several names is not split there.
@@ -188,14 +188,14 @@ for what coverage shows nobody reached.
 ### Running many workers at once
 - Split the candidate list into groups of about 20 (smallest, named, plain C first). One worker per group,
   its own `src/<group>.c` and `tests/<group>/`, nothing else of its own.
-- Shared files are the trap: `tools/equiv.py` rewrites `tests/equivalent.txt`, `docs/equivalent.md` and
+- Shared files are the trap: `tools/sim/equiv.py` rewrites `tests/equivalent.txt`, `docs/equivalent.md` and
   `build/equiv/*.log`, and `functions.txt` and `symbols.txt` are edited by everyone. Run every check and every
   edit of those through one lock (a `mkdir`-based wrapper, `build/eqlock.sh <command>`), and append symbols
   only after `grep -i <address> symbols.txt globals.txt` shows no name. Use `g_<address>` for unnamed globals so
   two workers name one address the same.
 - Brief each worker with the full rules (below); no git, no `build.sh`, no editing of tools. Ask for a
   table (function, state, note), the size fixes and symbols added, and the lessons.
-- After they finish: re-run every group yourself (`python3 tools/equiv.py -q src/<group>.c`), re-run
+- After they finish: re-run every group yourself (`python3 tools/sim/equiv.py -q src/<group>.c`), re-run
   `split_asm.py` and `build.sh` (sizes changed: `MATCH`), then `progress.py`. A worker's count is a claim;
   the tool's output is the evidence.
 
@@ -205,7 +205,7 @@ for what coverage shows nobody reached.
 > examples `src/<example>.c` with `tests/<example>/`. Write C to `src/<group>.c` and cases to
 > `tests/<group>/<function>.json` (dev first, then holdout written after the C passes dev; every branch).
 > Run `python3 tools/1-2-baseline/checksizes.py <name>`, `classify.py` and `poollist.py` first. Always run the check
-> through the lock: `build/eqlock.sh python3 tools/equiv.py -q src/<group>.c [function]`. Fix a wrong size
+> through the lock: `build/eqlock.sh python3 tools/sim/equiv.py -q src/<group>.c [function]`. Fix a wrong size
 > or add a symbol only through the lock / a grep first. Never touch other files, `tools/`, `docs/`,
 > `tests/equivalent.txt`, git, or `build.sh`. Blocked (the C cannot express it): say why and move on. At most
 > two attempts per function, then mark it FAILED with the first DIFFERS line. Final report, under 450 words:

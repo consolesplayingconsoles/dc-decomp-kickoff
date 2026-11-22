@@ -1,7 +1,7 @@
 """An FMOV register pair moves in the order of the two singles: the first register at the lower address.
 
 On the hardware (and in Flycast) `fmov @Rm,DRn` puts the word at Rm in FR(2n) and the word at Rm+4 in FR(2n+1), and `fmov DRm,@Rn` stores
-them back the same way; a natural float[4][4] loaded into XMTRX with pairs relies on it. The simulator (scripts/tools/sh4sim.py) and the
+them back the same way; a natural float[4][4] loaded into XMTRX with pairs relies on it. The simulator (scripts/tools/sim/sh4sim.py) and the
 generator (scripts/tools/5-generated/gen_equiv/gen_core.py) moved them swapped.
 
 No game data and no compiler. Run: python3 -m unittest tests.test_fmovpair   (or: python3 tests/test_fmovpair.py)

@@ -1,4 +1,4 @@
-"""A store queue's flush is an effect the checker compares (scripts/tools/sh4sim.py, pref). No game data, no compiler:
+"""A store queue's flush is an effect the checker compares (scripts/tools/sim/sh4sim.py, pref). No game data, no compiler:
 hand-assembled SH-4. Stdlib only.
 
 The SH-4 sends a store queue's 32 bytes when the code runs pref on a store-queue address (0xE0000000-0xE3FFFFFF); on any other

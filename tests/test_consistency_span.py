@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generated C proven while functions.txt gave the function a short size (scripts/tools/consistency.py). The size was fixed later (code past
+"""Generated C proven while functions.txt gave the function a short size (scripts/tools/common/consistency.py). The size was fixed later (code past
 a literal pool in the middle of the body), the proof stayed in tests/equivalent.txt, and the C still calls the address that is now inside the
 function itself: the current checker fails it (Virtua Tennis, 113 functions: kmiConvertUVnum's `bra 0x8c0ea608` was written as a call to
 0x8C0EA608). No game data, no compiler. Stdlib only.
@@ -20,7 +20,7 @@ import sys
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-TOOL = os.path.join(os.path.dirname(HERE), 'scripts', 'tools', 'consistency.py')
+TOOL = os.path.join(os.path.dirname(HERE), 'scripts', 'tools', 'common', 'consistency.py')
 
 FUNCTIONS = "F 8c010000 64 f_stale\nF 8c010100 32 f_plain\nF 8c010200 32 f_ext\n"
 C = """int f_stale(int a4)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The tools that find functions the analysis missed (scripts/tools/1-2-baseline/missed_funcs.py, scripts/tools/boundaries.py) must not
+"""The tools that find functions the analysis missed (scripts/tools/1-2-baseline/missed_funcs.py, scripts/tools/common/boundaries.py) must not
 list a table of words as a function. No game data, no compiler. Stdlib only.
 
 Crazy Taxi FUN_0c089f4c: 52 bytes of a table (pointer words and small numbers) whose first words happen to decode as instructions
@@ -106,7 +106,7 @@ class TestFindfuncs(unittest.TestCase):
             if '%08x' % T_AT in listed:
                 bad.append('missed_funcs: the table at %08x is a candidate: words that happen to decode are not code' % T_AT)
 
-            out = run(tmp, 'tools/boundaries.py', 'cands.txt')
+            out = run(tmp, 'tools/common/boundaries.py', 'cands.txt')
             rows = {}
             for l in out.splitlines():
                 p = l.split()

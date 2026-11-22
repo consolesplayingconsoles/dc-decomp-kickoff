@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""What the checker (scripts/tools/equiv.py) compares a call on, with no game data and no compiler. Stdlib only.
+"""What the checker (scripts/tools/sim/equiv.py) compares a call on, with no game data and no compiler. Stdlib only.
 
     check.py      a temp repo with the tools tree, a C file that declares its callees with too few arguments, and their proven
                   definitions in another file of src/:

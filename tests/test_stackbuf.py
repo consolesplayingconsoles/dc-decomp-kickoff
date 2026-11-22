@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A buffer in the frame handed to a call (scripts/tools/sh4sim.py, equiv.same) on synthetic functions, no game data. Stdlib only.
+"""A buffer in the frame handed to a call (scripts/tools/sim/sh4sim.py, equiv.same) on synthetic functions, no game data. Stdlib only.
 
     check.py      each function fills a local buffer and calls f(buffer): the callee's input is the buffer's contents.
                     contents  7 against 9 in the first word: the two runs must not agree (Virtua Tennis cursorBoxPut: its four

@@ -2,8 +2,8 @@
 
 Used in step 2 (Signature-driven baseline); the section on another decomp's names belongs to step 4 (Opportunity-driven optional boosts).
 
-Two sources of names, both turned into Ghidra function-ID hashes (`scripts/ghidra/ExportSigs.java`)
-and applied with `scripts/ghidra/ApplySigs.java <sigs> <out> apply` (unique matches only; ambiguous
+Two sources of names, both turned into Ghidra function-ID hashes (`scripts/tools/1-2-baseline/setup/ghidra/ExportSigs.java`)
+and applied with `scripts/tools/1-2-baseline/setup/ghidra/ApplySigs.java <sigs> <out> apply` (unique matches only; ambiguous
 hashes are listed, never guessed). Check a run: matched names sorted by target address should keep
 the source's library order.
 

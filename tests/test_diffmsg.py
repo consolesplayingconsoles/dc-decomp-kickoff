@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The checker's message for a difference names what differs (scripts/tools/equiv.py same). No game data, no compiler. Stdlib only.
+"""The checker's message for a difference names what differs (scripts/tools/sim/equiv.py same). No game data, no compiler. Stdlib only.
 
     check.py      two runs whose call lists differ at call 25 of 30:
                     names     the message says `calls: call 25/30` and shows that call of each side whole: each list was cut at 200

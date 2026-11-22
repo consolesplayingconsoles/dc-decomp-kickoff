@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A branch into another function's epilogue is the function's own ending (scripts/tools/sh4sim.py shared_epilogue, the generator's
+"""A branch into another function's epilogue is the function's own ending (scripts/tools/sim/sh4sim.py shared_epilogue, the generator's
 reading in scripts/tools/5-generated/gen_equiv/gen_core.py). No game data, no compiler. Stdlib only.
 
 The compiler lets a function end by branching into the epilogue of another one: the pops, a constant into r4, a jmp to a callee
@@ -80,7 +80,7 @@ class TestSharedtail(unittest.TestCase):
             os.makedirs(os.path.join(tmp, 'src'))
             case = {'exe': os.path.join(tmp, '1ST_READ.BIN'), 'base': '%08X' % BASE, 'entry': '%08X' % (BASE + 0x14), 'end': '%08X' % (BASE + 0x1C)}
             json.dump(case, open(os.path.join(tmp, 'case.json'), 'w'))
-            out = subprocess.run([sys.executable, os.path.join(tmp, 'tools', 'sh4sim.py'), 'run', os.path.join(tmp, 'case.json')],
+            out = subprocess.run([sys.executable, os.path.join(tmp, 'tools', 'sim', 'sh4sim.py'), 'run', os.path.join(tmp, 'case.json')],
                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True).stdout
             try:
                 r = json.loads(out)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Where a repo's C lives: the game's in src/, the SDK's in sdk/<library>/ (scripts/tools/layout.py).
+"""Where a repo's C lives: the game's in src/, the SDK's in sdk/<library>/ (scripts/tools/common/layout.py).
 No game data, no compiler. Stdlib only.
 
     flat       a repo with src/ only: its files, in name order; the SDK list is empty
@@ -21,6 +21,7 @@ import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(HERE), 'scripts', 'tools'))
+import toolpath  # noqa: E402,F401  (every tools folder on the import path: sim/, common/, the steps)
 import layout  # noqa: E402
 
 

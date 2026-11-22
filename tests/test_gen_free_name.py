@@ -2,7 +2,7 @@
 """The generator names a new file with a name no file has, in any folder (scripts/tools/5-generated/gen_equiv/__main__.py).
 No game data, no compiler. Stdlib only.
 
-    anywhere   the name is checked against every C file of the repo (tools/layout.py), not against src/ alone: with the
+    anywhere   the name is checked against every C file of the repo (tools/common/layout.py), not against src/ alone: with the
                SDK's C in sdk/<library>/, `gen_g` was free in src/ and taken in sdk/naomi/, the new file was written through
                the name lookup, and it replaced sdk/naomi/gen_g.c and its function (Crazy Taxi, nlObjPutSetLightDirectionV)
     cases      a name whose cases folder exists is not free either

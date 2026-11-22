@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Which argument registers a callee reads, as a set (scripts/tools/5-generated/gen_equiv/gen_core.py entry_reads_of), and the call
-comparison that uses it (scripts/tools/equiv.py callview). No game data, no compiler. Stdlib only.
+comparison that uses it (scripts/tools/sim/equiv.py callview). No game data, no compiler. Stdlib only.
 
 callee_arity counts up to the highest register a function reads: cpuShotRange (Virtua Tennis) reads fr6-fr10 after a call, counts 7
 floats and so takes in fr4 and fr5; cpuSglAimScore's generated C names fr4 and fr5 only to pass them on, and its caller

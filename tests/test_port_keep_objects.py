@@ -31,7 +31,8 @@ class KeepObjects(unittest.TestCase):
         with open(os.path.join(self.tmp, 'sdk.txt'), 'w') as fp:
             fp.write('range 0c14ab88 0c1789b0 SDK libraries\nhardware 0c15fc8e 0c1605ca GD-ROM file system\n')
         shutil.copy(os.path.join(TOOLS, 'toolpath.py'), os.path.join(self.tmp, 'tools'))
-        shutil.copy(os.path.join(TOOLS, 'layout.py'), os.path.join(self.tmp, 'tools'))
+        os.makedirs(os.path.join(self.tmp, 'tools', 'common'), exist_ok=True)
+        shutil.copy(os.path.join(TOOLS, 'common', 'layout.py'), os.path.join(self.tmp, 'tools', 'common'))
         os.makedirs(os.path.join(self.tmp, 'tools', '5-generated'))
         shutil.copy(os.path.join(TOOLS, '5-generated', 'sdk_place.py'), os.path.join(self.tmp, 'tools', '5-generated'))   # the function reader
         shutil.copytree(os.path.join(TOOLS, '10-port'), os.path.join(self.tmp, 'tools', '10-port'),

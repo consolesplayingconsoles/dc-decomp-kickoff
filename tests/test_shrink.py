@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""What the shrink logs when a regenerated function fails its recheck (scripts/tools/ledger.py last_failure, scripts/tools/7-reduction/shrink.py),
+"""What the shrink logs when a regenerated function fails its recheck (scripts/tools/common/ledger.py last_failure, scripts/tools/7-reduction/shrink.py),
 with no game data and no compiler. Stdlib only.
 
     check.py      a temp repo with a state/results.jsonl as the recheck writes it:
@@ -93,7 +93,7 @@ class TestShrink(unittest.TestCase):
                 if needle not in src:
                     bad.append('next: shrink.py does not try the next form after a failure (missing %s)' % needle)
             # file: a function that passes alone but differs in the file it was written into is restored, not logged as shrunk
-            for needle in ("the written file differs", "tools/equiv.py', layout.c_path(ns), fn"):
+            for needle in ("the written file differs", "tools/sim/equiv.py', layout.c_path(ns), fn"):
                 if needle not in src:
                     bad.append('file: shrink.py does not check the written file (missing %s)' % needle)
             for needle in ("ledger.last_failure(fn, since)", "'shrink-failed'", "new C failed, old restored"):

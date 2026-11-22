@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The stack words a call is compared on (scripts/tools/sh4sim.py stackchg) on a synthetic function, no game data. Stdlib only.
+"""The stack words a call is compared on (scripts/tools/sim/sh4sim.py stackchg) on a synthetic function, no game data. Stdlib only.
 
     check.py      sts.l pr,@-r15 then a call: the word the prologue saved pr into sits at SP at the call, where a fifth argument would be.
                     prsave    it is not counted as written for the call: a saved return address is never an argument (Virtua Tennis

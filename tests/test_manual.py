@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The manual-only flag (scripts/tools/consistency.py manual, manual_names): a function written by hand carries a comment
+"""The manual-only flag (scripts/tools/common/consistency.py manual, manual_names): a function written by hand carries a comment
 `/* manual: <reason> */` just above its definition, and the tools that write C (shrink.py, hoist.py, the generator's
 recheck and rebuild in keep.py) leave it alone. No game data, no compiler. Stdlib only.
 

@@ -1,5 +1,5 @@
-"""A routine that answers in registers other than r0 / fr0 is compared on the ones it names (scripts/tools/equiv.py returns and
-scripts/tools/sh4sim.py run). No game data, no compiler. Stdlib only.
+"""A routine that answers in registers other than r0 / fr0 is compared on the ones it names (scripts/tools/sim/equiv.py returns and
+scripts/tools/sim/sh4sim.py run). No game data, no compiler. Stdlib only.
 
 The checker compares a function on its result register, taken from its prototype: r0 for an integer, fr0 for a float, nothing for
 void. A register-convention routine (inline assembly whose results stay in other registers) has results the prototype cannot name.

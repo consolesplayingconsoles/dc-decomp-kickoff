@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""consistency.py --fix tells what it is doing while it does it (scripts/tools/consistency.py). A repair re-checks whole files with
-tools/equiv.py and can take many minutes; the log stayed empty until the end (Virtua Tennis, 2026-10-24: "there is no log output yet").
-No game data, no compiler: a stub tools/equiv.py that sleeps. Stdlib only.
+"""consistency.py --fix tells what it is doing while it does it (scripts/tools/common/consistency.py). A repair re-checks whole files with
+tools/sim/equiv.py and can take many minutes; the log stayed empty until the end (Virtua Tennis, 2026-10-24: "there is no log output yet").
+No game data, no compiler: a stub tools/sim/equiv.py that sleeps. Stdlib only.
 
     check.py      a temp repo with one generated function that has C and cases but no recorded pass, and a stub equiv.py that takes 4 s:
                     the first line (`checking src/gen_a.c`) arrives within 2.5 s, while --fix is still running
@@ -18,7 +18,7 @@ import tempfile
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-TOOL = os.path.join(os.path.dirname(HERE), 'scripts', 'tools', 'consistency.py')
+TOOL = os.path.join(os.path.dirname(HERE), 'scripts', 'tools', 'common', 'consistency.py')
 
 
 class TestConsistencyProgress(unittest.TestCase):
@@ -62,7 +62,8 @@ class TestConsistencyProgress(unittest.TestCase):
             open(os.path.join(repo, 'src', 'gen_a.c'), 'w').write('int f_a(int a4)\n{\n    return a4;\n}\n')
             open(os.path.join(repo, 'tests', 'gen_a', 'f_a.json'), 'w').write('{}')
             open(os.path.join(repo, 'tests', 'equivalent.txt'), 'w').write('')
-            open(os.path.join(repo, 'tools', 'equiv.py'), 'w').write('import time\ntime.sleep(4)\n')
+            os.makedirs(os.path.join(repo, 'tools', 'sim'), exist_ok=True)
+            open(os.path.join(repo, 'tools', 'sim', 'equiv.py'), 'w').write('import time\ntime.sleep(4)\n')
             t0 = time.time()
             p = subprocess.Popen([sys.executable, TOOL, '--fix'], cwd=repo, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
             ready = select.select([p.stdout], [], [], 2.5)[0]

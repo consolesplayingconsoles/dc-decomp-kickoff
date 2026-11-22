@@ -186,7 +186,7 @@ as an issue) to add a game.
   block, linked again), `tests/mbuild` (bsspad). What to check after a build: `_bss - <image end>` is a multiple of 32 (the map), and
   every `_A_` symbol whose original address is 32-byte aligned keeps that; results of the first build with it: see the game's docs.
 - Method that found a boot hang the proofs could not (Virtua Tennis, 2026-11-01): A/B builds with the original asm. Every function that has C is in a list; `asm-functions.txt` names the ones the build takes from the original assembly instead of their C (`cbuild.game_set()` subtracts them). Halve the list, build with one half on the original asm, observe one thing (does it pass the screen the all-C build hangs on), build the MIRROR too (one result cannot show a second cause), keep each informative build's executable and map, name builds by what they contain, write the exact function lists down, halve the half that holds the cause. 1,964 functions: the first two builds (A, B) placed the hang in the first half, two more (C, D) in the second quarter of it, and showed the menu textures and models as a separate bug in the other half. The equivalence cases, the audits of the relinked code and a whole-run simulator comparison had all said "no difference"; the builds located it in minutes each. Do this early when a build from C misbehaves and the checks are clean.
-- Narrowing the A/B further with the scene path (Virtua Tennis, 2026-11-01): of the 491 functions of the hang quarter only 5 are called directly by the start-up scene entries; a build with just those 5 on the original asm passed the screen (build E), so the cause was among them. Then fadeScreenStart alone on asm still hung (build F). Max-coverage hand cases (poked memory, answers for the calls) took the 5 to 100% of their instructions except 9 and all pass, so the simulator sees no difference there: the check cannot see calls whose arguments the original leaves in leftover registers (`ambEventStart`), nor stack arguments read from a function's own unwritten frame. Tool gap found on the way (tools/sh4sim.py, not fixed here): after a deep callee returns, the written-register mask is cleared, so a `poke_arg` on a call whose r4/r5 were set before a struct-copy helper is skipped on the compiled C side only and gives a false DIFFERS.
+- Narrowing the A/B further with the scene path (Virtua Tennis, 2026-11-01): of the 491 functions of the hang quarter only 5 are called directly by the start-up scene entries; a build with just those 5 on the original asm passed the screen (build E), so the cause was among them. Then fadeScreenStart alone on asm still hung (build F). Max-coverage hand cases (poked memory, answers for the calls) took the 5 to 100% of their instructions except 9 and all pass, so the simulator sees no difference there: the check cannot see calls whose arguments the original leaves in leftover registers (`ambEventStart`), nor stack arguments read from a function's own unwritten frame. Tool gap found on the way (tools/sim/sh4sim.py, not fixed here): after a deep callee returns, the written-register mask is cleared, so a `poke_arg` on a call whose r4/r5 were set before a struct-copy helper is skipped on the compiled C side only and gives a false DIFFERS.
 - A register read after a call took the incoming argument (Virtua Tennis FUN_8c08535e, 2026-11-01): the loop seed was r5 as `set_event` leaves it (the returned event, `mov r0,r5` at its end); the generator took a register absent from its state after a call for the function's own argument and wrote `t38 = a5`, giving the function a parameter the original never reads (arity scan: 0). The check could not see it: the simulator treats r4-r7 after a call as undefined on both sides. Fix in gen_core `gi()`: an r4-r7 read after a call on the path is an uninitialised local (as r8-r14 already were), no argument. Test: tests/gen_equiv `leftoverfn` (fails on the old generator: `leftoverfn(int a4, int a5)`).
 - Closing the round at 100% (0 functions, 0 bytes left): the strict checker found two more of the class and two false alarms.
   technicalBonusExec passed a 6-byte angle by value (copied onto the stack by _quick_odd_mvn before each Model_Put_Sprite3D
@@ -433,8 +433,8 @@ as an issue) to add a game.
 
 
 ### Equivalent tier (2026-10-12, Crazy Taxi's `src/extrand.c`)
-- The bar for game code changed from byte-matching to behaviour: `scripts/tools/sh4sim.py` (an SH-4
-  interpreter, stdlib) runs a function from a case, `scripts/tools/equiv.py` compiles a C file and
+- The bar for game code changed from byte-matching to behaviour: `scripts/tools/sim/sh4sim.py` (an SH-4
+  interpreter, stdlib) runs a function from a case, `scripts/tools/sim/equiv.py` compiles a C file and
   runs each function twice per case (original bytes, compiled C), comparing calls out (target,
   r4-r7, fr4-fr11), memory writes and the return register taken from the C prototype
 - First run: `extRand` (no byte match: its mask lands in r2, the original's in r3, after 22
@@ -662,7 +662,7 @@ Mistakes worth not repeating:
   same depth, passes `*(StkN *)(source)` by value; a function that reads only the caller's stack words takes one `StkN s`; the
   StkN typedefs head the file (cases `structargfn`, `stackreadfn` in tests/gen_equiv). Hand fixes: gdc_CourseStartLoadReq,
   kmiInitPAL, kmiInitNTSC, kmiSetVideoTimings(KmVideoTimings: 252 bytes), Start_Proposal(int, int, NLpoint3).
-- Dead end (Crazy Taxi, 2026-10-24): tools/equiv.py is not safe to run several at once in one repo. Three in parallel (xargs -P 3)
+- Dead end (Crazy Taxi, 2026-10-24): tools/sim/equiv.py is not safe to run several at once in one repo. Three in parallel (xargs -P 3)
   crashed on a missing build/equiv/<stem>.map and reported whole files "not compiled" (179 functions in one), files that pass when
   run alone. One run at a time; a full recheck of 1,220 files is a long job, not a quick one.
 - Structure sizes on SH (Crazy Taxi, 2026-10-24): the checker first counted every field as 4 bytes, so `AngleR { short x, y, z; }`
@@ -1123,7 +1123,7 @@ BupFailDialog compare only up to the step limit; _div64 and emotFaceMorph rest o
      declared with another parameter list in some caller; only this one is reached in play.
   3. *Matrix register pairs loaded in the wrong order.* The C of `nlPopMatrix` and `nlLoadMatrix8` had been generated before the
      simulator's pair order was corrected (a pair move keeps the singles' order: the first register of the pair at the lower address,
-     as `tools/sh4sim.py` says, "hardware and Flycast"). The port runs those two as C and `nlPushMatrix` (no C) in the interpreter,
+     as `tools/sim/sh4sim.py` says, "hardware and Flycast"). The port runs those two as C and `nlPushMatrix` (no C) in the interpreter,
      so a pushed matrix was popped with each pair swapped: `nlProjectScreen3D` returned a screen x of -2,231,000 for a piece 1,600
      units away, and `PutCourse_CheckPiece` rejected every course piece (about 34 asked per frame). Found with gdb on the port
      binary, stopped in play at `camUpdate` (MainMode 1, SubMode 1): the camera was sane; the task list was complete; `PutCourse`
@@ -1336,3 +1336,35 @@ BupFailDialog compare only up to the step limit; _div64 and emotFaceMorph rest o
 - -> the skill: `shift._listed()` and the `arm` region (done, with tests); Step 2 should refuse an entry whose first instruction is
   reached by falling through from unlisted code that is not filler; the build should rewrite, or refuse, an image address written
   as `H'...` in inline assembly.
+
+### The simulator against the console: hwverify on Virtua Tennis (2026-11-22)
+- Setup: a USB-serial board on the console's serial port (an SD-card adapter's plug), dcload-serial 1.0.7 built from
+  KallistiOS's source, `scripts/dev/hwverify.py`: a function's own bytes and its cases run on the Dreamcast and in sh4sim, and
+  the two answers are compared case by case. Callees are stubbed at their addresses and record their calls (target, r4-r7,
+  the stack word) as sh4sim's mocked callees do; the words the original reads are poked first with what sim saw at the start.
+- The loader: the stock dcload-serial starts a program with SR.BL set, so any exception is a manual reset to the boot ROM
+  (SH7750 manual) and its own register screen never runs; after a crash the console was dead until the cable was replugged and
+  the disc rebooted. Once BL was cleared, the handler's jump back into the loader left register bank 1 selected (its startup
+  mask keeps RB), and the next program died before `main`. -> a loader build (1.0.7-cpc) with BL and RB cleared that sends the
+  exception and its registers to the PC; hwverify reports `CONSOLE CRASH` with PC, PR and R0-R15.
+- `nlUnitVector`, `nlVoidUnitVector` (fipr, fsrra): 66 of 72 cases differed. Unit vectors came out 1-2 ulps short of the
+  exact result (-3 normalised: console `BF7FFFFF`, sim `BF800000`), and vectors with a denormal or NaN component came out NaN
+  on the console where sim gave infinity. Three causes in sh4sim: fipr / ftrv / fsrra / fsca were computed exactly (the
+  hardware runs them on one approximating multiplier block); a denormal operand was used as a tiny number (DN = 1 makes it a
+  zero, so 0 * inf is NaN); and FPSCR 0x00040001, the games' value, was read as round to nearest -- RM = 1 is round to
+  zero, and fadd / fmul / fdiv / fmac / fsqrt / float rounded to nearest whatever RM said. -> `sim/sh4fpu.py`, a port of
+  skmp's bit-exact model (MIT, verified on a Dreamcast; the port matches the C header on 63,000 vectors); denormal operands
+  are zeros with DN = 1; arithmetic is exact and rounded once as RM says (`tests/test_sh4fpu.py`, the console's words).
+- Reads outside RAM: sim answers 0 for the boot ROM and anything unmapped; the console gives the real bytes. A case with no
+  registers set walks a list from a null pointer (`FUN_8c08a978` reads 00000018) and the console loops for ever, without an
+  exception, so the loader never gets control back. `courtUsaDrawNumber` indexed a table with a scripted call result and
+  read 1738B170: the console returned 00001738 (open bus), sim 0. -> hwverify skips a case whose simulated run reads outside
+  RAM (`NOT RUN`, the address named). The model is not changed: what those reads return depends on the bus.
+- Gaps in the cases the console showed (not simulator bugs): many cases read 00000B5C / 00000B00 -- the game's globals
+  through GBR, which the cases leave at 0; a local read before it is written (`panelMenuSprPutA` differed by 0x100 until
+  hwverify zeroed the stack below the function, as sim's fresh stack page is).
+- Open: `bodyLinePerp` takes another branch on the console (it calls 8C0F0700 first, three calls against sim's one);
+  `FUN_8c01219e` hangs the console and reads nothing outside RAM.
+- Method notes: the console is not a test bench -- a hang costs a replug and a reboot, so a change to the loader or the
+  harness is checked on the PC first (the manual, a disassembly of what was built, the paths the change newly reaches) and a
+  function that hung stays out of the next run until its cause is known.

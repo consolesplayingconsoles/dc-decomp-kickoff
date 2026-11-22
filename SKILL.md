@@ -7,7 +7,7 @@ description: "Kick off and run the decompilation of a Sega Dreamcast (Katana) ga
 
 The goal is a decomp that goes from the disc to proven C for every function, and then to the game built from that C, in ten steps: it rebuilds the original executable
 byte for byte, every function is its own file, the names come from the SDK, and the C is proven function by function.
-A function is done when its C is **Equivalent** (`tools/equiv.py` runs both
+A function is done when its C is **Equivalent** (`tools/sim/equiv.py` runs both
 in an SH-4 interpreter on test cases and compares calls, writes and result) or **Matching** (its C rebuilds the original
 bytes, one source file at a time). The repo's `MODE` in `status.txt` says which. The repo's build keeps matching the original either way.
 
@@ -71,15 +71,15 @@ Hitachi tools through `wibo` on PATH and Ghidra from `GHIDRA_INSTALL_DIR` (Ghidr
 `DC_LOCAL` does not work on macOS or Windows (`wibo` is a Linux program): there, install Docker.
 **In a cloud workspace** (a Claude conversation's own Linux machine) images often cannot be pulled,
 and there is no Docker: use `DC_LOCAL=1` for every script. Install what it needs with
-`bash scripts/setup_tools.sh --check` (reports what is missing, installs nothing), then
-`bash scripts/setup_tools.sh` (wibo, unshield, JDK 21, Ghidra: pinned and checksummed, one step per line),
+`bash scripts/tools/1-2-baseline/setup/setup_tools.sh --check` (reports what is missing, installs nothing), then
+`bash scripts/tools/1-2-baseline/setup/setup_tools.sh` (wibo, unshield, JDK 21, Ghidra: pinned and checksummed, one step per line),
 then `source` the `env.sh` the script prints (`~/dc-tools/env.sh` by default) in every shell that runs a script. The user's disc and SDK are in a folder of
 that machine (ask for the folder); the repo is built there, so offer to hand it back to them at the end.
 
 **Before starting, check the machine:**
 - `python3 --version` works and is 3.6 or newer (on macOS, `python3` can be Apple's stub that
   opens an install dialog: then use another Python, e.g. from python.org or Homebrew).
-- `docker info` works (no Docker on Linux x86_64: `bash scripts/setup_tools.sh --check`, then install, as above). Docker Desktop and colima share **only your home folder** with containers
+- `docker info` works (no Docker on Linux x86_64: `bash scripts/tools/1-2-baseline/setup/setup_tools.sh --check`, then install, as above). Docker Desktop and colima share **only your home folder** with containers
   by default: keep the work folder, the repo and the SDK under your home folder, or mounts arrive
   empty (a build that "can't find" files it plainly has is this).
 - About 4 GB free (Docker images ~1.5 GB, the SDK, the disc copy for the game image).
@@ -97,7 +97,7 @@ tree with `.../Utl/Dev/Hitachi` and `Lib`): scripts find `asmsh.exe`, `lbr.exe`,
 to the user by its disc names and ask them to provide the images themselves; never download it:
 "Dreamcast SDK (Sega Library) Ver.1.55J" **Vol.1 (Common Disc)** and **Vol.2 (For SHC Users)**
 (Redump discs 87866 and 87867; Vol.3, CodeWarrior, is not needed). Lay it out with
-`python3 scripts/sdk_from_iso.py <out folder> <Vol.1 .iso> <Vol.2 .iso>`: it checks each image
+`python3 scripts/tools/1-2-baseline/setup/sdk_from_iso.py <out folder> <Vol.1 .iso> <Vol.2 .iso>`: it checks each image
 against its Redump record, then copies `bin/` (Vol.1) and `shc/` + `shinobi/` (Vol.2), about a second.
 Without it everything below still works, with fewer names.
 
@@ -153,7 +153,7 @@ equivalent material lawfully in their possession.
 | other Katana SDK releases, optional (disc images: 0.20 Pre 7 to R11b, 1.55J Vol.1 + Vol.2, Network 1.04; Katana 0.40 Release.4 for 1998 games; R1.42J and 2.00J come as InstallShield 3 installers, `is3_extract.py`; R2 and 0.20 Pre 7 carry GNU `ar` libraries this skill does not hash yet) | archive.org item `official-katana-sdks` (`OFFICIAL KATANA SDKs.zip`, one image per release); 1.55J is also catalogued by Redump (discs 87866, 87867); 0.40 and the Shinobi/Kamui library sources from sega-dreamcast-info.com's SDK archive page (https://www.sega-dreamcast-info.com/en/dreamcast-develppement-sdk-library-archive) | the release the game was built with (step 2), more SDK names                                                                                                                                                                                                                                |
 | the Shinobi and Kamui library sources, optional                                                                                                                                                                                                                                                | sega-dreamcast-info.com ("The source code of the Dreamcast Shinobi/Kamui development library")                                                                                                                                                                                                                                       | exact C and names for the SDK part of every game: reference source for the C loop, their bundled `.LIB` files are one more signature table, and the Shinobi dump's `.LST` listings name statics (`sdk_masked.py --listings`)                                                                |
 | the Sega NAOMI SDK, optional (for games built on the NAOMI library: arcade ports with `nl*` functions)                                                                                                                                                                                         | archive.org item `NaomiSDK` ("Sega Naomi SDK 001002": `archive/naomi/libwin.zip`, `libsgi.tgz`, `smpwin1-7.zip`, `doc.tgz`)                                                                                                                                                                                                          | the `nl*` / `nla*` / `nlsnd*` library (math, matrices, textures, sprites, print): one more signature table (`sdk_sigs.sh`, with a Katana SDK's `lbr.exe`/`lnk.exe` beside the libraries), its sample programs (`t.map` + `t.mot`) as another, and the API pages as each function's contract |
-| cheat codes, optional                                                                                                                                                                                                                                                                          | gamehacking.org (per-game pages, public); the Dreamcast-Talk compiled CodeBreaker list (members' attachment, credits its code authors); the community's widescreen code lists                                                                                                                                                        | named variables (`scripts/cheat_leads.py`)                                                                                                                                                                                                                                                  |
+| cheat codes, optional                                                                                                                                                                                                                                                                          | gamehacking.org (per-game pages, public); the Dreamcast-Talk compiled CodeBreaker list (members' attachment, credits its code authors); the community's widescreen code lists                                                                                                                                                        | named variables (`scripts/tools/4-boosts/cheat_leads.py`)                                                                                                                                                                                                                                                  |
 | a later port, a prototype, other decomps, optional                                                                                                                                                                                                                                             | the user's own copies (ports and prototypes), GitHub, hiddenpalace.org, tcrf.net, segaretro.org                                                                                                                                                                                                                                      | step 4                                                                                                                                                                                                                                                                                      |
 | an older SDK, optional                                                                                                                                                                                                                                                                         | archive.org item `dcsdk-9e` (SDK R9 Europe, Nov 1999, disc 1: SHC 5.1 Release 08)                                                                                                                                                                                                                                                    | a period compiler for games built in 1999-2000; so far it gave the same bytes as R10.1's (Release 11)                                                                                                                                                                                       |
 
@@ -179,7 +179,7 @@ The ten steps, in order. Each one is announced and closed as the section above s
 - **Name the conversation after the game.** As soon as IP.BIN gives the title (step 1), rename
    the session if your client lets you (e.g. "Dreamcast decomp kick-off: <title>"), so a user
    running several games can tell the conversations apart.
-- **Disc to executable.** Ask the user for the path of the folder that holds the game image (a `.gdi` with its track files: only `.gdi` is supported). Never ask them to attach or upload files, and never explain how to set up the client. (`scripts/tools/gdi_read.py`). Check the
+- **Disc to executable.** Ask the user for the path of the folder that holds the game image (a `.gdi` with its track files: only `.gdi` is supported). Never ask them to attach or upload files, and never explain how to set up the client. (`scripts/tools/1-2-baseline/gdi_read.py`). Check the
    boot file in IP.BIN; `0WINCEOS.BIN` means Windows CE: stop, this skill does not apply.
    **Check it is the game before splitting.** Look for the game's own text (menus, item or place
    names) in the executable. A big `.BIN` next to the boot file can be a bundled application
@@ -187,8 +187,8 @@ The ten steps, in order. Each one is announced and closed as the section above s
    none of the game's text). A boot file with none of the game's text may only be a core that
    loads the game's code at runtime from other files (relocatable modules): this skill handles one
    executable at a fixed address, so stop and say so (`docs/evidence.md` has an example).
-- **Base and fingerprint**: `scripts/linkbase.py`, `scripts/banners.py`. Note the SDK version the game used.
-   **Which SDK to ask for:** `python3 scripts/sdk_scan.py docs/sdk-banners.tsv <1ST_READ.BIN>`
+- **Base and fingerprint**: `scripts/tools/1-2-baseline/setup/linkbase.py`, `scripts/tools/1-2-baseline/setup/banners.py`. Note the SDK version the game used.
+   **Which SDK to ask for:** `python3 scripts/tools/1-2-baseline/setup/sdk_scan.py docs/sdk-banners.tsv <1ST_READ.BIN>`
    (`docs/sdk-releases.md` lists every release with the file names it has been seen under, as
    search terms for the user)
    ranks the publicly preserved Katana releases by how many of the game's library builds they
@@ -197,9 +197,9 @@ The ten steps, in order. Each one is announced and closed as the section above s
    release not in the list, and to pick a close one; suggest the one or two the script names. If
    the user already has several SDKs, they can instead point at one folder holding all of them
    (images, zips or folders) and run `sdk_scan.py <that folder> <1ST_READ.BIN>`. Older releases
-   ship inside InstallShield cabinets: `scripts/sdk_unpack.sh <image> <out>` lays any of them out
+   ship inside InstallShield cabinets: `scripts/tools/1-2-baseline/setup/sdk_unpack.sh <image> <out>` lays any of them out
    as plain files (Docker, any OS) before `sdk_sigs.sh`. The 1998-1999 releases (R1.42J, 2.00J)
-   are InstallShield 3 self-extractors instead: `python3 scripts/is3_extract.py <SETUP.EXE> <out>`
+   are InstallShield 3 self-extractors instead: `python3 scripts/tools/1-2-baseline/setup/is3_extract.py <SETUP.EXE> <out>`
    (stdlib) unpacks every archive inside. Some discs also carry a samples zip with prebuilt
    sample programs and their link maps: those link the release's libraries, so hashing them
    (ELFs in `elf/`, `map_names.py` output in `names/`, then `ExportSigs.java` in folder mode as
@@ -215,7 +215,7 @@ The ten steps, in order. Each one is announced and closed as the section above s
 - **Ghidra** (Docker; no Linux machine needed, the image builds on first use), with the
    executable in `<work>`:
    ```
-   scripts/ghidra/dghidra.sh <work> /work proj -import /work/1ST_READ.BIN -overwrite \
+   scripts/tools/1-2-baseline/setup/ghidra/dghidra.sh <work> /work proj -import /work/1ST_READ.BIN -overwrite \
      -loader BinaryLoader -loader-baseAddr <base> -processor SuperH4:LE:32:default \
      -scriptPath /scripts -preScript DcPre.java -postScript DcReport.java /work/report.txt
    ```
@@ -223,13 +223,13 @@ The ten steps, in order. Each one is announced and closed as the section above s
    Never copy the `.java` scripts into `<work>`: Ghidra then finds two copies and fails to load them.
    **How much it finds:** compare the bytes inside functions with the executable's size. A game is
    often mostly data (models, tables), so a third can be normal; a whole region with `rts`
-   instructions and no functions is code the analysis never reached. `scripts/seed_funcs.py`
+   instructions and no functions is code the analysis never reached. `scripts/tools/1-2-baseline/seed_funcs.py`
    lists function starts in uncovered stretches; re-import with `-preScript SeedFuncs.java
    <seeds.txt>` after `DcPre.java` so the analysis follows them. Code reached only through switch
    tables (`braf` / `jmp @Rn` with a table of offsets) or runs of function pointers stays hidden
    to both: read those tables when a region still looks like unreached code.
 - **Names**:
-   - SDK-wide: `scripts/sdk_sigs.sh <SDK folder> <out>` -> `<out>/katana-sdk.sigs`. Any SDK layout:
+   - SDK-wide: `scripts/tools/1-2-baseline/setup/sdk_sigs.sh <SDK folder> <out>` -> `<out>/katana-sdk.sigs`. Any SDK layout:
      the Hitachi tools and the `.lib` files are found by name. Build once per SDK and keep the table
      beside the SDK folders (not in a scratch dir): it is minutes to an hour of hashing to rebuild.
      Details and gotchas: `docs/sdk-signatures.md`.
@@ -243,7 +243,7 @@ The ten steps, in order. Each one is announced and closed as the section above s
      on a tiny function (a few instructions) can still be a collision with unrelated library code:
      report short names that make no sense where they sit (a video-player function in a game that
      plays no video) as suspect, never silently trust them.
-   - **Types from the SDK's headers**, once the names are in: `scripts/sdk_headers.py <SDK folder>
+   - **Types from the SDK's headers**, once the names are in: `scripts/tools/1-2-baseline/setup/sdk_headers.py <SDK folder>
      <out>` copies the headers in a form Ghidra's C parser reads, then, in the same Ghidra run as
      `DcReport.java` or on its own, `ApplyHeaders.java <out>/shinobi/include
      <out>/shinobi/include/SHC <out>/shc/include <out>/stub -D__SHC__ -D_SH4`. It parses the
@@ -260,11 +260,13 @@ The ten steps, in order. Each one is announced and closed as the section above s
    - copy `template/` (`build.sh`, `setup.sh`, `disc.sh`, `textures.sh`, `Makefile`, `models.txt`, `README.md`, `AGENTS.md`, `KICKOFF`, `status.txt`, `port/` (the native port's runtime, experimental: its README)),
      and `template/gitignore` as **`.gitignore`** (shipped without the dot: some installs drop
      dotfiles);
-   - copy `scripts/tools/` whole as **`tools/`** (without `__pycache__`): one folder per step (`1-2-baseline/` to `8-build/`,
-     each with a README of its tools), the tools several steps use at the top, `toolpath.py` (every folder on the import
+   - copy `scripts/tools/` whole as **`tools/`** (without `__pycache__` and without `1-2-baseline/setup/`, the kickoff's own
+     scripts, which run from this skill before the repo exists): one folder per step (`1-2-baseline/` to `8-build/`,
+     each with a README of its tools), `sim/` (the simulator, its checker and the disassembler), `common/` (the tools many
+     steps share), and at the top `progress.py` and `toolpath.py` (every folder on the import
      path), `hooks/` and `tools-image/` (so a cloned repo builds its own tools image, nothing pulled from anyone else).
      The repo's `tools/` and this folder stay identical: a tool changes here first;
-   - write `sdk.txt`: `scripts/sdk_txt.py <repo>/functions.txt <base> <1ST_READ.BIN>
+   - write `sdk.txt`: `scripts/tools/1-2-baseline/sdk_txt.py <repo>/functions.txt <base> <1ST_READ.BIN>
      <SDK ApplySigs output>`. It marks the boot block
      and the SDK library block;
    - write the base to `BASE` (hex, no `0x`); `split_asm.py` already wrote `functions.txt`;
@@ -314,7 +316,7 @@ The ten steps, in order. Each one is announced and closed as the section above s
    with the rebuilt executable and every file under `disc/` (same path as on the disc) written in
    place, error correction recomputed, read back to verify. A smaller file is padded; a **bigger**
    one moves into free sectors (GD-ROMs often carry a whole filler track) and its directory entry is
-   repointed. To change the executable from a modified copy, `tools/apply_bin.py <repo> <original>
+   repointed. To change the executable from a modified copy, `tools/1-2-baseline/apply_bin.py <repo> <original>
    <modified>` writes the changes into the asm data words; then `bash build.sh` (it prints DIFFERS,
    expected; `DC_EXPECT_CHANGES=1` makes that exit 0).
 
@@ -382,7 +384,7 @@ The maps open in [Shuriken Explorer](https://github.com/consolesplayingconsoles/
    6. **A prototype, debug build or dev kit dump.** Pre-release discs sometimes carry the
       linker's `.ELF` or `.MAP`, or a build log inside a data file, with every name; a studio's
       dev kit dump can hold the project folder with its link maps, ELFs with debug info
-      (`scripts/elf_debug_names.py`) and source. Whether one exists for the game:
+      (`scripts/tools/4-boosts/elf_debug_names.py`) and source. Whether one exists for the game:
       https://www.sega-dreamcast-info.com/en/releases-prototypes-sega-dreamcast-iso (about 300
       Dreamcast prototypes and the published dev kit dumps, with what each one holds) and Hidden
       Palace's Dreamcast list (https://hiddenpalace.org/Prototypes_by_system/Dreamcast). With no ELF or map, still diff
@@ -391,20 +393,20 @@ The maps open in [Shuriken Explorer](https://github.com/consolesplayingconsoles/
    7. **A sibling decomp** (same team: games that link the same in-house library, an engine or maths layer no SDK table knows).
       An offer, never a search: work only with a repo whose path the user gives you, and never look through their other folders for one.
    Record each answer in the game's evidence entry. Only 1, 4, 6 and 7 feed a tool: 1 ->
-   `scripts/cheat_leads.py` (globals candidates, below); 4 -> `docs/port-symbols.md`,
-   symbols check first; 6 -> a symbol scan before anything else, then the strings diff; 7 -> `scripts/sibling_names.py`. 2, 3 and
+   `scripts/tools/4-boosts/cheat_leads.py` (globals candidates, below); 4 -> `docs/port-symbols.md`,
+   symbols check first; 6 -> a symbol scan before anything else, then the strings diff; 7 -> `scripts/tools/4-boosts/sibling_names.py`. 2, 3 and
    5 become references in the repo's docs, and names only when the source is itself a matching
    decomp (`ExportSigs.java`).
    Never go looking for any of it: use what the user gives (a path, or a link they provide, which you may read). Never fetch
    games, SDKs or any extra that contains IP (a later port, a prototype, other regions): the user supplies those as paths.
-   - **Cheat codes** (when the user gave a list): `scripts/cheat_leads.py <list.txt> <title>
+   - **Cheat codes** (when the user gave a list): `scripts/tools/4-boosts/cheat_leads.py <list.txt> <title>
      <1ST_READ.BIN> <base>` prints one line per code: address, size, write or compare, the
      cheat's name. Those are globals candidates with their meaning (health, timer, cash...). Most
      are RAM variables beyond the executable. A list for another region of the game names the
      same variables at other addresses, and not by one constant shift (one build moved its game
      state block by 0x22E0 and its option flags by 0x2358): find each by its use in the code
      before applying it. `cheat_leads.py fetch <title>` takes the list from libretro-database.
-   - **Sibling decomp** (when the user gave a path): `python3 scripts/sibling_names.py <sibling repo> <repo>` proposes its names for exact
+   - **Sibling decomp** (when the user gave a path): `python3 scripts/tools/4-boosts/sibling_names.py <sibling repo> <repo>` proposes its names for exact
      masked matches that are unique both ways and lists the twins; `--apply`, then `split_asm.py` and `bash build.sh` (`MATCH`).
    - **A later port, a prototype**: as above (`docs/port-symbols.md`; the symbol scan), then `split_asm.py` and `bash build.sh` (`MATCH`).
    - End the step with `python3 tools/progress.py`: the names the extras added.
@@ -421,7 +423,7 @@ The maps open in [Shuriken Explorer](https://github.com/consolesplayingconsoles/
 - **Generated C.** `python3 tools/5-generated/gen_equiv` writes Equivalent C for the functions that need no thinking, checked against the original in the SH-4 simulator.
   Report it apart from hand-written C. A function that passes is done; there is no coverage pass mark, and the total test coverage is the quality figure.
 - **Polish.** `python3 tools/5-generated/gen_equiv --direct` / `--retest` widen the cases, guided by how much of the original they run, and list functions whose C fails on them.
-- **Do not lose work.** `state/kept` and `gen_equiv --recheck` keep and re-check what failed; `tools/consistency.py --fix` after overlapping runs; run in byte batches (`GEN_BATCH`); `tools/5-generated/remaining.py --table` shows where every function stands.
+- **Do not lose work.** `state/kept` and `gen_equiv --recheck` keep and re-check what failed; `tools/common/consistency.py --fix` after overlapping runs; run in byte batches (`GEN_BATCH`); `tools/5-generated/remaining.py --table` shows where every function stands.
 - End the step with `python3 tools/progress.py` and the instruction coverage `equiv.py` reports.
 
 ### Step 6: Experience-driven agentic decomp
@@ -449,7 +451,7 @@ code had, so the build of step 8 leaves every other address of the executable wh
   and `fit` says how many bytes are over (the literal pools and constants count, as in the build). It needs `layout.txt` (step 8,
   first point).
 - **Shrink**: `python3 tools/7-reduction/shrink.py <name> ...` writes each function again and keeps the new C only when it is
-  strictly smaller (`tools/sizes.py` measures both the same way) and still proven on its cases. Smallest functions first: they
+  strictly smaller (`tools/7-reduction/sizes.py` measures both the same way) and still proven on its cases. Smallest functions first: they
   are cheap and add up; stop when the target and a little spare are reached. `--regen` keeps the new C at any size when it is
   proven, for after a generator fix. `tools/7-reduction/hoist.py` holds a value the original loaded once in a local.
 - **Rewrite passes first**: `python3 tools/7-reduction/shrink.py --passes` rewrites the current C of every unit with the
@@ -469,11 +471,11 @@ code had, so the build of step 8 leaves every other address of the executable wh
 - **Outliers** (one function the generator gets wrong) are fixed in the C by hand, proven, and reported as a skill unit test
   (`tests/`), not patched into the tools.
 - **Manual only**: C written by hand carries `/* manual: <reason> */` right above its definition; shrink.py, hoist.py and the
-  generator's recheck and rebuild leave it alone (`tools/consistency.py manual_names`).
+  generator's recheck and rebuild leave it alone (`tools/common/consistency.py manual_names`).
 
 ### Step 8: Build from C
 
-- **Layout**: write `layout.txt` in the repo (`tools/layout.py`): `game` (the game's own code, required), `fill` (spare room in
+- **Layout**: write `layout.txt` in the repo (`tools/common/layout.py`): `game` (the game's own code, required), `fill` (spare room in
   the file before it), `code` (what the cases may not write to), `spare` (unused RAM, test builds only). Read it off the RAM map:
   the boot code, the entry, the libraries, the data and the SDK stay where they are. **`game` is the game's own code only**: the
   library ranges of `sdk.txt` (SDK, NAOMI, the C runtime) and the data blocks stay outside it, as the original bytes, and are not
@@ -537,15 +539,15 @@ Grouped by the step that first needs them (scripts, then templates, then docs wi
 
 | script                               | what it does                                                                                                                                                                                                                                                                                     |
 |--------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `scripts/tools/gdi_read.py`                | list / extract files from any data track of a GDI; extract IP.BIN                                                                                                                                                                                                                                |
-| `scripts/linkbase.py`                | pick the import base from self-pointer counts                                                                                                                                                                                                                                                    |
-| `scripts/banners.py`                 | SDK module banners: name, version, build date                                                                                                                                                                                                                                                    |
-| `scripts/sdk_from_iso.py`            | SDK 1.55J folder from its Vol.1 + Vol.2 disc images, checked against Redump                                                                                                                                                                                                                      |
-| `scripts/sdk_scan.py`                | which SDK release built the game: its library banners against `docs/sdk-banners.tsv` or a folder of SDKs                                                                                                                                                                                   |
-| `scripts/is3_extract.py`             | InstallShield 3 installers (SETUP.EXE / .Z) as plain files: directory + PKWARE implode, stdlib                                                                                                                                                                                                   |
-| `scripts/sdk_unpack.sh`              | any SDK image or zip as plain files, InstallShield cabinets unpacked (`unshield-image/`)                                                                                                                                                                                                         |
-| `scripts/iso_extract.py`             | copy every file out of a disc image or zip (Joliet or ISO9660, no mounting)                                                                                                                                                                                                                      |
-| `scripts/tools/docker_check.sh`            | Docker installed vs running vs low memory, and the tools image on first use                                                                                                                                                                                                                      |
+| `scripts/tools/1-2-baseline/gdi_read.py`                | list / extract files from any data track of a GDI; extract IP.BIN                                                                                                                                                                                                                                |
+| `scripts/tools/1-2-baseline/setup/linkbase.py`                | pick the import base from self-pointer counts                                                                                                                                                                                                                                                    |
+| `scripts/tools/1-2-baseline/setup/banners.py`                 | SDK module banners: name, version, build date                                                                                                                                                                                                                                                    |
+| `scripts/tools/1-2-baseline/setup/sdk_from_iso.py`            | SDK 1.55J folder from its Vol.1 + Vol.2 disc images, checked against Redump                                                                                                                                                                                                                      |
+| `scripts/tools/1-2-baseline/setup/sdk_scan.py`                | which SDK release built the game: its library banners against `docs/sdk-banners.tsv` or a folder of SDKs                                                                                                                                                                                   |
+| `scripts/tools/1-2-baseline/setup/is3_extract.py`             | InstallShield 3 installers (SETUP.EXE / .Z) as plain files: directory + PKWARE implode, stdlib                                                                                                                                                                                                   |
+| `scripts/tools/1-2-baseline/setup/sdk_unpack.sh`              | any SDK image or zip as plain files, InstallShield cabinets unpacked (`unshield-image/`)                                                                                                                                                                                                         |
+| `scripts/tools/1-2-baseline/setup/iso_extract.py`             | copy every file out of a disc image or zip (Joliet or ISO9660, no mounting)                                                                                                                                                                                                                      |
+| `scripts/tools/common/docker_check.sh`            | Docker installed vs running vs low memory, and the tools image on first use                                                                                                                                                                                                                      |
 | `scripts/tools/tools-image/Dockerfile`     | the `dc-tools` image: small Linux + pinned, checksum-verified wibo                                                                                                                                                                                                                               |
 | `scripts/tools/1-2-baseline/overlay_scan.py`            | classifies every file of an extracted disc (SH-4 code, ARM code, sound bank, texture, data) and proves whether it holds SH-4 code (`python3 tools/1-2-baseline/overlay_scan.py <dir> [--md]`) |
 | `docs/sdk-banners.tsv`         | library banners (module, version, build date) of every preserved Katana release                                                                                                                                                                                                                  |
@@ -555,24 +557,24 @@ Grouped by the step that first needs them (scripts, then templates, then docs wi
 
 | script                               | what it does                                                                                                                                                                                                                                                                                     |
 |--------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `scripts/ghidra/dghidra.sh`          | headless Ghidra in Docker (image from `scripts/ghidra/Dockerfile`, built on first use)                                                                                                                                                                                                           |
-| `scripts/ghidra/*.java`              | seed + report (`DcPre`, `DcReport`), signatures (`ExportSigs`, `ApplySigs`), prototypes and structs from the SDK's headers (`ApplyHeaders`), queries (`Query`: decompiles with FPSCR's PR and SZ at 0 on entry, so float code reads as single precision instead of two branches per instruction) |
-| `scripts/sdk_headers.py`             | an SDK's C headers copied in a form Ghidra's C parser reads (form feeds, Shift-JIS comments, `(Void)` parameter lists, empty attribute macros)                                                                                                                                                   |
-| `scripts/sdk_sigs.sh`                | signature table for every exported function in an SDK's libraries                                                                                                                                                                                                                                |
+| `scripts/tools/1-2-baseline/setup/ghidra/dghidra.sh`          | headless Ghidra in Docker (image from `scripts/tools/1-2-baseline/setup/ghidra/Dockerfile`, built on first use)                                                                                                                                                                                                           |
+| `scripts/tools/1-2-baseline/setup/ghidra/*.java`              | seed + report (`DcPre`, `DcReport`), signatures (`ExportSigs`, `ApplySigs`), prototypes and structs from the SDK's headers (`ApplyHeaders`), queries (`Query`: decompiles with FPSCR's PR and SZ at 0 on entry, so float code reads as single precision instead of two branches per instruction) |
+| `scripts/tools/1-2-baseline/setup/sdk_headers.py`             | an SDK's C headers copied in a form Ghidra's C parser reads (form feeds, Shift-JIS comments, `(Void)` parameter lists, empty attribute macros)                                                                                                                                                   |
+| `scripts/tools/1-2-baseline/setup/sdk_sigs.sh`                | signature table for every exported function in an SDK's libraries                                                                                                                                                                                                                                |
 | `scripts/tools/8-build/disc_patch.py`              | copy a GDI with files replaced in place, error correction recomputed                                                                                                                                                                                                                             |
-| `scripts/tools/apply_bin.py`               | write a modified executable's changes into the repo's asm data words                                                                                                                                                                                                                             |
+| `scripts/tools/1-2-baseline/apply_bin.py`               | write a modified executable's changes into the repo's asm data words                                                                                                                                                                                                                             |
 | `scripts/tools/1-2-baseline/split_asm.py`               | split an executable into per-function asmsh sources + link order                                                                                                                                                                                                                                 |
 | `scripts/tools/1-2-baseline/units.py`                   | in the repo: the link order with C units in place of the asm files they replace                                                                                                                                                                                                                  |
 | `scripts/tools/1-2-baseline/fill.py`                    | in the repo: lay a C unit out like the original (nop alignment, 0xEE fill, exact size; every other layout is an opt-in `+` option of the unit's header, `docs/matching-units.md`) |
 | `scripts/tools/1-2-baseline/shc_flags.txt`              | in the repo: the `shc` flags of every C unit, read by `build.sh` and `fcmp.py` (a unit adds its own in its header; `+<x>flags` picks `shc_flags.<x>.txt`) |
-| `scripts/tools/fcmp.py`, `scripts/tools/permute.py`     | in the repo: compare a C unit with the original function by function, instruction by instruction; try meaning-preserving rewrites of one function (matching) |
+| `scripts/tools/common/fcmp.py`, `scripts/tools/7-reduction/permute.py`     | in the repo: compare a C unit with the original function by function, instruction by instruction; try meaning-preserving rewrites of one function (matching) |
 | `scripts/tools/overlay/`                                | in the repo: code overlays loaded from the disc (only a game with `overlays.tsv` uses them): survey, decompress and split, function lists, carry a unit to every copy, build and report (`docs/overlays.md`) |
-| `scripts/sdk_txt.py`                 | mark the SDK's code (boot block, library block, single matches) as `sdk.txt`                                                                                                                                                                                                                     |
+| `scripts/tools/1-2-baseline/sdk_txt.py`                 | mark the SDK's code (boot block, library block, single matches) as `sdk.txt`                                                                                                                                                                                                                     |
 | `scripts/tools/1-2-baseline/sdk_masked.py`              | after the tables: name more SDK functions by masked instructions, library layout and source listings (statics), link order as the check (stdlib)                                                                                                                                                 |
 | `scripts/tools/1-2-baseline/missed_funcs.py`            | list code the analysis did not make into functions                                                                                                                                                                                                                                               |
-| `scripts/seed_funcs.py`              | function starts in stretches no function covers, seeds for `ghidra/SeedFuncs.java`                                                                                                                                                                                                               |
-| `scripts/map_names.py`               | code symbols of a linked library's map, runtime routines included                                                                                                                                                                                                                                |
-| `scripts/elf_debug_names.py`         | function names and addresses from an SHC ELF's DWARF 1 debug section (prototype or dev kit ELFs)                                                                                                                                                                                                 |
+| `scripts/tools/1-2-baseline/seed_funcs.py`              | function starts in stretches no function covers, seeds for `ghidra/SeedFuncs.java`                                                                                                                                                                                                               |
+| `scripts/tools/1-2-baseline/setup/map_names.py`               | code symbols of a linked library's map, runtime routines included                                                                                                                                                                                                                                |
+| `scripts/tools/4-boosts/elf_debug_names.py`         | function names and addresses from an SHC ELF's DWARF 1 debug section (prototype or dev kit ELFs)                                                                                                                                                                                                 |
 | `template/disc.sh`                   | in the repo: build a playable disc image of the user's version                                                                                                                                                                                                                                   |
 | `template/build.sh`                  | assemble, compile C units, link (`start P(<base>)`), `elf2bin`, compare with the original                                                                                                                                                                                                        |
 | `docs/sdk-signatures.md`       | naming library code from the SDK's libraries                                                                                                                                                                                                                                                     |
@@ -591,18 +593,18 @@ Grouped by the step that first needs them (scripts, then templates, then docs wi
 
 | script                               | what it does                                                                                                                                                                                                                                                                                     |
 |--------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `scripts/sibling_names.py`           | names from a sibling decomp (same team, shared library): exact masked matches unique both ways, twins listed                                                                                                                                                                                     |
-| `scripts/cheat_leads.py`             | cheat codes (CodeBreaker/Xploder list) as named-variable leads                                                                                                                                                                                                                                   |
-| `scripts/ghidra/ExportFeatures.java` | per-function strings, constants, calls and globals, for port matching                                                                                                                                                                                                                            |
-| `scripts/port/*.py`                  | pair functions and globals with a port's symbols (`docs/port-symbols.md`)                                                                                                                                                                                                                  |
+| `scripts/tools/4-boosts/sibling_names.py`           | names from a sibling decomp (same team, shared library): exact masked matches unique both ways, twins listed                                                                                                                                                                                     |
+| `scripts/tools/4-boosts/cheat_leads.py`             | cheat codes (CodeBreaker/Xploder list) as named-variable leads                                                                                                                                                                                                                                   |
+| `scripts/tools/1-2-baseline/setup/ghidra/ExportFeatures.java` | per-function strings, constants, calls and globals, for port matching                                                                                                                                                                                                                            |
+| `scripts/tools/1-2-baseline/setup/port/*.py`                  | pair functions and globals with a port's symbols (`docs/port-symbols.md`)                                                                                                                                                                                                                  |
 | `docs/port-symbols.md`         | naming from a later port that kept its symbols (Android, iOS, PC builds)                                                                                                                                                                                                                         |
 
 ### Tools for step 5: Incremental script-generated decomp
 
 | script                               | what it does                                                                                                                                                                                                                                                                                     |
 |--------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `scripts/tools/sh4sim.py`                  | in the repo: an SH-4 interpreter (integer, single-precision FPU, delay slots) that runs one function from a case (registers, memory, a RAM dump, mocked call returns) and records its calls, writes and result (stdlib)                                                                          |
-| `scripts/tools/equiv.py`                   | in the repo: compiles a C file and checks each function against the original on its test cases (`tests/<file>/<function>.json`); the Equivalent tier, written to `tests/equivalent.txt`; each result also says how many of the original's instructions the cases ran (coverage)                  |
+| `scripts/tools/sim/sh4sim.py`                  | in the repo: an SH-4 interpreter (integer, single-precision FPU, delay slots) that runs one function from a case (registers, memory, a RAM dump, mocked call returns) and records its calls, writes and result (stdlib)                                                                          |
+| `scripts/tools/sim/equiv.py`                   | in the repo: compiles a C file and checks each function against the original on its test cases (`tests/<file>/<function>.json`); the Equivalent tier, written to `tests/equivalent.txt`; each result also says how many of the original's instructions the cases ran (coverage)                  |
 | `scripts/tools/5-generated/gen_equiv/`                 | in the repo as `tools/5-generated/gen_equiv`: writes Equivalent C for functions that need no thinking (script-generated: report it apart from hand C); `--regen <name> ...` writes generated functions again after a generator fix, keeping the old C unless the new is proven; `--retest` draws the cases again, guided by the original's instruction coverage, and lists functions whose C fails on them; `--draw src/<file>.c` draws coverage-guided cases for C you wrote by hand (arguments from the prototype, memory behind pointers, answers for calls) |
 | `scripts/tools/5-generated/sdk_source.py`              | in the repo: compiles the library sources the user supplied with the SDK's shc; the functions whose bytes they reproduce go to `sdk-source/` (exact C, git-ignored) and `sdk-verified.txt` (names, counted by `progress.py`)                                                                     |
 | `scripts/tools/5-generated/sdk_dups.py`                | in the repo: one C per function: lists the C in `src/` for functions the SDK's own source already reproduces; `--fix` removes the second C, its cases and its record                                                                                                                              |
@@ -623,9 +625,9 @@ Grouped by the step that first needs them (scripts, then templates, then docs wi
 | `scripts/tools/1-2-baseline/checksizes.py`              | in the repo: functions whose size in `functions.txt` looks wrong (a literal pool mid-body ended the listing early), with the size that covers the code after it; `--hidden` finds the opposite, an entry listed longer than its code with another function inside it (counted proven, though nothing tests it) |
 | `scripts/tools/5-generated/classify.py`                | in the repo: which functions can have C at all (FPU banks, `fsrra`, control registers other than SR: blocked)                                                                                                                                                                                    |
 | `scripts/tools/6-agentic/poollist.py`                | in the repo: a function's literal pool as functions, RAM addresses (named, or MISSING) and numbers                                                                                                                                                                                               |
-| `scripts/tools/shdis.py`                   | in the repo: SH-4 disassembly with FPU, pool values and names (stdlib)                                                                                                                                                                                                                           |
-| `scripts/tools/4-boosts/live.py`                    | in the repo, optional: read, watch and write the running game by address or name, screenshots, pad input (RetroArch + Flycast core over its network ports, stdlib)                                                                                                                               |
-| `scripts/gdbsnap.py`                 | in the repo, optional: RAM snapshots of the running game over Flycast's GDB server (a build with `ENABLE_GDB_SERVER`), timelines, and what changed between two snapshots with the nearest global names; live data in `docs/agentic-decomp.md` (stdlib)                                              |
+| `scripts/tools/sim/shdis.py`                   | in the repo: SH-4 disassembly with FPU, pool values and names (stdlib)                                                                                                                                                                                                                           |
+| `scripts/tools/6-agentic/live.py`                    | in the repo, optional: read, watch and write the running game by address or name, screenshots, pad input (RetroArch + Flycast core over its network ports, stdlib)                                                                                                                               |
+| `scripts/tools/6-agentic/gdbsnap.py` | in the repo, optional: RAM snapshots of the running game over Flycast's GDB server (a build with `ENABLE_GDB_SERVER`), timelines, and what changed between two snapshots with the nearest global names; live data in `docs/agentic-decomp.md` (stdlib)                                              |
 | `scripts/tools/6-agentic/handcase.py`                  | in the repo: prove a function on cases written by hand, with the C the generator writes |
 | `scripts/tools/6-agentic/poolconst.py`                 | in the repo: the C's reads of the original's literal pools become constants (or the function's name) |
 | `scripts/tools/6-agentic/codeaddr.py`                  | in the repo: a game function's address written as a number becomes its name; numbers inside a function are listed |
@@ -638,7 +640,7 @@ Grouped by the step that first needs them (scripts, then templates, then docs wi
 |--------------------------------------|--------------|
 | `scripts/tools/7-reduction/shrink.py`               | in the repo: regenerate functions and keep the new C when strictly smaller and still proven (`--regen`: any size; `--passes`: the rewrite strategies on the current C, per unit) |
 | `scripts/tools/7-reduction/hoist.py`                | in the repo: hold a value the C recomputes at every use in a local, as the original held it in a register (`--loose`, `--apply`) |
-| `scripts/tools/sizes.py`                   | in the repo: the compiled size of a function's C, literal pools and constants included |
+| `scripts/tools/7-reduction/sizes.py`                   | in the repo: the compiled size of a function's C, literal pools and constants included |
 
 ### Tools for step 8: Build from C
 
@@ -652,7 +654,7 @@ Grouped by the step that first needs them (scripts, then templates, then docs wi
 | `scripts/tools/8-build/retcheck.py`               | in the repo: each function's result register from the original's code before its `rts` against its C declaration; `make c` and the pre-commit hook run it, a mismatch refuses |
 | `scripts/tools/8-build/protocheck.py`             | in the repo: calls that pass fewer stack words or argument registers than the callee takes; `--lost` keeps the ones where the original sets the register before the call, which `consistency.py` lists as `short call` and `--fix` hands back to the generator; a callee with no C in `src/` (library code kept as the original) is checked on the registers its original reads at its entry |
 | `scripts/tools/8-build/disc.py`                   | in the repo: `make disc` runs it. Builds the way `status.txt`'s `MODE` says and writes the result into a copy of the disc: `equivalent` (or no MODE line) is `make c`; `matching` is `build.sh`, then `build_overlays.sh` when the repo has overlays, which must match |
-| `scripts/tools/layout.py`                  | in the repo: reads `layout.txt` (the regions the build and the cases need) |
+| `scripts/tools/common/layout.py`                  | in the repo: reads `layout.txt` (the regions the build and the cases need) |
 | `template/Makefile`                  | in the repo: `make` (the matching build), `make setup`, `make c` (`retcheck.py` first), `make disc`, `make progress` |
 
 ### Tools for all steps
@@ -661,9 +663,9 @@ Grouped by the step that first needs them (scripts, then templates, then docs wi
 |--------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `scripts/tools/progress.py`                | in the repo: done (equivalent C), matching C, named functions and globals, documented. "done: equivalent C" stays the first row of the first section: Pluto finds the main metric by that label                                                                                                  |
 | `scripts/tools/toolpath.py`                | in the repo: every tools folder on the import path, so a tool imports another by name |
-| `scripts/tools/boundaries.py`              | in the repo: function boundaries from reachability: which addresses are functions of their own (`--apply` writes `functions.txt`); a `bra` or a conditional branch to another listed function is a tail jump, not more of the function |
-| `scripts/tools/rename.py`                  | in the repo: rename functions and globals everywhere at once |
-| `scripts/tools/consistency.py`, `ledger.py`, `status.py`, `watch.py` | in the repo: C and cases agree; nothing learnt about a function is lost; what is running; progress of a run |
+| `scripts/tools/common/boundaries.py`              | in the repo: function boundaries from reachability: which addresses are functions of their own (`--apply` writes `functions.txt`); a `bra` or a conditional branch to another listed function is a tail jump, not more of the function |
+| `scripts/tools/common/rename.py`                  | in the repo: rename functions and globals everywhere at once |
+| `scripts/tools/common/consistency.py`, `ledger.py`, `status.py`, `watch.py` | in the repo: C and cases agree; nothing learnt about a function is lost; what is running; progress of a run |
 | `template/setup.sh`                  | in the repo: extract + verify the user's executable, regenerate `asm/` and `text-map/`                                                                                                                                                                                                           |
 | `template/README.md`                 | the repo's README, with `@PLACEHOLDERS@` to fill                                                                                                                                                                                                                                                 |
 | `template/AGENTS.md`                 | the decompilation loop for whoever works in the repo                                                                                                                                                                                                                                             |

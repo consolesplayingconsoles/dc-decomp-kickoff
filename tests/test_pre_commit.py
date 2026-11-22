@@ -81,7 +81,7 @@ class PreCommit(unittest.TestCase):
 
     def test_unstaged(self):
         self.write('tests/equivalent.txt', 'main\n')
-        self.write('tools/equiv.py', '')
+        self.write('tools/sim/equiv.py', '')
         self.assertEqual(self.commit().returncode, 0)
         self.write('tests/equivalent.txt', 'main\nother\n')       # changed, not staged
         self.write('notes.txt', 'x')

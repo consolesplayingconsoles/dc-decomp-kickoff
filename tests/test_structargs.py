@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A structure passed by value goes on the stack, not in a register (scripts/tools/equiv.py prototypes, stack_args, definitions).
+"""A structure passed by value goes on the stack, not in a register (scripts/tools/sim/equiv.py prototypes, stack_args, definitions).
 SHC passes a struct argument in the caller's outgoing stack area, in parameter order with the integer arguments past the fourth;
 the registers carry only the scalar arguments. Counting it as an integer register made the checker compare r4 (a leftover) on Crazy
 Taxi kmiInitPAL / kmiInitNTSC -> kmiSetVideoTimings(KmVideoTimings) and missed the stack words. No game data, no compiler. Stdlib only.

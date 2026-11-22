@@ -1,4 +1,4 @@
-"""Two things the checker (scripts/tools/equiv.py, with scripts/tools/sh4sim.py) used to pass and the game did not. No game data, no
+"""Two things the checker (scripts/tools/sim/equiv.py, with scripts/tools/sim/sh4sim.py) used to pass and the game did not. No game data, no
 compiler: hand-assembled SH-4. Stdlib only.
 
 What a call reads through a pointer into the caller's frame (sh4sim frame_reach, equiv same_bufs). The checker compared the words

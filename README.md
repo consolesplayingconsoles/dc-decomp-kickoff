@@ -101,7 +101,7 @@ Install the whole folder when possible. Where only [SKILL.md](SKILL.md) can be a
 
 **What you provide:** the game disc as a `.gdi` with its track files (only `.gdi`) and a Katana SDK. dc-decomp-kickoff reads the disc and reports which SDK
 release it was built with; that release's library sources, or those of another release, are accepted as well. Python 3 is required
-wherever it runs, and Docker on any OS. Without Docker (Linux x86_64 only), [`scripts/setup_tools.sh`](scripts/setup_tools.sh) installs the tools
+wherever it runs, and Docker on any OS. Without Docker (Linux x86_64 only), [`scripts/tools/1-2-baseline/setup/setup_tools.sh`](scripts/tools/1-2-baseline/setup/setup_tools.sh) installs the tools
 dc-decomp-kickoff needs, one step at a time. To debug the running game you need Flycast, or a serial cable for real hardware.
 
 **Optional, and worth having:** each of these saves work, and the earlier it is used the more it saves (the SDK's own source is the clearest case). dc-decomp-kickoff asks for them

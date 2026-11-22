@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The result registers two runs are compared on (scripts/tools/equiv.py same, sh4sim.py out_set). Stdlib only, no compiler, no game data.
+"""The result registers two runs are compared on (scripts/tools/sim/equiv.py same, sh4sim.py out_set). Stdlib only, no compiler, no game data.
 
 A function that returns on a path that leaves r0 as it came in hands its caller a leftover; the compiled C has no way to hand back the same
 one (Virtua Tennis ballMarkCheck: the original branches to its epilogue on a flag and returns the entry r0, the C an unset local that came
