@@ -1,6 +1,6 @@
 # Evidence: games the skill has been run on
 
-One entry per game. The rest of the skill states rules without naming games; what each game showed,
+One section per game: an entry for the run that started it, then an entry for each later step. The rest of the skill states rules without naming games; what each game showed,
 and what changed in the skill because of it, lives here. A lesson that comes back on several games
 belongs in the rules; one that stays with a single game is that game's quirk.
 
@@ -10,7 +10,7 @@ as an issue) to add a game.
 ## Entry format
 
 ```
-### <Title> (<region>), <product number> <version>
+### <Region>, <product number> <version>: the run and what it showed (<date>)
 - Run: <date>, skill <version or commit>, on <OS / cloud workspace>
 - Executable: <size> bytes, linked at <base>; SDK by banners: <release, n/m library builds>; SDKs used: <...>
 - Functions: <n>; named: <n> (<n> SDK signatures, <n> sibling decomp); build: MATCH (also after setup.sh)
@@ -20,7 +20,27 @@ as an issue) to add a game.
 - What broke or surprised -> what changed in the skill
 ```
 
-### Crazy Taxi (Europe)
+Work after the run (a build, a port, a debugging session) is an entry of this shape in the game's section:
+
+```
+### Step <n>: <what was reached, or what blocked it> (<date or date range>)
+- State at the start: <progress, what builds, what was never tried>
+- What stopped it, in the order met: <symptom> -> <cause> -> <what changed in the skill, and its test>
+- Where it ended, and what is still open
+```
+
+**For agents: keep this layout.**
+- One `##` per game, named after the game alone. A new game gets a new `##` after the last one; the `Not tied to one game` section stays last.
+- An entry is a `###` in its game's section, added after that game's last entry. Do not reorder, merge or reword the entries already there.
+- A title does not repeat the game's name. It is `<what> (<qualifiers, ><date>)`: qualifiers such as `with Virtua Tennis` first, the date last, as
+  `YYYY-MM-DD` or `YYYY-MM-DD to YYYY-MM-DD`. A run entry uses the first shape above, later work the second.
+- No game's own data here: no function names, addresses to reuse, or notes. Those belong in that game's decomp. Counts, causes, what changed in the
+  skill and which test covers it belong here.
+- Other docs link to titles by their anchor (the README's table does). Renaming a title means updating those links in the same change.
+
+## Crazy Taxi
+
+### Europe, MK-51035 V1.000: the run and what it showed (2026-10-05)
 - Run: 2026-10-05 (v0.4) and later sessions, on macOS (Docker)
 - Executable: linked at 0x0C010000 (most Katana games use 0x8C010000: imported at the wrong base,
   Ghidra found 1,113 functions instead of 2,389); SDK by banners: R9 closest (19 of 29 known
@@ -119,7 +139,7 @@ as an issue) to add a game.
   starts `functions.txt` has (2,389 vs 2,824 here): `dec` there now says to use `mkdec`, and a
   query that throws no longer loses the output of the ones before it
 
-### Step 9 on Crazy Taxi: from a disc that fits to one that plays (2026-10-24)
+### Step 9: from a disc that fits to one that plays (2026-10-24)
 
 - The fitting build froze before the SEGA logo, then at the memory card window, then twisted the cab driver's arms. Three causes,
   none a wrong C statement: each a belief of the pipeline that the hardware does not share, invisible to equiv.py by construction.
@@ -141,7 +161,7 @@ as an issue) to add a game.
   session for the three. Flycast GDB breakpoints had never fired here (above), and no debugger was needed.
 - State: BOOTS TO MENU and PLAYABLE ticked, STABLE `[?]` not tested yet; the operator plays on.
 
-### Step 9 on Crazy Taxi: plays in the emulator, black screen on the console (2026-10-25)
+### Step 9: plays in the emulator, black screen on the console (2026-10-25)
 
 - Symptom: the build from C boots, shows the 50/60 Hz picker and plays in Flycast (real BIOS, region Europe); on a PAL
   Dreamcast through GDEMU the screen stays black after the BIOS licence screen. The original disc and a mod built on it play
@@ -209,214 +229,7 @@ as an issue) to add a game.
   boot stub (kept as original bytes, every PC-relative target inside it), the 48 KB of C placed in the executable's 0xFFFD filler
   (the original never writes there up to attract mode), stack depth (within 16 bytes at the first frame).
 
-### Virtua Tennis (USA), MK-51054 V1.001
-- Run: 2026-10-12 (v0.5) and later sessions, on macOS (Docker), started beside Crazy Taxi for a combined mod
-- Executable: 2,084,052 bytes, linked at 0x8C010000; SDK by banners: R10.1 (25 of 30 library builds match R10.1/R11b;
-  ADXT 5.66 is R9 only)
-- Functions: 3,232 at kick-off; named: 1,250 at kick-off (SDK tables, the masked SDK pass with the Shinobi listings, the
-  NAOMI library block, Crazy Taxi's shared names); the NAOMI sample programs named 126 more; build: MATCH
-- Shared code: the NAOMI library and C runtime are byte for byte the same as in Crazy Taxi: 31 Equivalent functions
-  carried over with `port_equiv.py`, each re-checked on this game's bytes
-- SDK source (2026-10-14): 280 functions reproduced by the Shinobi and Kamui source dumps. Unlike Crazy Taxi, Kamui
-  partly matches here (34 functions), so the two games were linked from different Kamui revisions
-- Model map: 1,644 textures through the executable's lists; the HUMAN, SSELE and WTC_MAIN texture lists not found.
-  Audio map: 1,546 sounds, about 83 minutes
-- What broke or surprised -> what changed:
-  - Two identical copies of the overlay lock functions; the signature name landed on the copy the overlay code does not
-    call -> each copy gets its own name (`ovLockCs_8c200114`)
-  - `gdFsCreateHnG` has its literal pool in the middle: `functions.txt` listed 92 of its 112 bytes in both games, and the
-    port missed it (the pool and filler differ between the games) -> sizes corrected, ported by hand
-  - `pdExecPeripheralServer` was listed with a data table after its 12 bytes of code, which `classify.py` read as
-    control-register instructions -> size corrected, a `D` line for the table
-  - The committed list counted 29 functions whose C an earlier port had overwritten -> ported again; `port_equiv.py`
-    keeps what a port file already holds, and drops the C and cases of a function that does not pass
-  - Three library functions are different builds in the two games: `nlCosf` and `nlCosh` (each constant one bit
-    apart) and `nlRenderTextureInit` (this game also sets a ready flag) -> each game's own build in its own file
-    (`vtsdk_g.c` here, `sdk_f.c` in Crazy Taxi), outside the port files
-  - Callees the port cannot map (reached by a branch, not a pool word) -> named the same in both games
-    (`nlFogTableSet`, `nlSpriteLoadTextureOnce_Sub`)
-
-### Step 8 and 9 on Virtua Tennis: a build with no spare room (2026-10-30)
-- No filler before the game code (Crazy Taxi's 49 KB absorbed its 1.12x C): the C must fit at about 1.0x of the original.
-  Generated C is 1.15-1.20x here as in every game (the frame array of the flat form, not the SDK, not structure), so the layout
-  shifts instead (`layout.txt` `shift <bytes> <end>`, `tools/8-build/shift.py`): the kept block, the SDK, the BSS and the heaps
-  move up by 0x28000, every reference into them follows (C literals, kept words, SDK pools, defined names, the entry stub).
-  Fits with 42 KB spare.
-- What broke, in the order found -> what changed:
-  - The kept block was built from C (the NAOMI library inside `game`) -> functions inside `keep` are not game functions
-    (`layout.moving`). Nothing then defined them: 3,329 calls linked to address 0, the game never left the BIOS -> each kept
-    function is defined at its address, and `cbuild.py` now stops on an undefined name.
-  - Byte tables read as pointers in the kept data (`07 07 08 08 | 0b 0b 0c 0c`) -> skipped and listed.
-  - Pointers to moved functions written `_name+H'80000000` (right for a game linked at 0C) wrapped to the 0C mirror in a game
-    linked at 8C (main called at 0C102D3C) -> `relocptr.py` and `relocasm.py` add the mirror difference from `BASE`.
-  - A bigger 1ST_READ.BIN moved by `disc_patch.py` to free sectors at LBA 45100 was never started by the boot code (data,
-    sector headers and the directory record all correct) -> it grows in place when it is the last file.
-  - Stuck at the licence screen: sysInit called the trampoline gdFsInit with none of its four arguments; gdFsInitG took a
-    leftover file count and cleared 84-byte records across memory -> the dropped-arguments check of step 8, 13 functions
-    regenerated, 4 calls fixed by hand.
-  - White screen: code the analysis never made into functions, reached through the data block, built as table pieces whose
-    pool loads land outside them (a jsr to 0009420B) -> `missed_funcs.py` (step 2, added after this repo passed it) lists 579
-    such regions in the game code.
-  - Stuck at the Sega screen: 11 more such functions, missed because `boundaries.py` read 8c candidates outside the file (no
-    mirror) and 4 were named only by the C (a call to 8c0c4c84, floats at 8c089f00 with a function behind them) -> the
-    candidates go through the mirror, `missed_funcs.py` also reads the C's numbers, and `audit.py` lists every table piece that
-    holds code. The 464 functions listed after step 5 had never been drawn: built as original instructions, not C.
-  - A `mova` to a float pool inside cameraExec made a 13 KB table piece, everything up to the next entry -> a number inside a
-    function's listed bytes copies only its run of pool words (44 bytes).
-- Ruled out on the way: a "578 KB overwrite" in a RAM dump was an artifact of bulk reads through the 8C mirror (read at 0C,
-  as `gdbsnap.py` says); the Flycast GDB build boots with reios, not the real BIOS.
-
-### Zombie Revenge (Europe), MK-51038 V1.000
-- Run: skill `unstable` (`KICKOFF`); `status.txt` ticks builds from C, boots to menu, playable, stable
-- Executable: 10299711 bytes, linked at 0C010000
-- Functions: 5848, of which 5197 can be C and 160 have no C form; all 5197 are Equivalent C, total test coverage 68.5%
-- Build: the movable build from the C (`make c`) plays
-- What broke or surprised: "The last few percent" (with Virtua Tennis) and "Step 9 on Zombie Revenge", below
-
-### Boku Doraemon (Japan), T-41802M V1.003
-- Run: 2026-10-05 (v0.4) and 2026-10-06 (v0.5, on macOS and in Claude: same
-  names)
-- Executable: 978,148 bytes, linked at 0x8C010000; SDK by banners: no release has all 48 library
-  builds (newest Shinobi 1.75, Oct 2000), closest R11b (26/48) then R10.1 (23/48); SDKs used:
-  R10.1, R11b, 1.55J
-- Functions: 3,034; named: 1,164 on 2026-10-08 (1,091 from nine SDK tables merged, 18 from a
-  names table since dropped, the rest wrappers; 1,060 the day before with three tables,
-  975 at v0.4 with R10.1 and that table); build: MATCH, also after setup.sh
-- Text map: 2,155 strings (80 Shift-JIS, 1,962 with pointers); file tables: STORY.PAC (76 scenes,
-  sector and length at 0x8C04B704), KAOGRA.PAC, STORYGRA.PAC; textures: 887 decoded, 222 not
-- Missed functions: 860 candidates, plus 9 merged functions reached through tables
-- C units: none yet
-- Proof beyond the build: rewriting STORY.PAC's table let the story script grow past its slot
-  (moved into the filler track, 10 KB bigger, a scene at 1.7x its budget); played through in
-  Flycast and on GDEMU. The game's Catalan translation went from about 40% to 99% this way.
-- What broke or surprised -> what changed:
-  - The scene table was found by `file_tables.py`; tested blind on 6 other games: no false hits
-    and no hits, so a missing row proves nothing
-  - Per-release SDK tables named twin stubs (byte-identical code under unrelated names) by which
-    release has which -> SDK tables are merged into one before applying
-  - The cloud workspace dropped dotfiles and execute bits from the uploaded skill, and could not
-    pull Docker images -> `template/gitignore` without the dot, `DC_LOCAL` for every script
-  - 2026-10-08, four more SDK tables (R4, R1.42J samples, R1.42J, 2.00J): +122 SDK names on top
-    of the 992 (measured in a scratch project): 86 from 2.00J (Sep 2000 libraries, the closest to
-    this Oct 2000 game: Sofdec `MPS_`/`MPV_`, `mwRnv2`...) and 33 only from the R1.42J sample
-    programs, whose Sofdec builds matched where no library did. Crazy Taxi: +7. More releases
-    keep paying, each game by the one nearest its build date, and sample programs count
-
-### Virtua Fighter 3tb (US), MK-51001 V1.002
-- Run: 2026-10-07, naming only (for another team's decomp; no repo kicked off), on macOS (Docker)
-- Executable: 1,179,648 bytes, linked at 0x0C010000 (16,517 pointers; 11 at 0x8C010000); SDK by
-  banners: none of the game's 6 library builds (Jan 1999, GDFS 0.53 of Aug 1998) is in any
-  preserved release: it sits between Katana 0.40 and 1.0B2; SDKs used: 0.40 Release.4, 1.55J, R9,
-  R10.1, R11b
-- Functions: 1,906 at first (27% of the executable), 2,306 after seeding (32%); the other team's
-  own baseline is 2,398 (37%): most of the executable is data
-- Named (after seeding): 126 (97 SDK, of which 0.40 added 44; 22 from the Crazy Taxi decomp's
-  NAOMI library names; 3 from a names table since dropped; 4 wrappers); before seeding, 97 of 116 signature names did not
-  appear anywhere in that team's repo
-- What broke or surprised -> what changed:
-  - 1998 libraries use another banner form -> `banners.py` / `sdk_scan.py` read both; 0.40 added
-  - A sister decomp (same developer's library) named what no SDK could -> "From another decomp's
-    names" in `sdk-signatures.md`
-  - The other team's best SDK matches came from an SDK sample program's ELF of the exact library
-    version -> "sample programs" note
-  - Analysis reached a quarter of the executable -> `seed_funcs.py` + `SeedFuncs.java`, coverage
-    note in step 3
-  - Tiny collisions (a video-player function name in a fighting game) -> suspect-name note in step 4
-  - PC (Sega ALLS, 2023) version: a modern host engine around the arcade original, no symbols
-  - More 1998-1999 SDK tables tried after that (R4: 1,035 signatures; R1.42J's 13 prebuilt
-    samples with their link maps: 2,141; R1.42J's own libraries, unpacked from its InstallShield 3
-    installer with `is3_extract.py`: 2,943): +0, +0 and +1 names. The game's libraries are in no
-    preserved release; the tables stay for the next early game
-  - Cheat codes (the Dreamcast-Talk CodeBreaker list, same release): 5 RAM variables named
-    (both players' health, the round timer, the win counters), none of them in that team's repo
-  - The 1998 Set 5.05 table from the Tower of Babel dev kit demo (below): +0, 1 ambiguous. VF3tb's
-    Kamui is not Set 5's either
-
-### Phantasy Star Online Ver. 2 (US), MK-51193 V1.004
-- Run: 2026-10-07, stopped at step 1
-- The boot file (157 KB, Shinobi 1.757) has none of the game's text: a core that loads the game's
-  code at runtime (the disc holds 129 `.BIN` and 516 `.REL` files); the big `2_DP.BIN` (2.8 MB,
-  SDK R9 exact) is the bundled Dream Passport 2 browser, kicked off by mistake before checking its
-  text (kept as its own local repo)
-- Ports checked for names: PC (no symbols, no `.pdb`), GameCube Episode I & II (no map; its extra
-  `.dol`s are a web browser and its debug build), the GameCube decomp (9 game files, C++ classes
-  whose names do not appear in the Dreamcast build): none carries names over automatically
-- What changed: step 1 "check it is the game", runtime-loaded code named as a limit; "check for
-  symbols first" in `port-symbols.md`
-- What it would need: a second phase. The skill expects the whole game in one executable at a fixed
-  address; PSO loads its game code into RAM at runtime from other files on the disc. Asked on the
-  Dreamcast-Talk thread how PSO DC loads its code; nothing from the PC or GameCube builds carried over
-
-### Illbleed (Japan, Crazy Games), T45601M V1.003
-- Run: 2026-10-13, on request from a Dreamcast-Talk member as a Spanish translation target; the
-  Japanese release, as they suggested
-- Executable: 1,391,108 bytes, linked at 0x8C010000; SDK by banners: libraries dated 1999 to Nov
-  2000, no preserved release contains them all; SDK era: KAMUI 1.11, Shinobi 1.76, Ninja
-  01100114, ADX 5.93
-- Functions: 4,245; named: about 2,000, mostly Sega library code; build: rebuilds the executable
-  byte for byte
-- Text map: the executable has almost no text of its own (developer error messages). The game keeps
-  its text in separate message files on the disc, one set per language (found from the file
-  names), so nothing has to be decompiled to reach it; textures: 17,269 dumped to one page for a
-  person to look through
-- The disc also carries the Dreamarena online browser, a separate program: left out of the analysis
-- What it showed: a translation here is doable, with four jobs the skill does not do for you:
-  the message files are not plain text (their format has to be worked out); the font needs room
-  for Spanish characters (ñ á é í ó ú ¿ ¡); Spanish runs longer than English and the game may have
-  fixed buffers (a long-text test, as on Boku Doraemon, shows it); text drawn into images has to be
-  found by eye on the texture page. The same four were solved on Boku Doraemon
-- What changed in the skill: the text map lists every image (`images.tsv`) instead of guessing
-  which ones have text
-
-### Sonic Adventure (Europe), MK-51000 V1.003
-- Run: kicked off 2026-10-15 (skill unstable), on macOS
-- Executable: 6,735,296 bytes, linked at 0x8C010000; SDK by banners: Shinobi 1.41, Kamui 1.06, Ninja 01000081 (Feb-Mar 1999),
-  ntUtl 2.00 (Aug 1999), CRI ADX 5.5x
-- Functions: 6,022 in the executable; named: 4,417 (1,088 at the kick-off); build: MATCH
-- Overlays: 200 of the 232 disc files with code (stages, bosses, events, Chao), 21,074 functions, 12,483 named; 32 files out
-  of scope, each with its reason in `overlays.tsv`
-- C units: a matching decomp. 48.5% of the executable's functions (9.2% of its bytes) and 6,663 overlay functions in 1,045
-  units rebuilt byte for byte; most of the C comes from the matching decompilation of the Japanese release
-  (reshaped/sonic-adventure), ported to this release
-- SDK source: 256 library functions whose bytes the supplied SDK source reproduces (`sdk-verified.txt`)
-- What broke or surprised -> what changed in the skill: the game's own code matches an older compiler than the SDK units
-  (SHC 5.1 Release 4 against Release 13) -> units can name their compiler (`+r04`, `SDK_R04_PATH`); most of the game's code is
-  in overlays on the disc, each linked at its own address -> `overlays.tsv` and `build_overlays.sh`, the overlays
-  counted apart in the progress report (`tools/overlay/progress.py`)
-
-### Dev kit dumps (sega-dreamcast-info.com, 11 "Set 5" Katana kits on archive.org)
-- Run: 2026-10-08, three kits opened (Tower of Babel 70 MB, Rage Software 0.2 GB, Eurocom 1.4 GB)
-- The disk images are the studios' project folders (NBA Hoopz, Hydro Thunder, UEFA Striker), no
-  SDK install on any of them; the recovered-files archives hold the useful pieces. By design: the
-  dev box's own disk holds GD-ROM emulation images (`.HCD`/`.VDS`), the SDK lives on the Windows
-  host, so no dev box dump will ever carry an SDK release
-- Tower of Babel: the demo's `1ST_READ` (Sep 1998) and its Hitachi link map, linked against
-  `C:\KTN505` (Set 5.05, Aug 1998); the map matches the binary (the start-up stub's jump). 1,005
-  code symbols -> `map_names.py` + `ExportSigs.java`: 690 signatures, the earliest table there is
-  (`nw`, `kmi`/`km`, `gd`, `vms`, `mpd`, `sd`, `sy`, `kd`, `bu`). Set 5 era only: VF3tb +0
-- Eurocom: `Hydro.elf` (Jul 1999, 26 MB) is the game's ELF with a 23 MB DWARF-1 `.debug` section
-  and no symbol table; a 60-line DWARF-1 walk gives 2,753 named functions with addresses, all
-  Eurocom's own code (the SDK libraries were linked without debug info), so it is a named
-  reference for a Hydro Thunder decomp, not an SDK table. `kmtransform*.c` are VideoLogic's 1998
-  KMTools sample sources
-- Rage: UEFA Striker DC betas without maps, PSX source in a zip, nothing to take
-- Hydro Thunder (Jul 28, 1999 prototype, Hidden Palace / archive.org, 258 MB): its `HYDRO.ELF` is
-  the kit's, byte for byte, and `LOO3.R2` (a data pack) embeds the Hitachi link map of the Jul 16
-  build: 3,027 code symbols, 1,032 of them library code. `sdk_scan.py` on the ELF: 18/18 library
-  builds = Release 8 (Europe), and 964 of those 1,032 names are already in the R8E table; the 68
-  left are Eurocom/Midway wrappers (`Bup*`, `dc*`, `SN_*`). Nothing new to hash, two things
-  confirmed: `sdk_scan.py` works on an ELF, and a prototype's data files can carry the link map
-- Also pulled (`~/cpc/dreamcast/prototypes/`): Crazy Taxi Dec 3 / Dec 13 1999, Jan 14 2000 (the
-  untitled "Dreamcast prototype" item is the same Jan 14 build) and VF3tb Jul 27 1999: only
-  `1ST_READ.BIN` on each, no ELF or map; earlier revisions of the executable. A strings diff
-  against the release still paid: Dec 3 keeps a debug readout ("Beta Version DEBUG ASCII") whose
-  printf labels name the cab driver's struct fields (`ManType`, `Act`, `Mode`, `ParamA`, `ParamB`,
-  `Addr`, `Frm`, `isIp`), and pairing functions build to build (pools, pool addresses and `bsr`
-  offsets allowed to move) shows what changed late: Jan 14 differs from the release in 58 functions
-- What changed: dev kit dumps added as extra material (link maps, ELFs with debug info, source);
-  a DWARF-1 reader is worth a script if a second ELF like this turns up
-
-### SDK headers as types (R10.1 headers on the Boku and Crazy Taxi projects)
+### SDK headers as types (R10.1 headers, also tried on the Boku project, 2026-10-08)
 - Run: 2026-10-08. 174 headers; what Ghidra's C parser tripped on, all handled by `sdk_headers.py`:
   form feeds between declarations (every Kamui API header), `(Void)` / `(VOID)` / `(KMVOID)` as an
   empty parameter list (a typedef of void is "not permitted" as a parameter), Shift-JIS comment
@@ -431,8 +244,7 @@ as an issue) to add a game.
 - Effect: `pPVar2 = (*PTR_pdGetPeripheral)(0x12)` now carries `PDS_PERIPHERAL *`; the decompiler
   does not fold the constant pool pointer into a direct call, so the call keeps its pointer name
 
-
-### Equivalent tier (2026-10-12, Crazy Taxi's `src/extrand.c`)
+### The Equivalent tier: `src/extrand.c` (2026-10-12)
 - The bar for game code changed from byte-matching to behaviour: `scripts/tools/sim/sh4sim.py` (an SH-4
   interpreter, stdlib) runs a function from a case, `scripts/tools/sim/equiv.py` compiles a C file and
   runs each function twice per case (original bytes, compiled C), comparing calls out (target,
@@ -446,7 +258,7 @@ as an issue) to add a game.
   to the game's addresses; only the prototype's return register is compared. Docker cannot mount
   macOS's /private/tmp: run the check inside the repo (its `build/equiv/`)
 
-### Equivalent C past 40%: where the cheap gains end (Crazy Taxi, Virtua Tennis; 2026-10-17)
+### Equivalent C past 40%: where the cheap gains end (with Virtua Tennis, 2026-10-17)
 - Run: CT 33.6% -> 40.7% and VT 12.7% -> 26.7% in one day, from four sources in order of yield:
   hand-written SDK C (CT, ~500 functions), `gen_equiv` on straight-line code (CT ~500, VT 367 in
   one run), `port_equiv.py` CT -> VT (+87 functions, 65 renames), then the dry tail below
@@ -472,7 +284,7 @@ as an issue) to add a game.
 - What changed: the skill's `gen_equiv` is the tool for the straight-line tail; expect a quarter to a
   third of a game's functions from it and `port_equiv.py`, then hand work or loop support
 
-### gen_equiv reads branches and loops (Crazy Taxi, 2026-10-18)
+### gen_equiv reads branches and loops (2026-10-18)
 - Run: `python3 tools/5-generated/gen_equiv 200` on a copy of the CT repo (working tree with the corrected function sizes), functions of up to
   200 bytes not yet covered. Before: the generator wrote C for 2 of them (the straight-line leftovers). After: **113 functions
   Equivalent** on `equiv.py` (44 with loops, 55 with `if`/`else`/early returns, 14 straight-line that earlier skips had hidden);
@@ -500,7 +312,7 @@ as an issue) to add a game.
   `_divls`/`_modls`/`_quick_odd_mvn` helpers (49: the generator cannot say what they take), a loop that changes a stack local,
   an address that the argument values alone do not give (array index with `<<`/casts)
 
-### From 50% to 62% on Crazy Taxi, and Virtua Tennis 29% to 48% (2026-10-19)
+### From 50% to 62%, and Virtua Tennis 29% to 48% (2026-10-19)
 
 What moved the numbers, in order of size:
 
@@ -530,7 +342,7 @@ Mistakes worth not repeating:
   time limit (`READ_LIMIT`, `BUILD_LIMIT`) cannot interrupt a hang in compiled code, so it may not catch such a stall. `GEN_TRACE=1`
   prints the function being processed, which names the culprit if it happens again.
 
-### How good "Equivalent" is: instruction coverage (Crazy Taxi, 2026-10-19)
+### How good "Equivalent" is: instruction coverage (2026-10-19)
 
 - **Measured.** `equiv.py` now reports, per function, how many of the original's instructions the cases ran (the listed bytes without literal
   pools and without the padding after the last return). Over the whole of Crazy Taxi: hand-written C 98.1% (949 of 998 functions
@@ -556,7 +368,7 @@ Mistakes worth not repeating:
   it: a proven neighbour in the address space fixes its start and end (the sizes tools `checksizes.py` check), and a proven caller
   shows its argument types, return use and what it expects the function to do. Work the functions that have no attempt yet first.
 
-### From proven C to a build from C (Crazy Taxi, 2026-10-22 to 2026-10-23)
+### From proven C to a build from C (2026-10-22 to 2026-10-23)
 - Start: all 3,321 functions that can be C proven Equivalent. Room for the game block: the old game code (342,336 bytes) and the
   fill in the file before it (58,328): 400,664. The libraries, data and SDK stay where they are; 181 pointer words follow the code.
 - Measuring: a function's size as the distance to the next symbol left out its literal pool (the compiler puts a file's pool after
@@ -581,7 +393,7 @@ Mistakes worth not repeating:
 - Debugging on the running game: Flycast's GDB server ignores breakpoints in this build (with and without the dynarec). Sampling the
   program counter, and comparing memory with the original disc at the same moment, found both crashes.
 
-### Step 8 after the argument fix: what regenerating cost (Crazy Taxi, 2026-10-23)
+### Step 8 after the argument fix: what regenerating cost (2026-10-23)
 - The regeneration: once the generator counted pass-through arguments, 453 functions were regenerated with `shrink.py --regen`, which
   keeps the new C at any size. The earlier shrinking of those functions was discarded and nothing in the log said so. Of the 370 with a
   known earlier size, 346 came out bigger, +49,640 bytes in all (PutCourse 5,000 -> 24,908). The build went from fitting with
@@ -721,7 +533,253 @@ Mistakes worth not repeating:
   word. No recheck of earlier passes: the checker as it was is kept in state/proof-key-frozen/ and its passes still count
   (tests/proofkey); about a third of the proven functions (899 of 2,974 in VT) pass a frame address to a call.
 
-### The last few percent: what blocked the remaining functions (Virtua Tennis, Zombie Revenge; 2026-10-27 to 2026-10-28)
+### Finding functions, slow draws, hand cases (with Virtua Tennis, 2026-10-31)
+
+- **A table of words is not a function.** Crazy Taxi `0c089f4c` (52 bytes of pointer words and small numbers) began with a word that decodes as `bt` and was accepted by `boundaries.py`, listed, drawn and never proven. `boundaries.py` now rejects a candidate with a conditional branch that leaves it backwards (and no longer crashes when the target is before the executable). Test: `tests/findfuncs`. Existing entries it flags (6 in CT, 6 in VT, 8 in ZR) are `_tail` pieces and shared-tail SDK entries: pieces of a function that starts earlier.
+- **A "Timeout" in the draw is not always a runaway loop.** The build limit is `max(60, size/8)` s times `GEN_TIME_FACTOR`, and with 10 parallel jobs 11 Virtua Tennis functions (464 to 1766 bytes) ran out of the 60 s. Run again with `GEN_TIME_FACTOR=10 --jobs 3`: 10 of the 11 were proven (the biggest, 1766 bytes, took 1628 s). Try the factor before writing hand cases. `gen_equiv NAME` skips a function whose C already exists in `src/` (it counts as defined); `--known` selects the already-proven ones, it is not "force".
+- **Hand cases (handcase.py, equiv.py): register values are big-endian hex ("r4": "0C600000"), memory bytes in `poke` are little-endian.** Writing a register little-endian turned a size of 16 into 0x10000000 and the original ran past 2,000,000 instructions (FUN_8c08a936, FUN_8c0de3cc). Fixed-count loops need no cases; a loop whose count comes from memory or a register needs the count set small; a wait-for-flag loop needs the flag set so it passes at once.
+- **`ldc sr` and `rte` in the simulator.** `sh4sim.py` stopped on any change of SR.BL ("not modelled"). The simulator has no exceptions, so BL is now kept as a bit (it reads back through `stc sr`); a change of SR.RB still stops. `rte` is modelled as `rts` plus SR = SSR (SPC and SSR start as the return address and entry SR). Tests: `tests/srblock`, `tests/rte`. An interrupt handler is written in C with `#pragma interrupt(f)`.
+- **The generator reads the current SR where the original restores the saved one.** Virtua Tennis `FUN_8c0f8100` (stc sr at the start, ldc of that value at the end) came out as `set_cr(get_cr() & ...)`, which leaves BL set. Written by hand with a `saved` variable it is proven (src/gen_zk.c). Open: fix the generator to keep the value read at the `stc`.
+- **Two functions are interrupt handlers, one a stub:** Virtua Tennis `8c1fc77c`, `8c1fc7d0` (push r0/r4/r5/pr, call 0xAC004000, `rte`), `8c1fc7cc` (a bare `rte`, proven), `8c1643a0` (a `bra` with a `bsr` in its delay slot, 4 bytes, not a function a compiler writes).
+
+### Step 10: a native port whose play frames lacked the world (2026-11-18)
+- The port: the game's C built for x32 through LLVM IR, RAM mapped at the console's addresses, an SH-4 interpreter for the 157
+  functions with no C, the disc read from the .gdi, and the PowerVR emulated on the host (the polygon stream and the textures in
+  video memory) and drawn with OpenGL. Title, menus and driver select drew correctly; play showed the HUD and some terrain, and the
+  road and buildings were black or missing.
+- **Three causes, each found by looking inside the running program:**
+  1. *A hardware register the host left at 0.* `nlInitLibrary0` reads SB_SBREV (`0xA05F689C`); at 8 or more it records the graphics
+     configuration (vertex buffer, list sizes) before the graphics system starts. At 0 it takes the other path silently, the first
+     4 MB texture pool is used up at boot and play runs out of texture memory (road and buildings get the dummy texture). Found by
+     reading the same words in Flycast and in the port at the same screen: pool counters (`0C177FCC`, `0C177FE0`), the configuration
+     block (`0C2AECD0`) and a guard flag (`0C2AED40`). With the register at 0x0B the port's pools match Flycast's (622,752 and
+     620,672 bytes free in the attract demo, against 622,784 and 620,640). The SDK's mode set then also waits on the scanline counter
+     (`0xA05F810C`), which the host has to move.
+  2. *Argument order with a structure by value.* `technicalBonusExec` called `Model_Put_Sprite3D` through hand-written casts that
+     put the model pointer before the 6-byte angle; the definition takes the angle before the model. The SH-4 puts every value in
+     the same register or stack word in either order, so the Equivalent check could not see it; on x86-64 the order picks the
+     register, the model pointer arrived as the angle (0), and `nlObjPut` read address 4 about 40 s into play. Found from the crash
+     (host backtrace, resolved to function names). The casts now follow the definition and two stale declarations were corrected; the
+     function is still EQUIVALENT and the build still MATCH. Of the twelve definitions that take a structure by value, nine are
+     declared with another parameter list in some caller; only this one is reached in play.
+  3. *Matrix register pairs loaded in the wrong order.* The C of `nlPopMatrix` and `nlLoadMatrix8` had been generated before the
+     simulator's pair order was corrected (a pair move keeps the singles' order: the first register of the pair at the lower address,
+     as `tools/sim/sh4sim.py` says, "hardware and Flycast"). The port runs those two as C and `nlPushMatrix` (no C) in the interpreter,
+     so a pushed matrix was popped with each pair swapped: `nlProjectScreen3D` returned a screen x of -2,231,000 for a piece 1,600
+     units away, and `PutCourse_CheckPiece` rejected every course piece (about 34 asked per frame). Found with gdb on the port
+     binary, stopped in play at `camUpdate` (MainMode 1, SubMode 1): the camera was sane; the task list was complete; `PutCourse`
+     found its section and asked for the pieces; each piece's projected value was garbage; a conditional watchpoint on the current
+     matrix caught `nlPopMatrix` loading it pair-swapped. The two functions were regenerated (36 cases each, build MATCH). Play
+     frames went from about a tenth filled to full: the taxi, its driver, the road.
+- Findings about the decomp on the way:
+  - `nlPow` was listed as two entries: the first's branches land inside the second, which holds the rest of the same function after
+    a literal pool. Merged into one entry (build MATCH); it is a float function.
+  - Twenty-four functions in `src/` call a code address that is not a function's start. The ones the game reaches in play: `0C0784A0`
+    (inside `nlRotateAxe`, reached through `nlRotateV`, 31,150 calls in one run) and `0C07AE10` (16 bytes into
+    `nlObjPutSetLightDirectionV`, once).
+  - 118 functions take fewer arguments than their callers pass; completing the arguments of every call in 184 source files in a
+    build copy changed no frame, so they are not what hid the world.
+- Ruled out as the cause of the missing world: taking the ten ground-collision functions, and the course-loading (63), car (38) and
+  course/area/grid (66) functions, from the original code instead of their C changed nothing in play.
+- Still open: the HUD is not drawn in play. Its translucent polygons do reach the emulation's buffer (131 opaque polygons grow to
+  192, 61 of them translucent, once the second block of 36,224 bytes is parsed); whether that buffer is the one rendered is not
+  established. The play camera looks down more steeply than the real game, and nothing presses the accelerator in the hands-free
+  test, so movement is untested.
+
+### Step 10: the port built the Virtua Tennis way, from boot to play (2026-11-19)
+- The port: Virtua Tennis's runtime (`port/runtime/`), its addresses moved to Crazy Taxi's, the SDK's C placed in `sdk/<library>/`,
+  the hardware drivers marked in `sdk.txt` (`hardware` lines) and left to the runtime. 1,588 files compile, 50 console functions are
+  stubbed (47 hardware), no function without C is called. It runs on Batocera (x86-64, SDL 3, Mesa) and in the build container.
+- Reached: the boot, the save screen, the title, the attract demo, the menus, driver select with textures and models, music, and the
+  start of play. Play itself once `nlFloor` was fixed (below).
+- What stopped it, in order, and what fixed each:
+  - "AICADRV ERR" at boot: `nlsndInit` counts reads of the sound driver's ready word; the emulated sound CPU runs in real time and
+    the count ran out first -> the runtime answers that read once the driver has had its time.
+  - a fault in `ConvertSwitch` after "Now Loading": the pad record's device-name pointer was 0 -> it points at the product name.
+  - a fault in `SetColliObj` at the start of play: the build placed data names from `symbols.txt` only, and the collision lists
+    named in `globals.txt` got storage of their own that the code clearing them at their address never reached -> the build reads
+    `globals.txt` too (`native_build.py` `read_symbols`, with a test).
+  - one file that did not compile: the calling-convention pass copied a definition's pointer type the caller's file does not
+    have -> such a pointer becomes `void *` (`sh4abi.py`, with a test).
+  - Japanese text: the boot ROM's settings copy (`syBtCfgSet`) was a no-op, so the language byte stayed 0 -> it writes English.
+  - "LOAD failed" at the save screen: `buIsReady`, `buIsFormat`, `vmsio_isready` and `vmsio_ismount` ran the SDK's C against a
+    card driver the port does not have -> the runtime answers them. A save still writes no file.
+  - lines between the pieces of the title's logo: texture smoothing wrapped at piece edges -> a draw whose coordinates stay inside
+    its texture is clamped.
+- The nose dive, found: while the game holds the taxi at its start point before the drop, `carGroundCheck` puts it back at
+  height 1530 each frame, `GetCollision2D` finds no surface under it (its flag at 0x0C26E494 is -1; the buffer it
+  returns then still holds an earlier lookup, which read at first as ground at 1500), the wheels hang, and
+  `carWheelCollision` adds about 45 to the pitch every frame until the cap (8448, 46 degrees). On the console the drop is
+  imperceptible: the ground found there is at the taxi's height. The hang came about 210 frames into the race, when the pitch
+  reached the cap.
+- The nose dive's cause: `nlFloor`'s C (`sdk/naomi/gen_ai.c`) returned `(float)(0xFFFFFFFF - (int)|x|)` for a negative number
+  with a fraction: the constant is unsigned in C, so -1.587 came out as about 4.29e9 instead of -2.0, and `GetCollision2D`
+  (`(int)nlFloor(x / cell)`) looked in a cell far outside the grid wherever x < 0. The console never runs it (its SDK stays
+  the original bytes), so only the port fell. The C is the generator's (batch gen_ai) and lacks the `(int)` the generator has
+  put before such a conversion since 2026-11-07 (`0cdc3ac`: a constant above 0x7FFFFFFF converted to float goes through
+  `(int)`): it was generated before that fix and not regenerated. The generator needs no change. It was proven Equivalent all
+  the same: its 36 cases ran 22 of its 28 instructions, none a negative fraction, and the checker records the coverage without
+  acting on it. Fixed to `-1 - (int)|x|`; eight negative fractions added to its cases (now 28 of 28 instructions, Equivalent).
+  With it the operator played the race.
+- Stray triangles over the world and the HUD in play (the operator's report), found in the renderer (`draw.c`), not in the game:
+  - The near clip was ruled out first. The library's kernel (`displaypolygondata_sidx`, its strip routines and
+    `nl_objasm_clip_send_vtx_sidx`) clips meshes whose bounding sphere crosses the near plane, at the fourth row of the matrix
+    against -0.3, and gives a clipped corner 1/W = 3.33 (the context's word 8); the runtime clips at W = 0.3 and gives the
+    same 1/W. The projection matrix in race RAM (`0x8C2B34A8`) has a W row of -z and a fourth row of +z, so both test the
+    same value for every model.
+  - The frame itself, read from the running game: the renderer's polygon records (`bufs` in `pvr.c`, at its symbol's host
+    address from `nm`) through `/proc/<pid>/mem`, with the console RAM, eight times in a race, no ptrace stop. Clipped
+    corners land up to 15 million pixels off the screen, but where those triangles cross the screen their exact depth is
+    W 9.5 or farther: correct.
+  - The same frame redrawn without the game, through `draw.c` alone, each polygon in a colour that is its number: far
+    translucent polygons (W 3,900-5,700) came out on top of the road (W 10) in the screen's corners. Two polygons were
+    enough to show it, and one triangle was enough to fail: at pixels near its on-screen corner (47, 383) it wrote W 1e-6,
+    the nearest possible, where its own depth is about W 5,700.
+  - The cause: the vertex shader gave OpenGL each vertex at its W and passed 1/W to the pixel without perspective. For this
+    far triangle, which crosses the screen's edge, the 1/W that reached some of its pixels made it the nearest thing on the
+    screen. The fix: positions go to OpenGL with W 1, so the cut is plain 2D, and 1/W and every attribute over W are
+    interpolated linearly and divided per pixel, as the PowerVR does. The first C unit test of the runtime
+    (`tests/c/test_draw.c`, `make -C tests/c` in the port image) fails on the old shader and passes on the new: three
+    triangles from the race frame and one plain one, every pixel inside drawn, none outside, depth within 0.01%. In the game:
+    the operator saw the triangles gone (the build container on the Mac).
+  - A first theory (OpenGL losing precision on corners millions of pixels away) was wrong: the test drew those triangles
+    exactly. The first version of the test only checked the pixels that were drawn; it now also counts the ones that
+    should be and are not.
+- The runtime's watchdog no longer ends the program after 12 s without a frame: it logs where the game is stuck and leaves
+  it running, so a frozen game can be read (`/proc/<pid>/mem`) instead of disappearing with its state. A run ends when the
+  operator ends it.
+- How the debugging went wrong, and the method that worked (a session cost the operator a drive through the menus each time):
+  - **The operator drives, the program reports.** Do not script the menus or guess their timing; do not force the game's
+    mode words to skip screens (that reached screens that are not on the normal path, and a skipped driver select left the
+    driver unloaded). The operator plays to the point; everything else is automatic.
+  - **The game says where it is.** A debug log in the runtime (`PORT_BOOT_LOG`, after the Power Stone port's): each change of
+    main mode and sub-mode, with the frame. A watcher follows it in the container's log and acts on the mode it needs (the
+    race: main mode 1, sub-mode 1). Guessed triggers (a word taken for a frame counter, a fixed delay) missed every time.
+  - **One session, everything from it.** At the trigger, one gdb attach collects all that run can show: the record of the
+    object under study in full, the words each candidate function changes in it (a copy before the call, a
+    FinishBreakpoint after), the calls of the functions they lean on with their arguments and results and one call stack,
+    the renderer's state; then it detaches by itself, at a count or a time limit. Asking one question per session, the
+    operator drove a dozen times.
+  - **Attach without killing the game.** The runtime routes console-address calls through SIGSEGV: gdb must be told to
+    pass the signals before it attaches (`gdb -batch -ex "handle SIGSEGV SIGBUS SIGALRM SIGUSR1 SIG34 SIG35 SIG36 nostop
+    noprint pass" -ex "attach PID" -x script`). With `gdb -p PID` and `handle` after, every session ended seconds later.
+  - **Find the process by its command line** (`pgrep -f "^build/native/game --data"`): its name is `exe` in one container
+    and `game` in another; a pattern that also matches the shell running it picks the shell.
+  - **Test the capture on a run of one's own first** (at the title: the attach, the reads, the detach, the game still
+    running after), before the operator drives.
+  - **Keep the log past the container**: the game's output to a file (`build/native/play_session.log`), or the reason a
+    session ended goes with `docker run --rm`.
+  - **Do not start a second copy of the play script over the operator's session** (it removes the container by name), and
+    do not build while asked only to debug.
+  - **Read the original first**: a freeze in the attract demo looked like the hang and was the original's own loading
+    pause; an address taken for a missed translation was already the game's. A wrong lead cost runs each time.
+  - Under gdb every console-address call is a signal, so attach late to a running program rather than starting it under
+    gdb, and keep breakpoint conditions off hot paths. gdb's hardware watchpoints crashed gdb itself here (an internal error).
+  - **Read without stopping**: `/proc/<pid>/mem` reads the console RAM and the runtime's own data (at the addresses `nm`
+    gives) while the game runs; no attach, nothing to lose. A run captured that way can then be replayed offline: a
+    frame's polygons redrawn through the renderer alone found the stray triangles with no further runs.
+  - **A proof is only as wide as its cases**: a pass with coverage below all instructions (`nlFloor`, 22 of 28) left the
+    branch with the bug unrun. And a test of drawn pixels missed pixels never drawn.
+  - **Every runtime change comes with a test**, C for the runtime's C (`tests/c/`, one `test_<file>.c` per file, built
+    against the template's file and run in the port image), as Python tests cover the tools.
+
+### Step 10: stalls, the save file, the pause screen and the street objects (2026-11-20)
+- Stalls in the race (frames given up again and again, more than half the play time): the list-end mask of each stalled frame
+  lacked the translucent list. The opaque modifier list (the cars' shadows) went 32 bytes out of step and its end was read as
+  data. The NAOMI library closes a shadow volume by flushing both store queues again at the next address without storing to
+  them: on the SH-4 a queue keeps its 32 bytes after a flush, so the last triangle goes out once more. The runtime had the
+  queue area as plain memory and sent what lay there. -> `hw.c` models the two queues and what each keeps (a word not stored
+  since the last flush is the queue's); `tests/c/test_hw.c`. Found by recording the stalls from `/proc/<pid>/mem` (the Kamui
+  frame words every 10 ms, the RAM at each stall) and parsing the recorded lists offline with the runtime's own parser.
+- The pause screen black past its left edge: the race is drawn into a 512x512 texture; the runtime sized that render from the
+  region array's tiles, whose entries 37-38 held other words with the last-entry bit, so 96 pixels wide. -> the size comes
+  from the clip registers; `tests/c/test_pvr.c`.
+- No save file ("Load failed" after "press A to create a new file"): `SaveBackupData` passed its save record to
+  `buMakeBackupFileImage` unfilled. The generated C kept the record's five fields in locals: the frame pass took the slots for
+  locals because the address passed on was given a short reach (the pass now defaults to the whole frame, after Zombie Revenge,
+  and this function predated it). Regenerated with the current generator. It had been proven Equivalent: the checker compared
+  only the words stored right from a passed frame address since the last call, and the fields lie 0x44 on, after the record's
+  `memmove`. -> sh4sim runs the real callee on a copy of the memory at each mocked call with a frame address and records the
+  frame words it reads before writing them; equiv compares those where either side stored them (`tests/test_equiv_reach.py`).
+  The new check fails the old C on its first case (the callee reads the icon pointer at +0x44: original `0C0EEC83`, C a leftover).
+- Street objects (boxes, signs) tumbling and bouncing without being hit, never at rest (the port only: the Dreamcast build
+  links the SDK's original `nlOuterProduct`, the port compiles its C). Found by recording every object at 120 consecutive
+  frames, then running `SetObjFly` from a recorded state three ways: the original in sh4sim, the C compiled for the Dreamcast
+  in sh4sim, the native build's function called under gdb in a headless copy loaded with the recorded RAM (the game's stack
+  set first: the C is built for x32). `GetCollision2D` agreed on all 576 points; `SetObjFly`'s spin did not. The cause:
+  `nlOuterProduct`'s C wrote `out[2]` before reading `b[1]` and `b[2]`, and `SetObjFly` calls it with the result over its
+  second operand. Every proof case had its own output. -> reads first, as the original; equiv runs each case again with an
+  output pointer set to each input pointer (`alias_variants`, same test file). The old C fails on the first variant.
+- Both checker changes alter what a pass means: earlier passes are not carried over, so a game's Equivalent functions are
+  checked again on the next run of equiv.
+- Method notes:
+  - Record against a trigger the game sets, never against a guessed moment: two RAM recordings missed (one covered a pause,
+    one started at the race's end). A ring of the last 10 s of RAM, stopped on the operator's word, caught the moment at once.
+  - gdb's `call` into the native game runs on the host stack: set `$rsp` into the game's stack first (x32 code faults otherwise),
+    pass SIGSEGV through, and never print an optimised-out local from a `dprintf` inside the call (gdb abandons the call, and
+    the cut-short run looks like the game leaving a loop).
+  - The port's `--fast` does not switch the exact FPU path (`port_fast_fpu`); set it directly to compare with the simulator.
+
+## Virtua Tennis
+
+### USA, MK-51054 V1.001: the run and what it showed (2026-10-12)
+- Run: 2026-10-12 (v0.5) and later sessions, on macOS (Docker), started beside Crazy Taxi for a combined mod
+- Executable: 2,084,052 bytes, linked at 0x8C010000; SDK by banners: R10.1 (25 of 30 library builds match R10.1/R11b;
+  ADXT 5.66 is R9 only)
+- Functions: 3,232 at kick-off; named: 1,250 at kick-off (SDK tables, the masked SDK pass with the Shinobi listings, the
+  NAOMI library block, Crazy Taxi's shared names); the NAOMI sample programs named 126 more; build: MATCH
+- Shared code: the NAOMI library and C runtime are byte for byte the same as in Crazy Taxi: 31 Equivalent functions
+  carried over with `port_equiv.py`, each re-checked on this game's bytes
+- SDK source (2026-10-14): 280 functions reproduced by the Shinobi and Kamui source dumps. Unlike Crazy Taxi, Kamui
+  partly matches here (34 functions), so the two games were linked from different Kamui revisions
+- Model map: 1,644 textures through the executable's lists; the HUMAN, SSELE and WTC_MAIN texture lists not found.
+  Audio map: 1,546 sounds, about 83 minutes
+- What broke or surprised -> what changed:
+  - Two identical copies of the overlay lock functions; the signature name landed on the copy the overlay code does not
+    call -> each copy gets its own name (`ovLockCs_8c200114`)
+  - `gdFsCreateHnG` has its literal pool in the middle: `functions.txt` listed 92 of its 112 bytes in both games, and the
+    port missed it (the pool and filler differ between the games) -> sizes corrected, ported by hand
+  - `pdExecPeripheralServer` was listed with a data table after its 12 bytes of code, which `classify.py` read as
+    control-register instructions -> size corrected, a `D` line for the table
+  - The committed list counted 29 functions whose C an earlier port had overwritten -> ported again; `port_equiv.py`
+    keeps what a port file already holds, and drops the C and cases of a function that does not pass
+  - Three library functions are different builds in the two games: `nlCosf` and `nlCosh` (each constant one bit
+    apart) and `nlRenderTextureInit` (this game also sets a ready flag) -> each game's own build in its own file
+    (`vtsdk_g.c` here, `sdk_f.c` in Crazy Taxi), outside the port files
+  - Callees the port cannot map (reached by a branch, not a pool word) -> named the same in both games
+    (`nlFogTableSet`, `nlSpriteLoadTextureOnce_Sub`)
+
+### Steps 8 and 9: a build with no spare room (2026-10-30)
+- No filler before the game code (Crazy Taxi's 49 KB absorbed its 1.12x C): the C must fit at about 1.0x of the original.
+  Generated C is 1.15-1.20x here as in every game (the frame array of the flat form, not the SDK, not structure), so the layout
+  shifts instead (`layout.txt` `shift <bytes> <end>`, `tools/8-build/shift.py`): the kept block, the SDK, the BSS and the heaps
+  move up by 0x28000, every reference into them follows (C literals, kept words, SDK pools, defined names, the entry stub).
+  Fits with 42 KB spare.
+- What broke, in the order found -> what changed:
+  - The kept block was built from C (the NAOMI library inside `game`) -> functions inside `keep` are not game functions
+    (`layout.moving`). Nothing then defined them: 3,329 calls linked to address 0, the game never left the BIOS -> each kept
+    function is defined at its address, and `cbuild.py` now stops on an undefined name.
+  - Byte tables read as pointers in the kept data (`07 07 08 08 | 0b 0b 0c 0c`) -> skipped and listed.
+  - Pointers to moved functions written `_name+H'80000000` (right for a game linked at 0C) wrapped to the 0C mirror in a game
+    linked at 8C (main called at 0C102D3C) -> `relocptr.py` and `relocasm.py` add the mirror difference from `BASE`.
+  - A bigger 1ST_READ.BIN moved by `disc_patch.py` to free sectors at LBA 45100 was never started by the boot code (data,
+    sector headers and the directory record all correct) -> it grows in place when it is the last file.
+  - Stuck at the licence screen: sysInit called the trampoline gdFsInit with none of its four arguments; gdFsInitG took a
+    leftover file count and cleared 84-byte records across memory -> the dropped-arguments check of step 8, 13 functions
+    regenerated, 4 calls fixed by hand.
+  - White screen: code the analysis never made into functions, reached through the data block, built as table pieces whose
+    pool loads land outside them (a jsr to 0009420B) -> `missed_funcs.py` (step 2, added after this repo passed it) lists 579
+    such regions in the game code.
+  - Stuck at the Sega screen: 11 more such functions, missed because `boundaries.py` read 8c candidates outside the file (no
+    mirror) and 4 were named only by the C (a call to 8c0c4c84, floats at 8c089f00 with a function behind them) -> the
+    candidates go through the mirror, `missed_funcs.py` also reads the C's numbers, and `audit.py` lists every table piece that
+    holds code. The 464 functions listed after step 5 had never been drawn: built as original instructions, not C.
+  - A `mova` to a float pool inside cameraExec made a 13 KB table piece, everything up to the next entry -> a number inside a
+    function's listed bytes copies only its run of pool words (44 bytes).
+- Ruled out on the way: a "578 KB overwrite" in a RAM dump was an artifact of bulk reads through the 8C mirror (read at 0C,
+  as `gdbsnap.py` says); the Flycast GDB build boots with reios, not the real BIOS.
+
+### The last few percent: what blocked the remaining functions (with Zombie Revenge, 2026-10-27 to 2026-10-28)
 
 VT went from 95.5% to 97.5% of functions (148 to 76 left), ZR from 94.6% to 96.3% (221 to 150). Almost every blocker was a gap in a
 tool, fixed with a test and ported to every decomp; only two functions were patched by hand, and both causes are now in the tools.
@@ -978,16 +1036,7 @@ BupFailDialog compare only up to the step limit; _div64 and emotFaceMorph rest o
   and to compare the layout with a fitting game's before shrinking. Also found: 182 VT functions (128 KB) proven on rescue cases only
   (see Step 6 / tools/6-agentic), and a soundness hole in frame.py's passed-address window (fixed, tests/frame).
 
-### Crazy Taxi and Virtua Tennis, 2026-10-31: finding functions, slow draws, hand cases
-
-- **A table of words is not a function.** Crazy Taxi `0c089f4c` (52 bytes of pointer words and small numbers) began with a word that decodes as `bt` and was accepted by `boundaries.py`, listed, drawn and never proven. `boundaries.py` now rejects a candidate with a conditional branch that leaves it backwards (and no longer crashes when the target is before the executable). Test: `tests/findfuncs`. Existing entries it flags (6 in CT, 6 in VT, 8 in ZR) are `_tail` pieces and shared-tail SDK entries: pieces of a function that starts earlier.
-- **A "Timeout" in the draw is not always a runaway loop.** The build limit is `max(60, size/8)` s times `GEN_TIME_FACTOR`, and with 10 parallel jobs 11 Virtua Tennis functions (464 to 1766 bytes) ran out of the 60 s. Run again with `GEN_TIME_FACTOR=10 --jobs 3`: 10 of the 11 were proven (the biggest, 1766 bytes, took 1628 s). Try the factor before writing hand cases. `gen_equiv NAME` skips a function whose C already exists in `src/` (it counts as defined); `--known` selects the already-proven ones, it is not "force".
-- **Hand cases (handcase.py, equiv.py): register values are big-endian hex ("r4": "0C600000"), memory bytes in `poke` are little-endian.** Writing a register little-endian turned a size of 16 into 0x10000000 and the original ran past 2,000,000 instructions (FUN_8c08a936, FUN_8c0de3cc). Fixed-count loops need no cases; a loop whose count comes from memory or a register needs the count set small; a wait-for-flag loop needs the flag set so it passes at once.
-- **`ldc sr` and `rte` in the simulator.** `sh4sim.py` stopped on any change of SR.BL ("not modelled"). The simulator has no exceptions, so BL is now kept as a bit (it reads back through `stc sr`); a change of SR.RB still stops. `rte` is modelled as `rts` plus SR = SSR (SPC and SSR start as the return address and entry SR). Tests: `tests/srblock`, `tests/rte`. An interrupt handler is written in C with `#pragma interrupt(f)`.
-- **The generator reads the current SR where the original restores the saved one.** Virtua Tennis `FUN_8c0f8100` (stc sr at the start, ldc of that value at the end) came out as `set_cr(get_cr() & ...)`, which leaves BL set. Written by hand with a `saved` variable it is proven (src/gen_zk.c). Open: fix the generator to keep the value read at the `stc`.
-- **Two functions are interrupt handlers, one a stub:** Virtua Tennis `8c1fc77c`, `8c1fc7d0` (push r0/r4/r5/pr, call 0xAC004000, `rte`), `8c1fc7cc` (a bare `rte`, proven), `8c1643a0` (a `bra` with a `bsr` in its delay slot, 4 bytes, not a function a compiler writes).
-
-### Step 9 on Virtua Tennis: plays in the emulator, hangs on Start on the console (2026-11-06)
+### Step 9: plays in the emulator, hangs on Start on the console (2026-11-06)
 
 - Symptom: the build from C boots, shows the title and plays in Flycast. On the console pressing Start on the press-start screen
   freezes the game; waiting on the title for the demo and coming back also failed (black screen, the press-start screen never
@@ -1050,7 +1099,48 @@ BupFailDialog compare only up to the step limit; _div64 and emotFaceMorph rest o
   the other two; equiv.py should compare r0-r2 at calls to register-convention helpers; Step 9 should say that a console-only
   hang is found by an on-screen breadcrumb readout drawn from the vblank callback, not by more emulator comparison.
 
-### Step 9 on Zombie Revenge: the game reboots after the loading screen, and how long it took to see it was not a crash (2026-11-11)
+### The simulator against the console: hwverify (2026-11-22)
+- Setup: a USB-serial board on the console's serial port (an SD-card adapter's plug), dcload-serial 1.0.7 built from
+  KallistiOS's source, `scripts/dev/hwverify.py`: a function's own bytes and its cases run on the Dreamcast and in sh4sim, and
+  the two answers are compared case by case. Callees are stubbed at their addresses and record their calls (target, r4-r7,
+  the stack word) as sh4sim's mocked callees do; the words the original reads are poked first with what sim saw at the start.
+- The loader: the stock dcload-serial starts a program with SR.BL set, so any exception is a manual reset to the boot ROM
+  (SH7750 manual) and its own register screen never runs; after a crash the console was dead until the cable was replugged and
+  the disc rebooted. Once BL was cleared, the handler's jump back into the loader left register bank 1 selected (its startup
+  mask keeps RB), and the next program died before `main`. -> a loader build (1.0.7-cpc) with BL and RB cleared that sends the
+  exception and its registers to the PC; hwverify reports `CONSOLE CRASH` with PC, PR and R0-R15.
+- `nlUnitVector`, `nlVoidUnitVector` (fipr, fsrra): 66 of 72 cases differed. Unit vectors came out 1-2 ulps short of the
+  exact result (-3 normalised: console `BF7FFFFF`, sim `BF800000`), and vectors with a denormal or NaN component came out NaN
+  on the console where sim gave infinity. Three causes in sh4sim: fipr / ftrv / fsrra / fsca were computed exactly (the
+  hardware runs them on one approximating multiplier block); a denormal operand was used as a tiny number (DN = 1 makes it a
+  zero, so 0 * inf is NaN); and FPSCR 0x00040001, the games' value, was read as round to nearest -- RM = 1 is round to
+  zero, and fadd / fmul / fdiv / fmac / fsqrt / float rounded to nearest whatever RM said. -> `sim/sh4fpu.py`, a port of
+  skmp's bit-exact model (MIT, verified on a Dreamcast; the port matches the C header on 63,000 vectors); denormal operands
+  are zeros with DN = 1; arithmetic is exact and rounded once as RM says (`tests/test_sh4fpu.py`, the console's words).
+- Reads outside RAM: sim answers 0 for the boot ROM and anything unmapped; the console gives the real bytes. A case with no
+  registers set walks a list from a null pointer (`FUN_8c08a978` reads 00000018) and the console loops for ever, without an
+  exception, so the loader never gets control back. `courtUsaDrawNumber` indexed a table with a scripted call result and
+  read 1738B170: the console returned 00001738 (open bus), sim 0. -> hwverify skips a case whose simulated run reads outside
+  RAM (`NOT RUN`, the address named). The model is not changed: what those reads return depends on the bus.
+- Gaps in the cases the console showed (not simulator bugs): many cases read 00000B5C / 00000B00 -- the game's globals
+  through GBR, which the cases leave at 0; a local read before it is written (`panelMenuSprPutA` differed by 0x100 until
+  hwverify zeroed the stack below the function, as sim's fresh stack page is).
+- Open: `bodyLinePerp` takes another branch on the console (it calls 8C0F0700 first, three calls against sim's one);
+  `FUN_8c01219e` hangs the console and reads nothing outside RAM.
+- Method notes: the console is not a test bench -- a hang costs a replug and a reboot, so a change to the loader or the
+  harness is checked on the PC first (the manual, a disassembly of what was built, the paths the change newly reaches) and a
+  function that hung stays out of the next run until its cause is known.
+
+## Zombie Revenge
+
+### Europe, MK-51038 V1.000: the run and what it showed
+- Run: skill `unstable` (`KICKOFF`); `status.txt` ticks builds from C, boots to menu, playable, stable
+- Executable: 10299711 bytes, linked at 0C010000
+- Functions: 5848, of which 5197 can be C and 160 have no C form; all 5197 are Equivalent C, total test coverage 68.5%
+- Build: the movable build from the C (`make c`) plays
+- What broke or surprised: "The last few percent" (with Virtua Tennis) and "Step 9 on Zombie Revenge", below
+
+### Step 9: the game reboots after the loading screen, and how long it took to see it was not a crash (2026-11-11)
 - Symptom: after player selection and the intro video the game shows loading, then the console restarts from the BIOS and boots the
   disc again, in a loop. Movable build from C, 3,595 C functions. The previous session did eight builds and kept no record.
 - **It is not a crash.** Flycast prints its own log to stdout when it is started from a terminal instead of `open`:
@@ -1101,185 +1191,137 @@ BupFailDialog compare only up to the step limit; _div64 and emotFaceMorph rest o
   Lesson: the checks that came out clean compared the build with the original only for words some instruction loads; a data
   word inside a "function" that is only read by address was invisible to all of them.
 
-### Step 10 on Crazy Taxi: a native port whose play frames lacked the world (2026-11-18)
-- The port: the game's C built for x32 through LLVM IR, RAM mapped at the console's addresses, an SH-4 interpreter for the 157
-  functions with no C, the disc read from the .gdi, and the PowerVR emulated on the host (the polygon stream and the textures in
-  video memory) and drawn with OpenGL. Title, menus and driver select drew correctly; play showed the HUD and some terrain, and the
-  road and buildings were black or missing.
-- **Three causes, each found by looking inside the running program:**
-  1. *A hardware register the host left at 0.* `nlInitLibrary0` reads SB_SBREV (`0xA05F689C`); at 8 or more it records the graphics
-     configuration (vertex buffer, list sizes) before the graphics system starts. At 0 it takes the other path silently, the first
-     4 MB texture pool is used up at boot and play runs out of texture memory (road and buildings get the dummy texture). Found by
-     reading the same words in Flycast and in the port at the same screen: pool counters (`0C177FCC`, `0C177FE0`), the configuration
-     block (`0C2AECD0`) and a guard flag (`0C2AED40`). With the register at 0x0B the port's pools match Flycast's (622,752 and
-     620,672 bytes free in the attract demo, against 622,784 and 620,640). The SDK's mode set then also waits on the scanline counter
-     (`0xA05F810C`), which the host has to move.
-  2. *Argument order with a structure by value.* `technicalBonusExec` called `Model_Put_Sprite3D` through hand-written casts that
-     put the model pointer before the 6-byte angle; the definition takes the angle before the model. The SH-4 puts every value in
-     the same register or stack word in either order, so the Equivalent check could not see it; on x86-64 the order picks the
-     register, the model pointer arrived as the angle (0), and `nlObjPut` read address 4 about 40 s into play. Found from the crash
-     (host backtrace, resolved to function names). The casts now follow the definition and two stale declarations were corrected; the
-     function is still EQUIVALENT and the build still MATCH. Of the twelve definitions that take a structure by value, nine are
-     declared with another parameter list in some caller; only this one is reached in play.
-  3. *Matrix register pairs loaded in the wrong order.* The C of `nlPopMatrix` and `nlLoadMatrix8` had been generated before the
-     simulator's pair order was corrected (a pair move keeps the singles' order: the first register of the pair at the lower address,
-     as `tools/sim/sh4sim.py` says, "hardware and Flycast"). The port runs those two as C and `nlPushMatrix` (no C) in the interpreter,
-     so a pushed matrix was popped with each pair swapped: `nlProjectScreen3D` returned a screen x of -2,231,000 for a piece 1,600
-     units away, and `PutCourse_CheckPiece` rejected every course piece (about 34 asked per frame). Found with gdb on the port
-     binary, stopped in play at `camUpdate` (MainMode 1, SubMode 1): the camera was sane; the task list was complete; `PutCourse`
-     found its section and asked for the pieces; each piece's projected value was garbage; a conditional watchpoint on the current
-     matrix caught `nlPopMatrix` loading it pair-swapped. The two functions were regenerated (36 cases each, build MATCH). Play
-     frames went from about a tenth filled to full: the taxi, its driver, the road.
-- Findings about the decomp on the way:
-  - `nlPow` was listed as two entries: the first's branches land inside the second, which holds the rest of the same function after
-    a literal pool. Merged into one entry (build MATCH); it is a float function.
-  - Twenty-four functions in `src/` call a code address that is not a function's start. The ones the game reaches in play: `0C0784A0`
-    (inside `nlRotateAxe`, reached through `nlRotateV`, 31,150 calls in one run) and `0C07AE10` (16 bytes into
-    `nlObjPutSetLightDirectionV`, once).
-  - 118 functions take fewer arguments than their callers pass; completing the arguments of every call in 184 source files in a
-    build copy changed no frame, so they are not what hid the world.
-- Ruled out as the cause of the missing world: taking the ten ground-collision functions, and the course-loading (63), car (38) and
-  course/area/grid (66) functions, from the original code instead of their C changed nothing in play.
-- Still open: the HUD is not drawn in play. Its translucent polygons do reach the emulation's buffer (131 opaque polygons grow to
-  192, 61 of them translucent, once the second block of 36,224 bytes is parsed); whether that buffer is the one rendered is not
-  established. The play camera looks down more steeply than the real game, and nothing presses the accelerator in the hands-free
-  test, so movement is untested.
+### Where the skeletons stand, and a lead (2026-11-22)
+Stopped after a first pass, not solved. What is known, so the next pass starts from it:
+- Motions are the one entry of `MOT.AFS` (5,142,579 bytes at `0x80000`), the game's archive table calling it 319 entries (`0x013F0001`). The data is not compressed (zlib 60%) and reads as small signed 16-bit values (`0xC000` = -90 degrees): keyframed joint angles, no header or tag.
+- No index was found for the 319 motions: not in the rest of the AFS (empty outside the one entry), and not in the executable (no ascending 319-entry offset table ending near the file size, no window of 319 sizes adding up to it).
+- The lead: the executable's motion debug screen (`MOTION MAIN`, `MOTION SUB`, `KANSETSU`, `ANGLE X/Y/Z`, code around `0x0C0C1714` to `0x0C0C1C4C`, strings around `0x0C1E3B80`) reads a character record: the selected joint at +0x90, a joint array at +0x84. Its loader of the motion data and the character's bone tree are in the code that fills those fields. Reading that player is the way to the skeleton; a data-only search (tables, sizes, entropy) has been tried and gave nothing.
+- The characters' parts are separate models in `POL.AFS` (entry 81 holds the playable characters); no bone tree is known for them.
 
-### Step 10 on Crazy Taxi: the port built the Virtua Tennis way, from boot to play (2026-11-19)
-- The port: Virtua Tennis's runtime (`port/runtime/`), its addresses moved to Crazy Taxi's, the SDK's C placed in `sdk/<library>/`,
-  the hardware drivers marked in `sdk.txt` (`hardware` lines) and left to the runtime. 1,588 files compile, 50 console functions are
-  stubbed (47 hardware), no function without C is called. It runs on Batocera (x86-64, SDL 3, Mesa) and in the build container.
-- Reached: the boot, the save screen, the title, the attract demo, the menus, driver select with textures and models, music, and the
-  start of play. Play itself once `nlFloor` was fixed (below).
-- What stopped it, in order, and what fixed each:
-  - "AICADRV ERR" at boot: `nlsndInit` counts reads of the sound driver's ready word; the emulated sound CPU runs in real time and
-    the count ran out first -> the runtime answers that read once the driver has had its time.
-  - a fault in `ConvertSwitch` after "Now Loading": the pad record's device-name pointer was 0 -> it points at the product name.
-  - a fault in `SetColliObj` at the start of play: the build placed data names from `symbols.txt` only, and the collision lists
-    named in `globals.txt` got storage of their own that the code clearing them at their address never reached -> the build reads
-    `globals.txt` too (`native_build.py` `read_symbols`, with a test).
-  - one file that did not compile: the calling-convention pass copied a definition's pointer type the caller's file does not
-    have -> such a pointer becomes `void *` (`sh4abi.py`, with a test).
-  - Japanese text: the boot ROM's settings copy (`syBtCfgSet`) was a no-op, so the language byte stayed 0 -> it writes English.
-  - "LOAD failed" at the save screen: `buIsReady`, `buIsFormat`, `vmsio_isready` and `vmsio_ismount` ran the SDK's C against a
-    card driver the port does not have -> the runtime answers them. A save still writes no file.
-  - lines between the pieces of the title's logo: texture smoothing wrapped at piece edges -> a draw whose coordinates stay inside
-    its texture is clamped.
-- The nose dive, found: while the game holds the taxi at its start point before the drop, `carGroundCheck` puts it back at
-  height 1530 each frame, `GetCollision2D` finds no surface under it (its flag at 0x0C26E494 is -1; the buffer it
-  returns then still holds an earlier lookup, which read at first as ground at 1500), the wheels hang, and
-  `carWheelCollision` adds about 45 to the pitch every frame until the cap (8448, 46 degrees). On the console the drop is
-  imperceptible: the ground found there is at the taxi's height. The hang came about 210 frames into the race, when the pitch
-  reached the cap.
-- The nose dive's cause: `nlFloor`'s C (`sdk/naomi/gen_ai.c`) returned `(float)(0xFFFFFFFF - (int)|x|)` for a negative number
-  with a fraction: the constant is unsigned in C, so -1.587 came out as about 4.29e9 instead of -2.0, and `GetCollision2D`
-  (`(int)nlFloor(x / cell)`) looked in a cell far outside the grid wherever x < 0. The console never runs it (its SDK stays
-  the original bytes), so only the port fell. The C is the generator's (batch gen_ai) and lacks the `(int)` the generator has
-  put before such a conversion since 2026-11-07 (`0cdc3ac`: a constant above 0x7FFFFFFF converted to float goes through
-  `(int)`): it was generated before that fix and not regenerated. The generator needs no change. It was proven Equivalent all
-  the same: its 36 cases ran 22 of its 28 instructions, none a negative fraction, and the checker records the coverage without
-  acting on it. Fixed to `-1 - (int)|x|`; eight negative fractions added to its cases (now 28 of 28 instructions, Equivalent).
-  With it the operator played the race.
-- Stray triangles over the world and the HUD in play (the operator's report), found in the renderer (`draw.c`), not in the game:
-  - The near clip was ruled out first. The library's kernel (`displaypolygondata_sidx`, its strip routines and
-    `nl_objasm_clip_send_vtx_sidx`) clips meshes whose bounding sphere crosses the near plane, at the fourth row of the matrix
-    against -0.3, and gives a clipped corner 1/W = 3.33 (the context's word 8); the runtime clips at W = 0.3 and gives the
-    same 1/W. The projection matrix in race RAM (`0x8C2B34A8`) has a W row of -z and a fourth row of +z, so both test the
-    same value for every model.
-  - The frame itself, read from the running game: the renderer's polygon records (`bufs` in `pvr.c`, at its symbol's host
-    address from `nm`) through `/proc/<pid>/mem`, with the console RAM, eight times in a race, no ptrace stop. Clipped
-    corners land up to 15 million pixels off the screen, but where those triangles cross the screen their exact depth is
-    W 9.5 or farther: correct.
-  - The same frame redrawn without the game, through `draw.c` alone, each polygon in a colour that is its number: far
-    translucent polygons (W 3,900-5,700) came out on top of the road (W 10) in the screen's corners. Two polygons were
-    enough to show it, and one triangle was enough to fail: at pixels near its on-screen corner (47, 383) it wrote W 1e-6,
-    the nearest possible, where its own depth is about W 5,700.
-  - The cause: the vertex shader gave OpenGL each vertex at its W and passed 1/W to the pixel without perspective. For this
-    far triangle, which crosses the screen's edge, the 1/W that reached some of its pixels made it the nearest thing on the
-    screen. The fix: positions go to OpenGL with W 1, so the cut is plain 2D, and 1/W and every attribute over W are
-    interpolated linearly and divided per pixel, as the PowerVR does. The first C unit test of the runtime
-    (`tests/c/test_draw.c`, `make -C tests/c` in the port image) fails on the old shader and passes on the new: three
-    triangles from the race frame and one plain one, every pixel inside drawn, none outside, depth within 0.01%. In the game:
-    the operator saw the triangles gone (the build container on the Mac).
-  - A first theory (OpenGL losing precision on corners millions of pixels away) was wrong: the test drew those triangles
-    exactly. The first version of the test only checked the pixels that were drawn; it now also counts the ones that
-    should be and are not.
-- The runtime's watchdog no longer ends the program after 12 s without a frame: it logs where the game is stuck and leaves
-  it running, so a frozen game can be read (`/proc/<pid>/mem`) instead of disappearing with its state. A run ends when the
-  operator ends it.
-- How the debugging went wrong, and the method that worked (a session cost the operator a drive through the menus each time):
-  - **The operator drives, the program reports.** Do not script the menus or guess their timing; do not force the game's
-    mode words to skip screens (that reached screens that are not on the normal path, and a skipped driver select left the
-    driver unloaded). The operator plays to the point; everything else is automatic.
-  - **The game says where it is.** A debug log in the runtime (`PORT_BOOT_LOG`, after the Power Stone port's): each change of
-    main mode and sub-mode, with the frame. A watcher follows it in the container's log and acts on the mode it needs (the
-    race: main mode 1, sub-mode 1). Guessed triggers (a word taken for a frame counter, a fixed delay) missed every time.
-  - **One session, everything from it.** At the trigger, one gdb attach collects all that run can show: the record of the
-    object under study in full, the words each candidate function changes in it (a copy before the call, a
-    FinishBreakpoint after), the calls of the functions they lean on with their arguments and results and one call stack,
-    the renderer's state; then it detaches by itself, at a count or a time limit. Asking one question per session, the
-    operator drove a dozen times.
-  - **Attach without killing the game.** The runtime routes console-address calls through SIGSEGV: gdb must be told to
-    pass the signals before it attaches (`gdb -batch -ex "handle SIGSEGV SIGBUS SIGALRM SIGUSR1 SIG34 SIG35 SIG36 nostop
-    noprint pass" -ex "attach PID" -x script`). With `gdb -p PID` and `handle` after, every session ended seconds later.
-  - **Find the process by its command line** (`pgrep -f "^build/native/game --data"`): its name is `exe` in one container
-    and `game` in another; a pattern that also matches the shell running it picks the shell.
-  - **Test the capture on a run of one's own first** (at the title: the attach, the reads, the detach, the game still
-    running after), before the operator drives.
-  - **Keep the log past the container**: the game's output to a file (`build/native/play_session.log`), or the reason a
-    session ended goes with `docker run --rm`.
-  - **Do not start a second copy of the play script over the operator's session** (it removes the container by name), and
-    do not build while asked only to debug.
-  - **Read the original first**: a freeze in the attract demo looked like the hang and was the original's own loading
-    pause; an address taken for a missed translation was already the game's. A wrong lead cost runs each time.
-  - Under gdb every console-address call is a signal, so attach late to a running program rather than starting it under
-    gdb, and keep breakpoint conditions off hot paths. gdb's hardware watchpoints crashed gdb itself here (an internal error).
-  - **Read without stopping**: `/proc/<pid>/mem` reads the console RAM and the runtime's own data (at the addresses `nm`
-    gives) while the game runs; no attach, nothing to lose. A run captured that way can then be replayed offline: a
-    frame's polygons redrawn through the renderer alone found the stray triangles with no further runs.
-  - **A proof is only as wide as its cases**: a pass with coverage below all instructions (`nlFloor`, 22 of 28) left the
-    branch with the bug unrun. And a test of drawn pixels missed pixels never drawn.
-  - **Every runtime change comes with a test**, C for the runtime's C (`tests/c/`, one `test_<file>.c` per file, built
-    against the template's file and run in the port image), as Python tests cover the tools.
+## Boku Doraemon
 
-### Step 10 on Crazy Taxi: stalls, the save file, the pause screen and the street objects (2026-11-20)
-- Stalls in the race (frames given up again and again, more than half the play time): the list-end mask of each stalled frame
-  lacked the translucent list. The opaque modifier list (the cars' shadows) went 32 bytes out of step and its end was read as
-  data. The NAOMI library closes a shadow volume by flushing both store queues again at the next address without storing to
-  them: on the SH-4 a queue keeps its 32 bytes after a flush, so the last triangle goes out once more. The runtime had the
-  queue area as plain memory and sent what lay there. -> `hw.c` models the two queues and what each keeps (a word not stored
-  since the last flush is the queue's); `tests/c/test_hw.c`. Found by recording the stalls from `/proc/<pid>/mem` (the Kamui
-  frame words every 10 ms, the RAM at each stall) and parsing the recorded lists offline with the runtime's own parser.
-- The pause screen black past its left edge: the race is drawn into a 512x512 texture; the runtime sized that render from the
-  region array's tiles, whose entries 37-38 held other words with the last-entry bit, so 96 pixels wide. -> the size comes
-  from the clip registers; `tests/c/test_pvr.c`.
-- No save file ("Load failed" after "press A to create a new file"): `SaveBackupData` passed its save record to
-  `buMakeBackupFileImage` unfilled. The generated C kept the record's five fields in locals: the frame pass took the slots for
-  locals because the address passed on was given a short reach (the pass now defaults to the whole frame, after Zombie Revenge,
-  and this function predated it). Regenerated with the current generator. It had been proven Equivalent: the checker compared
-  only the words stored right from a passed frame address since the last call, and the fields lie 0x44 on, after the record's
-  `memmove`. -> sh4sim runs the real callee on a copy of the memory at each mocked call with a frame address and records the
-  frame words it reads before writing them; equiv compares those where either side stored them (`tests/test_equiv_reach.py`).
-  The new check fails the old C on its first case (the callee reads the icon pointer at +0x44: original `0C0EEC83`, C a leftover).
-- Street objects (boxes, signs) tumbling and bouncing without being hit, never at rest (the port only: the Dreamcast build
-  links the SDK's original `nlOuterProduct`, the port compiles its C). Found by recording every object at 120 consecutive
-  frames, then running `SetObjFly` from a recorded state three ways: the original in sh4sim, the C compiled for the Dreamcast
-  in sh4sim, the native build's function called under gdb in a headless copy loaded with the recorded RAM (the game's stack
-  set first: the C is built for x32). `GetCollision2D` agreed on all 576 points; `SetObjFly`'s spin did not. The cause:
-  `nlOuterProduct`'s C wrote `out[2]` before reading `b[1]` and `b[2]`, and `SetObjFly` calls it with the result over its
-  second operand. Every proof case had its own output. -> reads first, as the original; equiv runs each case again with an
-  output pointer set to each input pointer (`alias_variants`, same test file). The old C fails on the first variant.
-- Both checker changes alter what a pass means: earlier passes are not carried over, so a game's Equivalent functions are
-  checked again on the next run of equiv.
-- Method notes:
-  - Record against a trigger the game sets, never against a guessed moment: two RAM recordings missed (one covered a pause,
-    one started at the race's end). A ring of the last 10 s of RAM, stopped on the operator's word, caught the moment at once.
-  - gdb's `call` into the native game runs on the host stack: set `$rsp` into the game's stack first (x32 code faults otherwise),
-    pass SIGSEGV through, and never print an optimised-out local from a `dprintf` inside the call (gdb abandons the call, and
-    the cut-short run looks like the game leaving a loop).
-  - The port's `--fast` does not switch the exact FPU path (`port_fast_fpu`); set it directly to compare with the simulator.
+### Japan, T-41802M V1.003: the run and what it showed (2026-10-05)
+- Run: 2026-10-05 (v0.4) and 2026-10-06 (v0.5, on macOS and in Claude: same
+  names)
+- Executable: 978,148 bytes, linked at 0x8C010000; SDK by banners: no release has all 48 library
+  builds (newest Shinobi 1.75, Oct 2000), closest R11b (26/48) then R10.1 (23/48); SDKs used:
+  R10.1, R11b, 1.55J
+- Functions: 3,034; named: 1,164 on 2026-10-08 (1,091 from nine SDK tables merged, 18 from a
+  names table since dropped, the rest wrappers; 1,060 the day before with three tables,
+  975 at v0.4 with R10.1 and that table); build: MATCH, also after setup.sh
+- Text map: 2,155 strings (80 Shift-JIS, 1,962 with pointers); file tables: STORY.PAC (76 scenes,
+  sector and length at 0x8C04B704), KAOGRA.PAC, STORYGRA.PAC; textures: 887 decoded, 222 not
+- Missed functions: 860 candidates, plus 9 merged functions reached through tables
+- C units: none yet
+- Proof beyond the build: rewriting STORY.PAC's table let the story script grow past its slot
+  (moved into the filler track, 10 KB bigger, a scene at 1.7x its budget); played through in
+  Flycast and on GDEMU. The game's Catalan translation went from about 40% to 99% this way.
+- What broke or surprised -> what changed:
+  - The scene table was found by `file_tables.py`; tested blind on 6 other games: no false hits
+    and no hits, so a missing row proves nothing
+  - Per-release SDK tables named twin stubs (byte-identical code under unrelated names) by which
+    release has which -> SDK tables are merged into one before applying
+  - The cloud workspace dropped dotfiles and execute bits from the uploaded skill, and could not
+    pull Docker images -> `template/gitignore` without the dot, `DC_LOCAL` for every script
+  - 2026-10-08, four more SDK tables (R4, R1.42J samples, R1.42J, 2.00J): +122 SDK names on top
+    of the 992 (measured in a scratch project): 86 from 2.00J (Sep 2000 libraries, the closest to
+    this Oct 2000 game: Sofdec `MPS_`/`MPV_`, `mwRnv2`...) and 33 only from the R1.42J sample
+    programs, whose Sofdec builds matched where no library did. Crazy Taxi: +7. More releases
+    keep paying, each game by the one nearest its build date, and sample programs count
 
-### Step 9 on Power Stone: from a disc that restarts at boot to playable on Flycast and the Dreamcast (2026-11-21)
+## Virtua Fighter 3tb
+
+### US, MK-51001 V1.002: the run and what it showed (2026-10-07)
+- Run: 2026-10-07, naming only (for another team's decomp; no repo kicked off), on macOS (Docker)
+- Executable: 1,179,648 bytes, linked at 0x0C010000 (16,517 pointers; 11 at 0x8C010000); SDK by
+  banners: none of the game's 6 library builds (Jan 1999, GDFS 0.53 of Aug 1998) is in any
+  preserved release: it sits between Katana 0.40 and 1.0B2; SDKs used: 0.40 Release.4, 1.55J, R9,
+  R10.1, R11b
+- Functions: 1,906 at first (27% of the executable), 2,306 after seeding (32%); the other team's
+  own baseline is 2,398 (37%): most of the executable is data
+- Named (after seeding): 126 (97 SDK, of which 0.40 added 44; 22 from the Crazy Taxi decomp's
+  NAOMI library names; 3 from a names table since dropped; 4 wrappers); before seeding, 97 of 116 signature names did not
+  appear anywhere in that team's repo
+- What broke or surprised -> what changed:
+  - 1998 libraries use another banner form -> `banners.py` / `sdk_scan.py` read both; 0.40 added
+  - A sister decomp (same developer's library) named what no SDK could -> "From another decomp's
+    names" in `sdk-signatures.md`
+  - The other team's best SDK matches came from an SDK sample program's ELF of the exact library
+    version -> "sample programs" note
+  - Analysis reached a quarter of the executable -> `seed_funcs.py` + `SeedFuncs.java`, coverage
+    note in step 3
+  - Tiny collisions (a video-player function name in a fighting game) -> suspect-name note in step 4
+  - PC (Sega ALLS, 2023) version: a modern host engine around the arcade original, no symbols
+  - More 1998-1999 SDK tables tried after that (R4: 1,035 signatures; R1.42J's 13 prebuilt
+    samples with their link maps: 2,141; R1.42J's own libraries, unpacked from its InstallShield 3
+    installer with `is3_extract.py`: 2,943): +0, +0 and +1 names. The game's libraries are in no
+    preserved release; the tables stay for the next early game
+  - Cheat codes (the Dreamcast-Talk CodeBreaker list, same release): 5 RAM variables named
+    (both players' health, the round timer, the win counters), none of them in that team's repo
+  - The 1998 Set 5.05 table from the Tower of Babel dev kit demo (below): +0, 1 ambiguous. VF3tb's
+    Kamui is not Set 5's either
+
+## Phantasy Star Online Ver. 2
+
+### US, MK-51193 V1.004: the run and what it showed (2026-10-07)
+- Run: 2026-10-07, stopped at step 1
+- The boot file (157 KB, Shinobi 1.757) has none of the game's text: a core that loads the game's
+  code at runtime (the disc holds 129 `.BIN` and 516 `.REL` files); the big `2_DP.BIN` (2.8 MB,
+  SDK R9 exact) is the bundled Dream Passport 2 browser, kicked off by mistake before checking its
+  text (kept as its own local repo)
+- Ports checked for names: PC (no symbols, no `.pdb`), GameCube Episode I & II (no map; its extra
+  `.dol`s are a web browser and its debug build), the GameCube decomp (9 game files, C++ classes
+  whose names do not appear in the Dreamcast build): none carries names over automatically
+- What changed: step 1 "check it is the game", runtime-loaded code named as a limit; "check for
+  symbols first" in `port-symbols.md`
+- What it would need: a second phase. The skill expects the whole game in one executable at a fixed
+  address; PSO loads its game code into RAM at runtime from other files on the disc. Asked on the
+  Dreamcast-Talk thread how PSO DC loads its code; nothing from the PC or GameCube builds carried over
+
+## Illbleed
+
+### Japan (Crazy Games), T45601M V1.003: the run and what it showed (2026-10-13)
+- Run: 2026-10-13, on request from a Dreamcast-Talk member as a Spanish translation target; the
+  Japanese release, as they suggested
+- Executable: 1,391,108 bytes, linked at 0x8C010000; SDK by banners: libraries dated 1999 to Nov
+  2000, no preserved release contains them all; SDK era: KAMUI 1.11, Shinobi 1.76, Ninja
+  01100114, ADX 5.93
+- Functions: 4,245; named: about 2,000, mostly Sega library code; build: rebuilds the executable
+  byte for byte
+- Text map: the executable has almost no text of its own (developer error messages). The game keeps
+  its text in separate message files on the disc, one set per language (found from the file
+  names), so nothing has to be decompiled to reach it; textures: 17,269 dumped to one page for a
+  person to look through
+- The disc also carries the Dreamarena online browser, a separate program: left out of the analysis
+- What it showed: a translation here is doable, with four jobs the skill does not do for you:
+  the message files are not plain text (their format has to be worked out); the font needs room
+  for Spanish characters (ñ á é í ó ú ¿ ¡); Spanish runs longer than English and the game may have
+  fixed buffers (a long-text test, as on Boku Doraemon, shows it); text drawn into images has to be
+  found by eye on the texture page. The same four were solved on Boku Doraemon
+- What changed in the skill: the text map lists every image (`images.tsv`) instead of guessing
+  which ones have text
+
+## Sonic Adventure
+
+### Europe, MK-51000 V1.003: the run and what it showed (2026-10-15)
+- Run: kicked off 2026-10-15 (skill unstable), on macOS
+- Executable: 6,735,296 bytes, linked at 0x8C010000; SDK by banners: Shinobi 1.41, Kamui 1.06, Ninja 01000081 (Feb-Mar 1999),
+  ntUtl 2.00 (Aug 1999), CRI ADX 5.5x
+- Functions: 6,022 in the executable; named: 4,417 (1,088 at the kick-off); build: MATCH
+- Overlays: 200 of the 232 disc files with code (stages, bosses, events, Chao), 21,074 functions, 12,483 named; 32 files out
+  of scope, each with its reason in `overlays.tsv`
+- C units: a matching decomp. 48.5% of the executable's functions (9.2% of its bytes) and 6,663 overlay functions in 1,045
+  units rebuilt byte for byte; most of the C comes from the matching decompilation of the Japanese release
+  (reshaped/sonic-adventure), ported to this release
+- SDK source: 256 library functions whose bytes the supplied SDK source reproduces (`sdk-verified.txt`)
+- What broke or surprised -> what changed in the skill: the game's own code matches an older compiler than the SDK units
+  (SHC 5.1 Release 4 against Release 13) -> units can name their compiler (`+r04`, `SDK_R04_PATH`); most of the game's code is
+  in overlays on the disc, each linked at its own address -> `overlays.tsv` and `build_overlays.sh`, the overlays
+  counted apart in the progress report (`tools/overlay/progress.py`)
+
+## Power Stone
+
+### Step 9: from a disc that restarts at boot to playable on Flycast and the Dreamcast (2026-11-21)
 - Start: the movable build from C (3,826 C functions) showed the licence screens and then hung or restarted. One day, seven causes,
   none in the game's C logic: four were wrong or missing entries in `functions.txt` and `words.txt`, two were tool gaps, one was an
   address in hand-written inline assembly. Result: boots to menu and
@@ -1337,47 +1379,76 @@ BupFailDialog compare only up to the step limit; _div64 and emotFaceMorph rest o
   reached by falling through from unlisted code that is not filler; the build should rewrite, or refuse, an image address written
   as `H'...` in inline assembly.
 
-### The simulator against the console: hwverify on Virtua Tennis (2026-11-22)
-- Setup: a USB-serial board on the console's serial port (an SD-card adapter's plug), dcload-serial 1.0.7 built from
-  KallistiOS's source, `scripts/dev/hwverify.py`: a function's own bytes and its cases run on the Dreamcast and in sh4sim, and
-  the two answers are compared case by case. Callees are stubbed at their addresses and record their calls (target, r4-r7,
-  the stack word) as sh4sim's mocked callees do; the words the original reads are poked first with what sim saw at the start.
-- The loader: the stock dcload-serial starts a program with SR.BL set, so any exception is a manual reset to the boot ROM
-  (SH7750 manual) and its own register screen never runs; after a crash the console was dead until the cable was replugged and
-  the disc rebooted. Once BL was cleared, the handler's jump back into the loader left register bank 1 selected (its startup
-  mask keeps RB), and the next program died before `main`. -> a loader build (1.0.7-cpc) with BL and RB cleared that sends the
-  exception and its registers to the PC; hwverify reports `CONSOLE CRASH` with PC, PR and R0-R15.
-- `nlUnitVector`, `nlVoidUnitVector` (fipr, fsrra): 66 of 72 cases differed. Unit vectors came out 1-2 ulps short of the
-  exact result (-3 normalised: console `BF7FFFFF`, sim `BF800000`), and vectors with a denormal or NaN component came out NaN
-  on the console where sim gave infinity. Three causes in sh4sim: fipr / ftrv / fsrra / fsca were computed exactly (the
-  hardware runs them on one approximating multiplier block); a denormal operand was used as a tiny number (DN = 1 makes it a
-  zero, so 0 * inf is NaN); and FPSCR 0x00040001, the games' value, was read as round to nearest -- RM = 1 is round to
-  zero, and fadd / fmul / fdiv / fmac / fsqrt / float rounded to nearest whatever RM said. -> `sim/sh4fpu.py`, a port of
-  skmp's bit-exact model (MIT, verified on a Dreamcast; the port matches the C header on 63,000 vectors); denormal operands
-  are zeros with DN = 1; arithmetic is exact and rounded once as RM says (`tests/test_sh4fpu.py`, the console's words).
-- Reads outside RAM: sim answers 0 for the boot ROM and anything unmapped; the console gives the real bytes. A case with no
-  registers set walks a list from a null pointer (`FUN_8c08a978` reads 00000018) and the console loops for ever, without an
-  exception, so the loader never gets control back. `courtUsaDrawNumber` indexed a table with a scripted call result and
-  read 1738B170: the console returned 00001738 (open bus), sim 0. -> hwverify skips a case whose simulated run reads outside
-  RAM (`NOT RUN`, the address named). The model is not changed: what those reads return depends on the bus.
-- Gaps in the cases the console showed (not simulator bugs): many cases read 00000B5C / 00000B00 -- the game's globals
-  through GBR, which the cases leave at 0; a local read before it is written (`panelMenuSprPutA` differed by 0x100 until
-  hwverify zeroed the stack below the function, as sim's fresh stack page is).
-- Open: `bodyLinePerp` takes another branch on the console (it calls 8C0F0700 first, three calls against sim's one);
-  `FUN_8c01219e` hangs the console and reads nothing outside RAM.
-- Method notes: the console is not a test bench -- a hang costs a replug and a reboot, so a change to the loader or the
-  harness is checked on the PC first (the manual, a disassembly of what was built, the paths the change newly reaches) and a
-  function that hung stays out of the next run until its cause is known.
+## Power Stone 2
 
-### The `recordparts` rule: a skeleton stored in the model file (Power Stone 2, 2026-11-22)
+### The `recordparts` rule: a skeleton stored in the model file (2026-11-22)
 A fighter's file is a container (a table of (offset, size) pairs, then segments); its model segments carry a 60-byte record table, one record per
 bone (a part's offset, the parent index, the bone's three floats), found from two header words. The same skeleton, bone for bone, is kept in the
 executable in the predecessor game (where `fileparts` reads it), so the tables are stored where each game's loader finds them. `recordparts`
 reads them from the model file. Tested on synthetic containers (`tests/test_recordparts.py`).
 
-### Zombie Revenge: where the skeletons stand, and a lead (2026-11-22)
-Stopped after a first pass, not solved. What is known, so the next pass starts from it:
-- Motions are the one entry of `MOT.AFS` (5,142,579 bytes at `0x80000`), the game's archive table calling it 319 entries (`0x013F0001`). The data is not compressed (zlib 60%) and reads as small signed 16-bit values (`0xC000` = -90 degrees): keyframed joint angles, no header or tag.
-- No index was found for the 319 motions: not in the rest of the AFS (empty outside the one entry), and not in the executable (no ascending 319-entry offset table ending near the file size, no window of 319 sizes adding up to it).
-- The lead: the executable's motion debug screen (`MOTION MAIN`, `MOTION SUB`, `KANSETSU`, `ANGLE X/Y/Z`, code around `0x0C0C1714` to `0x0C0C1C4C`, strings around `0x0C1E3B80`) reads a character record: the selected joint at +0x90, a joint array at +0x84. Its loader of the motion data and the character's bone tree are in the code that fills those fields. Reading that player is the way to the skeleton; a data-only search (tables, sizes, entropy) has been tried and gave nothing.
-- The characters' parts are separate models in `POL.AFS` (entry 81 holds the playable characters); no bone tree is known for them.
+### Step 8: the first disc build from C of a decomp made elsewhere (2026-11-22 to 2026-11-23)
+- State at the start: made with the skill at v2.0 by its author, never built from C. USA, T-1211N V1.000; executable 3,097,497 bytes, linked at
+  0x0C010000; 9,789 functions, 9,763 Equivalent; `build.sh` MATCH. Only the build-step tools (`8-build`, the simulator and checker,
+  `boundaries.py`, `movecheck.py`, `rename.py`) were taken from the skill's v3; the rest stayed as the author had it. Each stop was read from the
+  build's own message, fixed in the skill with a test first, and copied back.
+- Hidden functions, three rounds (`mbuild`: "the C passes on the entry of a routine functions.txt does not list"): 19 routines sat inside other
+  functions' listed ranges or in a data tail, reached by `bra` tail jumps into code the analysis had merged into the function before.
+  `boundaries.py` refused them: its walk of the holder followed the tail `bra`, took the candidate for a label of the holder, and left the holder's
+  size over it. Now a `bra` to another entry or to a candidate of the same run is a tail jump (`tests/test_boundaries_cut`). Three holders were cut
+  (1,948 to 1,650, 804 to 312, 1,064 to 486 bytes); one holder's C had inlined the code behind the tail `bra` and was regenerated; 18 of the 19 got
+  proven C from `gen_equiv`, the 19th (start-up code that fills memory in a loop of over a million passes) timed out drawing its cases.
+- `movecheck` check 2 (the padded image) reported three differences on code that behaved the same:
+  - a table of addresses copied a byte at a time, each byte differing from the original's: four ascending byte writes to a word now compare as the
+    word (`tests/test_movecheck_writes`);
+  - a data section's end marker equal to the start of the next piece, a pad between them lengthening the section from 12 to 44 bytes: a piece after a
+    data tail of more than 2 KB stays with it (`tests/test_movecheck_tail`);
+  - the code rounding a BSS pointer up to 256 while the padded BSS moved by a non-multiple of 256: the shift is rounded up to 4 KB
+    (`tests/test_movecheck_bss`).
+  After them, all 1,660,709 writes of 20,000,000 steps are the original's.
+- Result registers: `retcheck` warned of six functions declared `void` whose original returns in r0 and whose callers use it; their C was corrected.
+  Five proved at once. The sixth is a wait loop whose cases all run to the step limit, and the checker compared r0 at the cut, an arbitrary value:
+  a run cut at the step limit is no longer compared on r0 and fr0 (`tests/test_endlessout`).
+- Names: 47 functions had been named in `functions.txt` after their C was generated, so 1,300 uses in 302 files still called the placeholder and
+  the link had 336 undefined symbols (the proofs find a function by its address and passed). `rename.py --stale` puts the current names in
+  (`tests/test_rename_stale`; it refuses when both names are defined in C, which found one function defined twice, under both names). Two runtime
+  helpers named only in a hand-written file's `@runtime` lines were renamed in `functions.txt`.
+- Smaller: `gen_equiv`'s per-worker memory cap is refused by macOS (the guard has `tests/test_capmemory`); the progress badge has equal margins
+  (`tests/test_badge_margins`).
+- Open when this was written: the link still stops on 14 C calls by placeholder name to addresses in the middle of other functions. The original
+  has no word or direct branch that refers to them; at the one place read, it calls two named library functions where the C calls those
+  placeholders. Not explained. Linking a running copy there is the Crazy Taxi mid-function freeze.
+
+## Not tied to one game
+
+### Dev kit dumps (sega-dreamcast-info.com, 11 "Set 5" Katana kits on archive.org, 2026-10-08)
+- Run: 2026-10-08, three kits opened (Tower of Babel 70 MB, Rage Software 0.2 GB, Eurocom 1.4 GB)
+- The disk images are the studios' project folders (NBA Hoopz, Hydro Thunder, UEFA Striker), no
+  SDK install on any of them; the recovered-files archives hold the useful pieces. By design: the
+  dev box's own disk holds GD-ROM emulation images (`.HCD`/`.VDS`), the SDK lives on the Windows
+  host, so no dev box dump will ever carry an SDK release
+- Tower of Babel: the demo's `1ST_READ` (Sep 1998) and its Hitachi link map, linked against
+  `C:\KTN505` (Set 5.05, Aug 1998); the map matches the binary (the start-up stub's jump). 1,005
+  code symbols -> `map_names.py` + `ExportSigs.java`: 690 signatures, the earliest table there is
+  (`nw`, `kmi`/`km`, `gd`, `vms`, `mpd`, `sd`, `sy`, `kd`, `bu`). Set 5 era only: VF3tb +0
+- Eurocom: `Hydro.elf` (Jul 1999, 26 MB) is the game's ELF with a 23 MB DWARF-1 `.debug` section
+  and no symbol table; a 60-line DWARF-1 walk gives 2,753 named functions with addresses, all
+  Eurocom's own code (the SDK libraries were linked without debug info), so it is a named
+  reference for a Hydro Thunder decomp, not an SDK table. `kmtransform*.c` are VideoLogic's 1998
+  KMTools sample sources
+- Rage: UEFA Striker DC betas without maps, PSX source in a zip, nothing to take
+- Hydro Thunder (Jul 28, 1999 prototype, Hidden Palace / archive.org, 258 MB): its `HYDRO.ELF` is
+  the kit's, byte for byte, and `LOO3.R2` (a data pack) embeds the Hitachi link map of the Jul 16
+  build: 3,027 code symbols, 1,032 of them library code. `sdk_scan.py` on the ELF: 18/18 library
+  builds = Release 8 (Europe), and 964 of those 1,032 names are already in the R8E table; the 68
+  left are Eurocom/Midway wrappers (`Bup*`, `dc*`, `SN_*`). Nothing new to hash, two things
+  confirmed: `sdk_scan.py` works on an ELF, and a prototype's data files can carry the link map
+- Also pulled (`~/cpc/dreamcast/prototypes/`): Crazy Taxi Dec 3 / Dec 13 1999, Jan 14 2000 (the
+  untitled "Dreamcast prototype" item is the same Jan 14 build) and VF3tb Jul 27 1999: only
+  `1ST_READ.BIN` on each, no ELF or map; earlier revisions of the executable. A strings diff
+  against the release still paid: Dec 3 keeps a debug readout ("Beta Version DEBUG ASCII") whose
+  printf labels name the cab driver's struct fields (`ManType`, `Act`, `Mode`, `ParamA`, `ParamB`,
+  `Addr`, `Frm`, `isIp`), and pairing functions build to build (pools, pool addresses and `bsr`
+  offsets allowed to move) shows what changed late: Jan 14 differs from the release in 58 functions
+- What changed: dev kit dumps added as extra material (link maps, ELFs with debug info, source);
+  a DWARF-1 reader is worth a script if a second ELF like this turns up

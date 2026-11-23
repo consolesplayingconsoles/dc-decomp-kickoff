@@ -23,6 +23,7 @@ class TestRewritesAlign(unittest.TestCase):
         self.addCleanup(sys.path.__setitem__, slice(None), saved)
         sys.path.insert(0, os.path.join(TOOLS, '5-generated', 'gen_equiv'))
         sys.path.insert(0, TOOLS)
+        import toolpath  # noqa: F401  (puts every tools folder on the path: rewrites imports layout)
         import rewrites
         self.rewrites = rewrites
 

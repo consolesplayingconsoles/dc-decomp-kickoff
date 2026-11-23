@@ -9,6 +9,14 @@ import gen_core as G
 import unpoke_code
 Skip=G.Skip
 def build(name,ret,passthru=False):
+    """The generator's C for one function: gen_drv._build, behind the size gate on `frame` (GEN_FRAME=gate builds it with and without
+    frame.scalarize, compiles both and keeps the smaller; 0 or 1 build once, see framegate.py)."""
+    import framegate
+    def size(n,text,c):
+        import sizes
+        return sizes.c_size(n,text,c.protos)
+    return framegate.build_gated(_build,size,name,ret,passthru)
+def _build(name,ret,passthru=False):
     c=G.run(name,passthru)
     ip=sorted(c.iuse); fp=sorted(c.fuse)
     params=[]
@@ -195,14 +203,7 @@ def build(name,ret,passthru=False):
     src=splitflat.split(src.rstrip('\n'),int(os.environ.get('GEN_MAX_LABELS','500')))+'\n'
     if os.environ.get('GEN_REGISTER','1')!='0': src=register_locals(src.rstrip('\n'))+'\n'
     import rewrites
-    if os.environ.get('GEN_SELFCOPY','1')!='0': src=rewrites.drop_self_copies(src)      # frame slots stored back unchanged
-    if os.environ.get('GEN_STRUCT','1')!='0': src=rewrites.struct_access(src)      # far field accesses as members (head_protos declares the structures)
-    if os.environ.get('GEN_GLOBASE','1')!='0': src=rewrites.global_base(src)      # nearby fixed addresses off one base
-    if os.environ.get('GEN_SWITCH','1')!='0': src=rewrites.chains_to_switch(src)      # a state chain of ifs as a switch
-    if os.environ.get('GEN_COPIES','1')!='0': src=rewrites.merge_copies(src)      # a result threaded through nesting levels by copies
-    if os.environ.get('GEN_DEADFRAME','1')!='0': src=rewrites.drop_dead_frame(src)      # a stack array nothing reads goes (after the self-copies are gone)
-    if os.environ.get('GEN_HOIST','1')!='0': src=rewrites.hoist_builtins(src)      # a pure builtin called more than once with the same variable: once
-    if os.environ.get('GEN_REBASE','1')!='0': src=rewrites.frame_rebase(src)      # the stack array based at its first used word (last: other passes read the old offsets)
+    src=rewrites.last_passes(src)      # the size rewrites of rewrites.LAST_PASSES (each behind its GEN_<NAME> switch; head_protos declares the structures struct_access needs)
     # the structure of stack words covers every word the body reads: a word read on one path only (Zombie Revenge FUN_0c0a6928 reads
     # s.w[4] under an if) was left out of the count, the function was declared Stk4, and its callers, generated against that, never
     # passed the fifth word the original's caller stores (consistency.py: args outside)

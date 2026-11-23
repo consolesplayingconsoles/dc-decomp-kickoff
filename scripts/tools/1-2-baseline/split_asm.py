@@ -12,7 +12,8 @@ replaces a function can call the others by name.
 The body is emitted as data words: that is what guarantees the byte match on day one. Turning a
 file into real instructions (and then C) is the decomp work itself.
 Writes <out dir>/asm/*.src, <out dir>/objects.txt (link order) and <out dir>/functions.txt
-("F <addr> <size> <name>", the committed function list setup.sh splits from).
+("F <addr> <size> <name>", the committed function list setup.sh splits from). A name the report gives to
+more than one function (Ghidra allows it) is written once: the next ones get their address as a suffix, in functions.txt and in the pieces alike.
 """
 import os as _tp_os, sys as _tp_sys  # noqa: E401  every tools folder on the import path (tools/toolpath.py)
 _tp_sys.path.insert(0, _tp_os.path.normpath(_tp_os.path.join(_tp_os.path.dirname(_tp_os.path.abspath(__file__)), '..')))
@@ -37,6 +38,7 @@ def main():
                 names[a] = p[3]
     starts = sorted(set(names) | {base})
     used = set()
+    final = {}          # address: the name its piece carries; functions.txt gets the same, so that no name is used twice
     out = os.path.join(sys.argv[4], "asm")
     os.makedirs(out, exist_ok=True)
     order = []
@@ -46,6 +48,7 @@ def main():
         if name in used:
             name = "%s_%08x" % (name, a)
         used.add(name)
+        final[a] = name
         label = "_" + name
         fname = "%08x_%s.src" % (a, name)
         chunk = data[a - base:b - base]
@@ -71,7 +74,8 @@ def main():
             for line in open(sys.argv[3]):
                 p = line.split()
                 if len(p) >= 4 and p[0] in ("F", "D") and base <= int(p[1], 16) < end:
-                    f.write("%s %s %s %s\n" % (p[0], p[1], p[2], p[3]))
+                    a = int(p[1], 16)
+                    f.write("%s %s %s %s\n" % (p[0], p[1], p[2], final[a] if names.get(a) == p[3] else p[3]))     # two entries at one address: left as listed
     print("%d files, %d named, %d bytes" % (len(order), sum(1 for a, n in names.items() if not n.startswith(("FUN_", "data_"))), len(data)))
 
 

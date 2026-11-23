@@ -464,7 +464,7 @@ code had, so the build of step 8 leaves every other address of the executable wh
   registers and frame words their calls passed dropped; frame slots stored back unchanged dropped; far field accesses as one-field
   structure members, frame slots held in locals, nearby globals reached off one base, a state chain of ifs on one variable as a
   switch, a result threaded up through nesting levels by `tA = (tB);` copies merged into one temporary, a pure builtin called repeatedly with the same variable computed once (`hoist`), the stack array based at its
-  first used word (`rebase`), a stack array nothing reads dropped with its stores (`deadframe`); `gen_equiv/rewrites.py`), and keeps each
+  first used word (`rebase`), a stack array nothing reads dropped with its stores (`deadframe`); the sign sequence of a signed remainder by a power of two as `% 0x40` (`smod`); `gen_equiv/rewrites.py`), and keeps each
   function that compiles smaller and is still proven. No regeneration, so it is fast: run it before the regenerating shrink.
   Zombie Revenge, 80 random units: 28-38% less excess, 50% with `narrow`; on the medium units 25-41%; `rebase` ~4 bytes and `hoist` ~14 and `deadframe` ~17 per function they change.
   `tools/7-reduction/residue.py` lists the C shapes the bloated functions share and the fine ones lack: where the next pass comes from. The generator now ends every function with the same
@@ -477,6 +477,7 @@ code had, so the build of step 8 leaves every other address of the executable wh
   (`tests/`), not patched into the tools.
 - **Manual only**: C written by hand carries `/* manual: <reason> */` right above its definition; shrink.py, hoist.py and the
   generator's recheck and rebuild leave it alone (`tools/common/consistency.py manual_names`).
+- **Coverage bar for any rewrite**: a rewrite of a proven function (a shrink pass, a regeneration or C written by hand) is accepted only when `equiv.py` proves it on cases that cover at least 70-80% of the function's instructions (the `N of M instructions` of its line; aim far higher), and the instructions left uncovered are not a whole branch; below that the old C stays. `equiv.py` calls a function Equivalent whatever its coverage, and `shrink.py` does not enforce the bar. Power Stone 2: a hand version passed at 12% with two bugs in it (an inverted compare, a pool float read as -6.0 for -24.0) and was caught only at 98%; a function's old C had passed with 0 of 574 instructions run. Raise coverage with `tools/6-agentic/fuzzcases.py`, `casesearch.py` or hand-written case JSON.
 
 ### Step 8: Build from C
 

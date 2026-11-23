@@ -100,6 +100,55 @@ def global_base(text, span=60):
         if a not in base or (a-base[a]) % _TSIZE.get(m.group(1), 1): return m.group(0)      # a member at an offset its type does not align
         return '(((struct o%X_%s *)0x%X)->v)'%(a-base[a],m.group(1).replace('unsigned ','u'),base[a])
     return pat.sub(sub,text) if base else text
+
+_SMOD = re.compile(
+    r'^(?P<ind>[ \t]*)if \(\(int\)(?P<v>\w+) >= 0\) \{\n'
+    r'[ \t]*(?P=v) = \((?P=v) & (?P<m>0x[0-9A-Fa-f]+)\);\n'
+    r'[ \t]*\} else \{\n'
+    r'[ \t]*(?P=v) = \(~(?P=v)\);\n'
+    r'[ \t]*(?P=v) = \((?P=v) \+ 0x1\);\n'
+    r'[ \t]*(?P=v) = \((?P=v) & (?P=m)\);\n'
+    r'[ \t]*(?P=v) = \(~(?P=v)\);\n'
+    r'[ \t]*(?P=v) = \((?P=v) \+ 0x1\);\n'
+    r'[ \t]*\}\n', re.M)
+
+
+_SMOD2 = re.compile(
+    r'^(?P<ind>[ \t]*)(?P<d>\w+) = \(\(~\(\(\(~(?P<s>\w+)\) \+ 0x1\) & (?P<m>0x[0-9A-Fa-f]+)\)\) \+ 0x1\);\n'
+    r'[ \t]*if \(\(int\)(?P=s) >= 0\) \{\n'
+    r'[ \t]*(?P=d) = \((?P=s) & (?P=m)\);\n'
+    r'[ \t]*\}\n', re.M)
+
+
+def fold_signed_mask(text):
+    """The sign sequences the generator writes for a remainder by a power of two on a signed value, as one `% 0x40` line. Two shapes:
+    `if ((int)t5 >= 0) { t5 = (t5 & 0x3F); } else { t5 = (~t5); t5 = (t5 + 0x1); t5 = (t5 & 0x3F); t5 = (~t5); t5 = (t5 + 0x1); }`
+    becomes `t5 = (t5 % 0x40);`, and `t9 = ((~(((~t5) + 0x1) & 0xF)) + 0x1); if ((int)t5 >= 0) { t9 = (t5 & 0xF); }` becomes
+    `t9 = (t5 % 0x10);` (t9 another variable than t5). Both compute the same value as C's remainder on a signed int, but that is
+    not what lets the rewrite stay: shrink.py keeps it only when the unit compiles smaller and equiv.py proves the function
+    on the simulator, so the Dreamcast's own behaviour decides. Power Stone 2: the first shape 16 times in FUN_0c0d0ec2, the
+    second 28 times in FUN_0c0b2d30. Only a mask of the form 2^k - 1 on a variable the function declares `int`."""
+    def int_var(m, v):
+        head = text[:m.start()]
+        f = head.rfind('\n{\n')
+        return re.search(r'(?m)^[ \t]*(?:register )?int %s;' % re.escape(v), head[f + 1:] if f >= 0 else head)
+
+    def one(m):
+        mask = int(m.group('m'), 16)
+        if mask < 1 or mask & (mask + 1) or not int_var(m, m.group('v')):
+            return m.group(0)
+        return '%s%s = (%s %% 0x%X);\n' % (m.group('ind'), m.group('v'), m.group('v'), mask + 1)
+
+    def two(m):
+        mask = int(m.group('m'), 16)
+        if mask < 1 or mask & (mask + 1) or m.group('d') == m.group('s') or not int_var(m, m.group('s')):
+            return m.group(0)
+        return '%s%s = (%s %% 0x%X);\n' % (m.group('ind'), m.group('d'), m.group('s'), mask + 1)
+    out = _SMOD.sub(one, text)
+    text = out
+    return _SMOD2.sub(two, out)
+
+
 def struct_decls(text):
     """The declarations of the structures struct_access and global_base name in text, each once, ordered by name."""
     ty={'int':'int','uint':'unsigned int','short':'short','ushort':'unsigned short','char':'char','uchar':'unsigned char','float':'float'}
@@ -215,6 +264,38 @@ def narrow_calls(text, defs):
     return text, names
 
 
+_CAST = re.compile(r'\(\((?P<ret>[A-Za-z_][\w ]*?) \(\*\)\((?P<types>[^()]*)\)\)\((?P<name>\w+)\)\)\(')
+
+
+def narrow_cast_calls(text, defs):
+    """`((int (*)(int, int, int, int, int))(F))(a, b, c, d, e)` with F defined (defs, from definitions) on three parameters as
+    `((int (*)(int, int, int))(F))(a, b, c)`. The generator calls a function it has no prototype for through a cast sized from what
+    the caller left in registers and on the stack (Power Stone 2 FUN_0c02e43c: a 3-parameter function called six times through a
+    12-int cast), so every call loaded and pushed words the callee never reads, and the checker compared them because the cast said
+    so. Only when the cast's leading types are the definition's and no dropped argument holds a call. The newlines of dropped
+    arguments stay after the call, so a writer's line spans hold."""
+    for m in reversed(list(_CAST.finditer(text))):
+        n = m.group('name')
+        if n not in defs:
+            continue
+        k = len(defs[n])
+        types = _params(m.group('types'))
+        if len(types) <= k or types[:k] != defs[n]:
+            continue
+        o, d = m.end() - 1, 0
+        for j in range(o, len(text)):
+            d += (text[j] == '(') - (text[j] == ')')
+            if d == 0:
+                break
+        args = _args(text[o + 1:j])
+        if len(args) <= k or any(_has_call(x) for x in args[k:]):
+            continue
+        keep = ', '.join(m.group('types').split(', ')[:k]) or 'void'
+        new = '((%s (*)(%s))(%s))(%s)' % (m.group('ret'), keep, n, ','.join(args[:k]).strip()) + '\n' * ''.join(args[k:]).count('\n')
+        text = text[:m.start()] + new + text[j + 1:]
+    return text
+
+
 _DEFS = []
 
 
@@ -230,7 +311,7 @@ def narrow_unit(text):
     if not _DEFS:
         _DEFS.append(definitions(open(p, errors='replace').read() for p in layout.c_files()
                                  if not os.path.basename(p).startswith(('gen_tmp', 'zz_'))))
-    return narrow_calls(text, _DEFS[0])[0]
+    return narrow_cast_calls(narrow_calls(text, _DEFS[0])[0], _DEFS[0])
 
 
 _COPY = re.compile(r'^(\s*)(t\d+) = \(?(t\d+)\)?;$')
@@ -478,3 +559,130 @@ def by_function_size(unit_funcs, size, least):
     largest such function first; ties by name. A unit with none is left out."""
     best = {u: max((size.get(n, 0) for n in names), default=0) for u, names in unit_funcs.items()}
     return sorted((u for u in best if best[u] >= least), key=lambda u: (-best[u], u))
+
+
+_VDEF = re.compile(r'^(?P<type>int|unsigned int|float|short|char|unsigned char|double)\s+(?P<name>\w+)\s*\((?P<params>[^;{]*)\)\s*\n\{', re.M)
+_CALLNAME = re.compile(r'\b([A-Za-z_]\w*)\s*\(')
+_DECLPREFIX = re.compile(r'^\s*(?:extern\s+)?(?:unsigned\s+)?(?:int|float|void|short|char|double)\s+\**\s*$')
+
+
+def unused_value_names(texts, reg_of):
+    """{names} of the functions the given unit texts ({file: text}) define, that the original returns no register for (reg_of(name) is
+    None: retcheck found no write to r0 or fr0 before its rts, or the paths disagree) and whose value no call reads: a call that is
+    a statement of its own, a declaration or the definition line is not a use; an assignment, a condition, an argument or a return
+    of it is. These can be written `void` (void_returns): the C proves either way, since equiv.py compares r0 only for a C that
+    returns a value, so what decides is whether a caller reads it."""
+    defined = set()
+    used = set()
+    for t in texts.values():
+        defined.update(m.group('name') for m in _VDEF.finditer(t))
+        for m in _CALLNAME.finditer(t):          # one pass over the text: every name followed by `(` whose line has something before it
+            prefix = t[t.rfind('\n', 0, m.start()) + 1:m.start()]
+            if prefix.strip() and not _DECLPREFIX.match(prefix):
+                used.add(m.group(1))
+    return {n for n in defined if n not in used and reg_of(n) is None}
+
+
+def _groups(expr):
+    """The top-level pieces of an expression: [(kind, text)], kind 'g' for a parenthesised group and 't' for anything else."""
+    out, d, cur, kind = [], 0, '', 't'
+    for ch in expr:
+        if ch == '(':
+            if d == 0 and cur:
+                out.append((kind, cur))
+                cur = ''
+            d += 1
+            kind = 'g'
+        cur += ch
+        if ch == ')':
+            d -= 1
+            if d == 0:
+                out.append(('g', cur))
+                cur, kind = '', 't'
+    if cur:
+        out.append((kind, cur))
+    return out
+
+
+def _pure_call(expr):
+    """True when the whole expression is one call: `name(args)` or `((type)(name))(args)`."""
+    g = _groups(expr.strip())
+    if len(g) == 2 and g[1][0] == 'g' and ((g[0][0] == 't' and re.match(r'^\w+$', g[0][1])) or g[0][0] == 'g'):
+        return True
+    return False
+
+
+def void_returns(text, names):
+    """The functions in names written `void`: the type of the definition and of its prototypes in this text, `return value;` as
+    `return;`, `return call(args);` as the call and `return;`. A function with a `return` that is not alone on its line, a value that
+    holds a call inside an expression, or a pointer or void type is left whole (a half-converted function does not compile)."""
+    out = []
+    for m in _VDEF.finditer(text):
+        n = m.group('name')
+        if n not in names:
+            continue
+        end = text.find('\n}\n', m.end())
+        if end < 0:
+            continue
+        body = text[m.end():end]
+        new = []
+        ok = True
+        for line in body.split('\n'):
+            if not re.search(r'\breturn\b', line):
+                new.append(line)
+                continue
+            mm = re.match(r'^(\s*)return\s*(.*?);\s*$', line)
+            if not mm:
+                ok = False
+                break
+            ind, expr = mm.groups()
+            if not expr:
+                new.append(line)
+            elif re.search(r'[\w\)]\s*\(', expr):
+                if not _pure_call(expr):
+                    ok = False
+                    break
+                new += [ind + expr + ';', ind + 'return;']
+            else:
+                new.append(ind + 'return;')
+        if not ok:
+            continue
+        head = 'void %s(%s)\n{' % (n, m.group('params'))
+        out.append((m.start(), end, head + '\n'.join(new)))
+    if not out:
+        return text
+    res, pos = [], 0
+    for a, b, rep in out:
+        res.append(text[pos:a])
+        res.append(rep)
+        pos = b
+    res.append(text[pos:])
+    got = ''.join(res)
+    for n in [m.group('name') for m in _VDEF.finditer(text) if m.group('name') in names]:
+        got = re.sub(r'(?m)^((?:extern\s+)?)(?:int|unsigned int|float|short|char|unsigned char|double)(\s+%s\s*\([^;{]*\);)$' % re.escape(n), r'\1void\2', got)
+    return got
+
+
+# The generator's last passes on a function's C, in order: (shrink.py pass name, the GEN_<NAME> switch that turns it off with 0, the
+# rewrite). gen_drv.build applies them to every function it writes, so new C is born small; shrink.py --passes runs the same rewrites
+# on C written before. rebase is last: the other passes read the stack array's old offsets.
+LAST_PASSES = [
+    ('selfcopy', 'GEN_SELFCOPY', drop_self_copies),         # frame slots stored back unchanged
+    ('smod', 'GEN_SMOD', fold_signed_mask),                 # the sign sequence of a signed remainder by 2^k as one `%` line
+    ('struct', 'GEN_STRUCT', struct_access),                # far field accesses as members (head_protos declares the structures)
+    ('globase', 'GEN_GLOBASE', global_base),                # nearby fixed addresses off one base
+    ('switch', 'GEN_SWITCH', chains_to_switch),             # a state chain of ifs as a switch
+    ('copies', 'GEN_COPIES', merge_copies),                 # a result threaded through nesting levels by copies
+    ('deadframe', 'GEN_DEADFRAME', drop_dead_frame),        # a stack array nothing reads goes (after the self-copies are gone)
+    ('hoist', 'GEN_HOIST', hoist_builtins),                 # a pure builtin called more than once with the same variable: once
+    ('rebase', 'GEN_REBASE', frame_rebase),                 # the stack array based at its first used word
+]
+
+
+def last_passes(text):
+    """text through every LAST_PASSES rewrite whose GEN_<NAME> switch is not 0."""
+    import os
+    for _name, env, fn in LAST_PASSES:
+        if os.environ.get(env, '1') != '0':
+            text = fn(text)
+    return text

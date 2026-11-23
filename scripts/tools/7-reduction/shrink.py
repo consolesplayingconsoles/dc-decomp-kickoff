@@ -3,7 +3,7 @@
 Run in the repo.
 
     python3 tools/7-reduction/shrink.py [--keep 1.0] [--regen] <name> ...
-    python3 tools/7-reduction/shrink.py --passes [narrow,selfcopy,struct,frame,globase,switch,copies,rebase,hoist,deadframe] [--min-size N] [src/<unit>.c ...]
+    python3 tools/7-reduction/shrink.py --passes [narrow,selfcopy,struct,frame,globase,switch,copies,rebase,hoist,deadframe,smod,voidret] [--min-size N] [src/<unit>.c ...]
 
 --regen keeps the new C whatever its size, as long as it is proven: for when the generator itself was fixed.
 
@@ -19,6 +19,12 @@ rewrites that change no address and no type, in this order, each on what the one
   globase   rewrites.global_base: nearby fixed addresses as members off the lowest, loaded once (36 bytes to 20)
   switch    rewrites.chains_to_switch: a chain of ifs on one state variable as a switch (5 instructions a level to 2)
   copies    rewrites.merge_copies: a result threaded up through nesting levels by `tA = (tB);` copies, one temporary instead
+  smod      rewrites.fold_signed_mask: the generated sign sequences for a remainder by a power of two on a signed value (an if/else of
+            eight lines, or a two-line `t9 = ((~(((~t5) + 0x1) & 0xF)) + 0x1); if ((int)t5 >= 0) ...`) as `t5 = (t5 % 0x40);`. Kept only
+            when smaller and proven on the simulator (Power Stone 2: gen_dw.c 21,110 to 18,146 bytes by the size check)
+  voidret   rewrites.void_returns: a function the original returns no register for (retcheck) and no unit reads the value of, as `void`:
+            its `return value;` as `return;` and `return call(args);` as the call, then `return;` (Power Stone 2: the threaded return
+            temporaries of half the manual rewrites); equiv.py compares r0 only for a C that returns a value, the callers' use decides
 --min-size N (with --passes): only functions of at least N bytes (build/sizes.json) are rewritten, the units that hold the largest of them
 first and those with none left out, so a run can be stopped where the gains run out (Crazy Taxi: under 256 bytes, 20% of the savings).
 For each unit the changed functions are written in place (rewrites.splice), the unit compiled before and after
@@ -56,7 +62,7 @@ if '--keep' in args:
 PASSES = None                       # --passes: the rewrite strategies instead of a regeneration
 if '--passes' in args:
     k = args.index('--passes')
-    PASSES = ['narrow', 'selfcopy', 'struct', 'frame', 'globase', 'switch', 'copies', 'rebase', 'hoist', 'deadframe']
+    PASSES = ['narrow', 'selfcopy', 'struct', 'frame', 'globase', 'switch', 'copies', 'rebase', 'hoist', 'deadframe', 'smod', 'voidret']
     if k + 1 < len(args) and not args[k + 1].startswith(('src/', 'sdk/', '-')):
         PASSES = args[k + 1].split(',')
         del args[k + 1]
@@ -188,8 +194,9 @@ def narrow_pass(f, log):
                                           if not os.path.basename(p).startswith(('gen_tmp', 'zz_'))))
     text = open(f, errors='replace').read()
     new, names = rewrites.narrow_calls(text, _DEFS[0])
+    new = rewrites.narrow_cast_calls(new, _DEFS[0])          # calls through a cast of a K&R extern, sized the same way
     log.write('%s narrow: %d callees\n' % (f, len(set(names)))); log.flush()
-    if not names:
+    if not names and new == text:
         return
     before, after = sizes.unit_sizes(f, text), sizes.unit_sizes(f, new)
     if isinstance(before, str) or isinstance(after, str):
@@ -222,6 +229,22 @@ def narrow_pass(f, log):
 _FSIZE = {}                          # --min-size: {function: compiled bytes} from build/sizes.json
 
 
+_VOID = []
+
+
+def void_names():
+    """The functions the original returns no register for (retcheck) and whose value no unit reads: voidret writes them `void`."""
+    if not _VOID:
+        import retcheck
+        import rewrites
+        F = retcheck.functions()
+        cache = retcheck.load_cache()
+        texts = {f: open(f, errors='replace').read() for f in layout.c_files()}
+        _VOID.append(rewrites.unused_value_names(texts, lambda n: retcheck.returns_cached(cache, n, *F[n]) if n in F else 'unknown'))
+        retcheck.save_cache(cache)
+    return _VOID[0]
+
+
 def rewrite_pass(f, pas, log, manual):
     """One --passes strategy on one unit: the changed functions that compile smaller and are proven stay, the rest go back."""
     if pas == 'narrow':
@@ -229,7 +252,7 @@ def rewrite_pass(f, pas, log, manual):
     import frame
     import rewrites
     fn_ = {'selfcopy': rewrites.drop_self_copies, 'struct': rewrites.struct_access, 'globase': rewrites.global_base,
-           'switch': rewrites.chains_to_switch, 'copies': rewrites.merge_copies, 'rebase': rewrites.frame_rebase, 'hoist': rewrites.hoist_builtins, 'deadframe': rewrites.drop_dead_frame,
+           'switch': rewrites.chains_to_switch, 'copies': rewrites.merge_copies, 'rebase': rewrites.frame_rebase, 'hoist': rewrites.hoist_builtins, 'deadframe': rewrites.drop_dead_frame, 'smod': rewrites.fold_signed_mask, 'voidret': lambda c: rewrites.void_returns(c, void_names()),
            'frame': lambda c: frame.scalarize(c.rstrip('\n')) + '\n'}[pas]
     text = open(f, errors='replace').read()
     funcs = {}
