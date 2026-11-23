@@ -54,11 +54,14 @@ def entries():
 _held = {}
 
 
-def reach(start, stop_at=None, tails=(), funcs=None):
+def reach(start, stop_at=None, tails=(), funcs=None, bra_tails=()):
     """(end, flags): the end of the code reachable from start by its own branches (calls are not followed), the set of reached
     addresses, and what was seen: 'table' (a jump through a register), 'off' (ran past stop_at or the executable).
     tails: entry addresses a `bra` to is a tail jump into that function, not more of this one (Zombie Revenge 0C04179C ends with
-    `bra FUN_0c041f2a`, a function after it: followed, it ran into that entry and seven functions the C calls stayed unlisted)."""
+    `bra FUN_0c041f2a`, a function after it: followed, it ran into that entry and seven functions the C calls stayed unlisted).
+    bra_tails: the same for an unconditional `bra` only (a conditional branch to it stays a branch of this function): the entries and the
+    candidates of the run, when the function walked is a holder (a candidate reached by the holder's `bra` is a tail jump to another
+    routine, not a label of the holder)."""
     seen, todo, flags, end = set(), [start], set(), start
     top = BASE + len(BIN)
     while todo:
@@ -109,7 +112,7 @@ def reach(start, stop_at=None, tails=(), funcs=None):
             if m == 'bra':
                 seen.add(a + 2)
                 end = max(end, a + 4)
-                if target is not None and target >= start and target not in tails:      # a bra before the start, or to another
+                if target is not None and target >= start and target not in tails and target not in bra_tails:      # a bra before the start, or to another
                     todo.append(target)                                                  # entry, is a tail jump into that function
                 break
             if m in ('rts', 'rte'):
@@ -183,7 +186,7 @@ def main(argv):
         why = []
         if holder:
             if holder[0] not in _held:            # one walk a holding function: a whole-game list asks about the same one many times
-                _held[holder[0]] = reach(holder[0], stop_at=None)
+                _held[holder[0]] = reach(holder[0], stop_at=None, bra_tails=(known | set(c for c, _ in cands)) - {holder[0]})
             hend, hseen, hflags = _held[holder[0]]
             if a in hseen:
                 rows.append((a, 'label inside %s' % holder[2], '', 'reached by its own branches'))
@@ -211,7 +214,7 @@ def main(argv):
         plan.append((a, size, name or 'FUN_%08x' % a))
         rows.append((a, 'function', holder[2] if holder else '(gap)', 'size %d %s' % (size, note)))
         if holder and a < holder[0] + holder[1]:      # only a start inside its listed size cuts it: one in the gap after it leaves the
-            hend, hseen, hflags = reach(holder[0])    # size alone (Virtua Tennis cpuSglAimTable, 18,398 bytes of jump-table code,
+            hend, hseen, hflags = reach(holder[0], bra_tails=(known | set(c for c, _ in cands)) - {holder[0]})    # size alone (Virtua Tennis cpuSglAimTable, 18,398 bytes of jump-table code,
             cuts[holder[0]] = hend - holder[0]        # would have been cut to the 8,762 its own branches reach)
     kept, inner = [], set()            # a new start inside another new function's reach is a label of it, not a function (Virtua Tennis:
     for a, s, n in sorted(plan):       # state handlers behind one jump table that branch into each other)

@@ -482,10 +482,12 @@ def same_trap(case, orig, mine):
 def cut_endless(orig, mine):
     """The two runs of an endless case, both cut at the step limit, reduced to what both got through: the same number of calls and of
     device accesses, the first ones in order (writes are left out). Compiled code takes more instructions per pass of a loop, so in the
-    same steps it makes fewer calls and device accesses (Virtua Tennis vmsfs_c_dispatch: "access 1053/1333: original [...] / C none")."""
+    same steps it makes fewer calls and device accesses (Virtua Tennis vmsfs_c_dispatch: "access 1053/1333: original [...] / C none").
+    The result registers are not compared: the function never returned, so r0 and fr0 are what the last instruction before the cut left
+    there, and the two sides are cut in different places of the loop (out_set, as for a result the original never assigned)."""
     k = min(len(orig['calls']), len(mine['calls']))
     kd = min(len(orig.get('devices', [])), len(mine.get('devices', [])))
-    return (dict(orig, calls=orig['calls'][:k], devices=orig.get('devices', [])[:kd], writes={}, error=None),
+    return (dict(orig, calls=orig['calls'][:k], devices=orig.get('devices', [])[:kd], writes={}, error=None, out_set={'r0': False, 'fr0': False}),
             dict(mine, calls=mine['calls'][:k], devices=mine.get('devices', [])[:kd], writes={}, error=None))
 
 
@@ -903,13 +905,21 @@ def main(argv):
     results, evidence = {}, {}
     cache = load_cache()
     compared_all = (sorted(arity.items()), sorted(STACKN.items()), sorted(back.items()))
+
+    def report(fn):
+        """a function's line, printed as soon as its result is final (a long check shows its progress)"""
+        ok, why = results[fn]
+        if not quiet or ok is not True:
+            print('%-28s %-11s %s' % (fn, {True: 'EQUIVALENT', False: 'DIFFERS', None: '-'}[ok], why), flush=True)
     for fn in want:
         case_path = os.path.join('tests', stem, fn + '.json')
         if fn not in funcs or '_' + fn not in syms:
             results[fn] = (None, 'not in functions.txt or not compiled')
+            report(fn)
             continue
         if not os.path.exists(case_path):
             results[fn] = (None, 'no cases (%s)' % case_path)
+            report(fn)
             continue
         start, size = funcs[fn]
         c_at = syms['_' + fn]
@@ -933,6 +943,7 @@ def main(argv):
             results[fn] = (True, hit['why'])
             evidence[fn] = (start, size, cfile, counts,
                             [c.get('about', '') for k in ('dev', 'holdout') for c in sets.get(k, [])] + ['the cases run %s' % hit['covtext']])
+            report(fn)
             continue
         queue = [c for k in ('dev', 'holdout') for c in sets.get(k, [])]
         for case in queue:
@@ -988,13 +999,11 @@ def main(argv):
             evidence[fn] = (start, size, cfile, counts,
                             [c.get('about', '') for k in ('dev', 'holdout') for c in sets.get(k, [])] + ['the cases run %s' % covtext])
             cache[key] = {'fn': fn, 'why': results[fn][1], 'covtext': covtext}
+        report(fn)
     if any(ok for ok, _ in results.values()) and not (stem.startswith('zz_') or fuzz):
         fresh_cache = load_cache()          # another run may have added keys meanwhile
         fresh_cache.update(cache)
         save_cache(fresh_cache)
-    for fn, (ok, why) in results.items():
-        if not quiet or ok is not True:
-            print('%-28s %-11s %s' % (fn, {True: 'EQUIVALENT', False: 'DIFFERS', None: '-'}[ok], why))
     if quiet:
         print('%d EQUIVALENT, %d DIFFERS, %d without cases or not compiled' % (
             sum(1 for ok, _ in results.values() if ok is True), sum(1 for ok, _ in results.values() if ok is False),

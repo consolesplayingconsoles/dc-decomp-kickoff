@@ -22,7 +22,10 @@ public class ExportFeatures extends GhidraScript {
     // undefined bytes: read a printable C string ourselves (never from code)
     try {
       Memory m = currentProgram.getMemory();
-      if (m.getBlock(a) == null || m.getBlock(a).isExecute()) return null;
+      if (m.getBlock(a) == null) return null;
+      // never from code: an executable block counts only where an instruction or a function body is (a Katana
+      // executable is one executable block, data and strings included)
+      if (m.getBlock(a).isExecute() && (getInstructionAt(a) != null || getFunctionContaining(a) != null)) return null;
       StringBuilder sb = new StringBuilder();
       for (int i = 0; i < 200; i++) {
         byte b = m.getByte(a.add(i));

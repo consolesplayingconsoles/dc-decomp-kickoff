@@ -1368,3 +1368,16 @@ BupFailDialog compare only up to the step limit; _div64 and emotFaceMorph rest o
 - Method notes: the console is not a test bench -- a hang costs a replug and a reboot, so a change to the loader or the
   harness is checked on the PC first (the manual, a disassembly of what was built, the paths the change newly reaches) and a
   function that hung stays out of the next run until its cause is known.
+
+### The `recordparts` rule: a skeleton stored in the model file (Power Stone 2, 2026-11-22)
+A fighter's file is a container (a table of (offset, size) pairs, then segments); its model segments carry a 60-byte record table, one record per
+bone (a part's offset, the parent index, the bone's three floats), found from two header words. The same skeleton, bone for bone, is kept in the
+executable in the predecessor game (where `fileparts` reads it), so the tables are stored where each game's loader finds them. `recordparts`
+reads them from the model file. Tested on synthetic containers (`tests/test_recordparts.py`).
+
+### Zombie Revenge: where the skeletons stand, and a lead (2026-11-22)
+Stopped after a first pass, not solved. What is known, so the next pass starts from it:
+- Motions are the one entry of `MOT.AFS` (5,142,579 bytes at `0x80000`), the game's archive table calling it 319 entries (`0x013F0001`). The data is not compressed (zlib 60%) and reads as small signed 16-bit values (`0xC000` = -90 degrees): keyframed joint angles, no header or tag.
+- No index was found for the 319 motions: not in the rest of the AFS (empty outside the one entry), and not in the executable (no ascending 319-entry offset table ending near the file size, no window of 319 sizes adding up to it).
+- The lead: the executable's motion debug screen (`MOTION MAIN`, `MOTION SUB`, `KANSETSU`, `ANGLE X/Y/Z`, code around `0x0C0C1714` to `0x0C0C1C4C`, strings around `0x0C1E3B80`) reads a character record: the selected joint at +0x90, a joint array at +0x84. Its loader of the motion data and the character's bone tree are in the code that fills those fields. Reading that player is the way to the skeleton; a data-only search (tables, sizes, entropy) has been tried and gave nothing.
+- The characters' parts are separate models in `POL.AFS` (entry 81 holds the playable characters); no bone tree is known for them.

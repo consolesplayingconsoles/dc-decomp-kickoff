@@ -73,6 +73,8 @@ class TestDeferred(unittest.TestCase):
         self.addCleanup(self._restore_modules, snapshot)
         drv = types.ModuleType('gen_drv')
         drv.head_protos = lambda use: '\n'.join(sorted({v for it in use for v in it[3].values()}))
+        drv.ASMW = dict.fromkeys(('iaFscaS', 'iaFscaC', 'iaFsrra', 'iaOcbi', 'iaOcbp', 'iaOcbwb', 'iaMovca'))      # gen_drv's helper names
+        drv.INTRIN = dict.fromkeys(('iaFscaS', 'iaFscaC', 'iaFsrra'))
         core = types.ModuleType('gen_core')
         core.Skip = type('Skip', (Exception,), {})
         sys.modules['gen_drv'] = drv
@@ -110,7 +112,7 @@ class TestDeferred(unittest.TestCase):
         try:
             os.chdir(tmp)
             os.makedirs('src'); os.makedirs('tests')
-            patcher = mock.patch.object(gen_pipe.subprocess, 'run', fake_run)
+            patcher = mock.patch.object(gen_pipe, '_equiv', lambda args: (lambda r: r.stdout + r.stderr)(fake_run(['python3', 'tools/sim/equiv.py'] + args)))
             patcher.start()
             self.addCleanup(patcher.stop)
             items = [item('a', {'x': 'int x(int);'}), item('b', {'x': 'int x(void);'}), item('c', {'y': 'int y(void);'}),
@@ -156,6 +158,10 @@ class TestDeferred(unittest.TestCase):
             gs = gen_pipe.compatible_groups(items)
             if sorted(sorted(i[0] for i in g) for g in gs) != [['a', 'c'], ['b'], ['d']]:
                 bad.append('groups: %s; want a+c, b, d' % [[i[0] for i in g] for g in gs])
+            ka = [item('ocb', {'iaOcbwb': ('void *',)}), item('sin', {'iaFscaS': ('int',)}), item('p1', {}), item('p2', {})]
+            kg = sorted(sorted(i[0] for i in g) for g in gen_pipe.compatible_groups(ka))
+            if kg != [['ocb', 'p1', 'p2'], ['sin']]:
+                bad.append('asmkind: %s; want an inline-assembly helper and an fsca intrinsic in separate files (ocb p1 p2, sin)' % kg)
             main_src = open(os.path.join(TOOLS, '5-generated', 'gen_equiv', '__main__.py')).read()
             if 'gen_pipe.compatible_groups(keep)' not in main_src:
                 bad.append('groups: write_batch does not split the passed functions with gen_pipe.compatible_groups')

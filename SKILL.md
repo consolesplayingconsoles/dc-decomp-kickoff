@@ -133,6 +133,10 @@ minutes: these actions are long), and give a line of state when the user asks: a
 comes back. If a command comes back interrupted or rejected, say so plainly, and look at the log before saying why and
 before running anything again.
 
+**Every action has a log, and every message about it gives that log.** Each action (a script, a build, a generator band, a queue of
+them) writes to a log file of its own. The message that starts it, and every later message about it (its state, its progress, its
+result), names the log's full path and a `tail -f` command for it, so the user can follow it without asking.
+
 Every question with a closed set of answers is a real multiple-choice question (the client's question tool,
 `AskUserQuestion` in Claude Code), the recommended answer first: new or upgrade, which release
 when several fit, each optional extra (provide it, or skip), continue or stop at a decision point. Ask for a folder by its path. A client with no question tool gets the options as a numbered
@@ -424,6 +428,7 @@ The maps open in [Shuriken Explorer](https://github.com/consolesplayingconsoles/
   Report it apart from hand-written C. A function that passes is done; there is no coverage pass mark, and the total test coverage is the quality figure.
 - **Polish.** `python3 tools/5-generated/gen_equiv --direct` / `--retest` widen the cases, guided by how much of the original they run, and list functions whose C fails on them.
 - **Do not lose work.** `state/kept` and `gen_equiv --recheck` keep and re-check what failed; `tools/common/consistency.py --fix` after overlapping runs; run in byte batches (`GEN_BATCH`); `tools/5-generated/remaining.py --table` shows where every function stands.
+- **The SDK's C in its own folder.** The generator writes into `src/`, which is the game's own code. A function inside a library block of `sdk.txt` is the SDK's: its C belongs in `sdk/<library>/` (`sdk/shinobi/`, `sdk/kamui/`, `sdk/naomi/`, `sdk/sofdec/`, `sdk/runtime/`, `sdk/boot/`). `python3 tools/5-generated/sdk_place.py` prints the plan, `--fix` moves each file (or splits a file that mixes libraries, its cases following each function). Run it after each generator run, before the step's report.
 - End the step with `python3 tools/progress.py` and the instruction coverage `equiv.py` reports.
 
 ### Step 6: Experience-driven agentic decomp
@@ -608,6 +613,7 @@ Grouped by the step that first needs them (scripts, then templates, then docs wi
 | `scripts/tools/5-generated/gen_equiv/`                 | in the repo as `tools/5-generated/gen_equiv`: writes Equivalent C for functions that need no thinking (script-generated: report it apart from hand C); `--regen <name> ...` writes generated functions again after a generator fix, keeping the old C unless the new is proven; `--retest` draws the cases again, guided by the original's instruction coverage, and lists functions whose C fails on them; `--draw src/<file>.c` draws coverage-guided cases for C you wrote by hand (arguments from the prototype, memory behind pointers, answers for calls) |
 | `scripts/tools/5-generated/sdk_source.py`              | in the repo: compiles the library sources the user supplied with the SDK's shc; the functions whose bytes they reproduce go to `sdk-source/` (exact C, git-ignored) and `sdk-verified.txt` (names, counted by `progress.py`)                                                                     |
 | `scripts/tools/5-generated/sdk_dups.py`                | in the repo: one C per function: lists the C in `src/` for functions the SDK's own source already reproduces; `--fix` removes the second C, its cases and its record                                                                                                                              |
+| `scripts/tools/5-generated/sdk_place.py`               | in the repo: the SDK's C out of the game's `src/` into its library's folder, `sdk/<library>/`; prints the plan, `--fix` moves or splits the files, their cases following each function |
 | `scripts/tools/5-generated/audit_equivalent.py`        | in the repo: every function in `tests/equivalent.txt` has C behind it (or is SDK-verified); `--fix` removes the rest (the pre-commit hook runs it)                                                                                                                                               |
 | `scripts/tools/4-boosts/port_equiv.py`              | in the repo: carries Equivalent C for shared library code from a sibling decomp into this one (masked-code match, pool-word mapping, ported cases), every function re-checked by this repo's `equiv.py`                                                                                          |
 | `scripts/tools/5-generated/remaining.py`               | in the repo: every function not done yet, by its current state and the cause it shares with others (`--table`) |
