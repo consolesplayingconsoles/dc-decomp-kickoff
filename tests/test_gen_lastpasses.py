@@ -74,6 +74,7 @@ class TestLastPasses(unittest.TestCase):
 
     def test_smod_off(self):
         os.environ['GEN_SMOD'] = '0'
+        os.environ['GEN_EARLYRET'] = '0'    # the sequence left as it is ends in the returned temporary: earlyret would write returns there
         self.assertEqual(self.rw.last_passes(SMOD), SMOD)
 
     def test_selfcopy(self):

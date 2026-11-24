@@ -313,6 +313,12 @@ The ten steps, in order. Each one is announced and closed as the section above s
    points at an entry). Expect hundreds, about half backed by a pointer. They matter for C units, whose ends must be function boundaries. Report the count
    and leave the list for review: adding an entry never changes the bytes (still `MATCH`), only
    `python3 tools/progress.py` gives the starting state.
+   Then the routines listed code reaches or hands on: `python3 tools/common/boundaries.py --discover --values > candidates.txt`
+   (what it jumps or calls to, and the code addresses in pool words it loads and passes on: callbacks, state handlers), then
+   `python3 tools/common/boundaries.py candidates.txt` (the plan: each candidate checked, data refused) and `--apply`, `split_asm.py`,
+   `bash build.sh` (`MATCH`). Run it twice: a routine named only by another unlisted one shows in the second round. Without the
+   values, Jet Set Radio's 830 such routines (151 KB) stayed unlisted until the build from C (step 8) refused to hand on their addresses;
+   from the executable alone the first round names 816 of them.
    Then `python3 tools/1-2-baseline/checksizes.py --extend --write`, `split_asm.py` and `bash build.sh` (`MATCH`): the analysis
    ends a function at a literal pool in the middle of its body, and a size shorter than the code makes every case of that function
    run to the simulator's step cap (Virtua Tennis: 49 generator timeouts, ~600 short sizes; `tests/checksizes`).
@@ -434,6 +440,23 @@ The maps open in [Shuriken Explorer](https://github.com/consolesplayingconsoles/
 ### Step 6: Experience-driven agentic decomp
 
 - **Matching C.** Matching C, one source file at a time, is also written here (`docs/matching-c.md`).
+- **An outlier function is done in parts, never in one long run.** A function far larger than the rest (several KB, over every band's
+  limit, or a timeout on its own) is not given a longer time limit or a bigger band: a whole run of it blocks the machine for hours and
+  ends in a timeout. Instead:
+  1. *Map it*: `python3 tools/6-agentic/parts.py map <name>` cuts it along its dominator tree (a block that dominates a region is
+     entered only through its first instruction: a part), descending through chains with one big child until every part is at most
+     600 instructions (`--max`); long `jmp`s through a pool word to one place are the sections' shared exit. Read the map against
+     the disassembly: repeated sections of the same shape are one routine written several times.
+  2. *Read each part*: `python3 tools/6-agentic/parts.py read <name>` lists every part as an entry of a scratch copy of the repo and
+     has the generator read it as a small function (`state/parts/<name>/<part>.c`). What a part receives from the parts before it
+     shows in its C: the parent's frame words as stack parameters, the callee-saved registers as temporaries read before they are set.
+  3. *Join by hand*: one function, one frame (the original's, as an array), the parts in order, the exits the compiler shared between
+     parts written once. Calls trimmed to their callees' definitions.
+  4. *Prove the joined function* on drawn cases that reach every part, then directed cases (`--direct`) for what the drawn ones miss,
+     at the coverage bar of step 7. The directed cases find the faults of the join.
+  Seen on Virtua Tennis cameraExec (14.6 KB, twelve camera modes, one part per case: 155 cases, 4,940 of 5,627 instructions) and on
+  Jet Set Radio FUN_8c0d296c (13 KB, no calls, eleven `jmp`s to one exit: a 10-instruction head, then four sections of the same
+  shape, parts of 100-580 instructions). `docs/evidence.md` has both.
 - **Hand over**: `template/AGENTS.md` is the loop and the steps; write the repo's plan into it (what is left, by pocket).
    **Print the run as an evidence entry** (the format at the top of `docs/evidence.md`:
    game, SDK by banners, counts, MATCH, text-map highlights, and what broke or surprised), and
@@ -635,7 +658,9 @@ Grouped by the step that first needs them (scripts, then templates, then docs wi
 | `scripts/tools/sim/shdis.py`                   | in the repo: SH-4 disassembly with FPU, pool values and names (stdlib)                                                                                                                                                                                                                           |
 | `scripts/tools/6-agentic/live.py`                    | in the repo, optional: read, watch and write the running game by address or name, screenshots, pad input (RetroArch + Flycast core over its network ports, stdlib)                                                                                                                               |
 | `scripts/tools/6-agentic/gdbsnap.py` | in the repo, optional: RAM snapshots of the running game over Flycast's GDB server (a build with `ENABLE_GDB_SERVER`), timelines, and what changed between two snapshots with the nearest global names; live data in `docs/agentic-decomp.md` (stdlib)                                              |
+| `scripts/tools/6-agentic/parts.py`                     | in the repo, step 6: an outlier function in parts: `map` cuts it along its dominator tree (`state/parts/<name>/parts.txt`), `read` has the generator read each part in a scratch copy (`<part>.c`, the material for the join by hand) |
 | `scripts/tools/6-agentic/handcase.py`                  | in the repo: prove a function on cases written by hand, with the C the generator writes |
+| `scripts/tools/6-agentic/PROMPT_prove.md`              | a prompt to hand an agent: prove one function, raising its coverage with the tools above |
 | `scripts/tools/6-agentic/poolconst.py`                 | in the repo: the C's reads of the original's literal pools become constants (or the function's name) |
 | `scripts/tools/6-agentic/codeaddr.py`                  | in the repo: a game function's address written as a number becomes its name; numbers inside a function are listed |
 | `scripts/tools/6-agentic/unpoke_code.py`               | in the repo: takes the code out of what a test case may change (`layout.txt` `code`) |
@@ -648,6 +673,10 @@ Grouped by the step that first needs them (scripts, then templates, then docs wi
 | `scripts/tools/7-reduction/shrink.py`               | in the repo: regenerate functions and keep the new C when strictly smaller and still proven (`--regen`: any size; `--passes`: the rewrite strategies on the current C, per unit) |
 | `scripts/tools/7-reduction/hoist.py`                | in the repo: hold a value the C recomputes at every use in a local, as the original held it in a register (`--loose`, `--apply`) |
 | `scripts/tools/7-reduction/sizes.py`                   | in the repo: the compiled size of a function's C, literal pools and constants included |
+| `scripts/tools/7-reduction/repeats.py`                | in the repo: the game functions whose original repeats one run of instructions many times (candidates for a loop written by hand) |
+| `scripts/tools/7-reduction/PROMPT_handshrink.md`       | a prompt to hand an agent: a smaller C version of one function by hand, proven at the coverage bar |
+| `scripts/tools/7-reduction/PROMPT_install.md`         | a prompt to hand an agent: a hand version checked again, its callers checked, put into the repo and proven there |
+| `scripts/tools/7-reduction/PROMPT_pass.md`             | a prompt to hand an agent: a rewrite pass counted, tried in a scratch copy on the game's own code, then run |
 
 ### Tools for step 8: Build from C
 
@@ -662,6 +691,7 @@ Grouped by the step that first needs them (scripts, then templates, then docs wi
 | `scripts/tools/8-build/protocheck.py`             | in the repo: calls that pass fewer stack words or argument registers than the callee takes; `--lost` keeps the ones where the original sets the register before the call, which `consistency.py` lists as `short call` and `--fix` hands back to the generator; a callee with no C in `src/` (library code kept as the original) is checked on the registers its original reads at its entry |
 | `scripts/tools/8-build/disc.py`                   | in the repo: `make disc` runs it. Builds the way `status.txt`'s `MODE` says and writes the result into a copy of the disc: `equivalent` (or no MODE line) is `make c`; `matching` is `build.sh`, then `build_overlays.sh` when the repo has overlays, which must match |
 | `scripts/tools/common/layout.py`                  | in the repo: reads `layout.txt` (the regions the build and the cases need) |
+| `scripts/tools/8-build/PROMPT_triage.md`               | a prompt to hand an agent: a build from C that stopped, traced from its own message to the step that fixes it |
 | `template/Makefile`                  | in the repo: `make` (the matching build), `make setup`, `make c` (`retcheck.py` first), `make disc`, `make progress` |
 
 ### Tools for all steps
@@ -670,7 +700,7 @@ Grouped by the step that first needs them (scripts, then templates, then docs wi
 |--------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `scripts/tools/progress.py`                | in the repo: done (equivalent C), matching C, named functions and globals, documented. "done: equivalent C" stays the first row of the first section: Pluto finds the main metric by that label                                                                                                  |
 | `scripts/tools/toolpath.py`                | in the repo: every tools folder on the import path, so a tool imports another by name |
-| `scripts/tools/common/boundaries.py`              | in the repo: function boundaries from reachability: which addresses are functions of their own (`--apply` writes `functions.txt`); a `bra` or a conditional branch to another listed function is a tail jump, not more of the function |
+| `scripts/tools/common/boundaries.py`              | in the repo: function boundaries from reachability: which addresses are functions of their own (`--apply` writes `functions.txt`); `--discover [--values]` names the candidates (what listed code jumps or calls to; with `--values`, also the code addresses in pool words it loads and hands on); a `bra` or a conditional branch to another listed function is a tail jump, not more of the function |
 | `scripts/tools/common/rename.py`                  | in the repo: rename functions and globals everywhere at once |
 | `scripts/tools/common/consistency.py`, `ledger.py`, `status.py`, `watch.py` | in the repo: C and cases agree; nothing learnt about a function is lost; what is running; progress of a run |
 | `template/setup.sh`                  | in the repo: extract + verify the user's executable, regenerate `asm/` and `text-map/`                                                                                                                                                                                                           |

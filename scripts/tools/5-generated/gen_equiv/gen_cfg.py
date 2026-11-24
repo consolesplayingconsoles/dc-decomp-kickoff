@@ -342,8 +342,9 @@ class Graph:
         return not s.loop_exits(h) and not any(EXIT in s.succ[n] for n in s.loops[h])
 
     def loop_exit(s, h):
-        """(main exit, other exits) of loop h. The main exit is the one no other exit leads to; the others are left by
-        returning (their code runs inline in the loop). None for the main exit when the loop only ever returns."""
+        """(main exit, other exits) of loop h. The main exit is the one no other exit leads to (of several, one inside the enclosing
+        loop); the others are left by returning (their code runs inline in the loop). None for the main exit when the loop only
+        ever returns."""
         xs = s.loop_exits(h)
         body = s.loops[h]
         if not xs:
@@ -355,6 +356,13 @@ class Graph:
         main = [x for x in xs if not any(y != x and x in r(y) for y in xs)]
         if not main:
             return None, None
+        if len(main) > 1 and cut:
+            # two ways out that do not lead to each other: the one that stays in the enclosing loop is where the loop goes on (the
+            # outer body follows it); the one that leaves that loop too ends the function and runs inline. Taken the other way round,
+            # the whole rest of the outer body was written inside this loop, with every join in it read as a way out (a library
+            # function of 288 bytes: 11 calls in the original, 31 in the C)
+            outer = s.loops[min(cut, key=lambda H: len(s.loops[H]))]
+            main = [x for x in main if x in outer] or main
         main = main[0]
         others = [x for x in xs if x != main]
         if any(main in r(x) for x in others):

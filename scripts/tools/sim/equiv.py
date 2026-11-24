@@ -391,6 +391,19 @@ def used_definitions():
     return _USED
 
 
+def _orig_stack_words(name):
+    """The stack words the original code of a function reads (gen_core.callee_stack_words), or 0 when they cannot be told: its code takes the
+    address of the stack (mov r15,rN: a structure copy or a pointer into the arguments reads words a direct load does not show)."""
+    try:
+        import gen_core
+        out = subprocess.run(['python3', 'tools/sim/shdis.py', '--func', name], capture_output=True, text=True).stdout
+        if re.search(r'\bmov\s+r15,r\d+', out):
+            return 0
+        return gen_core.callee_stack_words(name)
+    except Exception:
+        return 0
+
+
 def compared_arity(cfile, table):
     """What each call out is compared on: ({address: (integer, float) register arguments}, {address: arguments on the stack}).
     A callee defined in src/ is compared on the registers its definition takes (the build links every caller against that one
@@ -405,6 +418,10 @@ def compared_arity(cfile, table):
             continue
         if sw:                                # the stack words the callee reads are compared whatever the caller's file declares
             stackn[key] = max(stackn.get(key, 0), min(sw, STACK_CAP))
+            if ni == 0:      # a callee that takes one structure (the generator pads it to four words so it goes on the stack): the words
+                k = _orig_stack_words(n)                      # its original code never reads are the caller's frame leftovers, not arguments
+                if 0 < k < stackn[key]:
+                    stackn[key] = k
         a = arity.get(key)
         if a is None or len(a) <= 2:          # the definition says which registers the callee reads: the others are leftovers, whatever the
             arity[key] = (min(ni, 4), min(nf, 8))      # caller's file declares (more, or no prototype: Virtua Tennis effFootDust -> vecSub(Stk5),

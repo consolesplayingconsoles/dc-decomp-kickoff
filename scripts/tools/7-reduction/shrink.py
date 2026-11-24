@@ -3,7 +3,7 @@
 Run in the repo.
 
     python3 tools/7-reduction/shrink.py [--keep 1.0] [--regen] <name> ...
-    python3 tools/7-reduction/shrink.py --passes [narrow,selfcopy,struct,frame,globase,switch,copies,rebase,hoist,deadframe,smod,voidret] [--min-size N] [src/<unit>.c ...]
+    python3 tools/7-reduction/shrink.py --passes [narrow,selfcopy,struct,frame,globase,switch,copies,rebase,hoist,deadframe,smod,voidret,imask,earlyret,regorder,unused,pushstores,rtfold,inlinetemps,outargs,trimstk,stklocals,fold,memberform,mulonce,addrreg,cseexpr,constmerge,frameorder,noregister,constprop] [--min-size N] [src/<unit>.c ...]
 
 --regen keeps the new C whatever its size, as long as it is proven: for when the generator itself was fixed.
 
@@ -25,6 +25,28 @@ rewrites that change no address and no type, in this order, each on what the one
   voidret   rewrites.void_returns: a function the original returns no register for (retcheck) and no unit reads the value of, as `void`:
             its `return value;` as `return;` and `return call(args);` as the call, then `return;` (Power Stone 2: the threaded return
             temporaries of half the manual rewrites); equiv.py compares r0 only for a C that returns a value, the callers' use decides
+  pushstores rewrites.drop_pushed_stores: a frame store whose value is one of the next call's arguments past the fourth, when nothing reads the slot.
+  unused    rewrites.drop_unused_locals: a scalar local declared and never named is not declared.
+  regorder  rewrites.order_registers: the `register` declarations most-named first; SHC hands out its saved registers in that order.
+  rtfold    rewrites.rt_fold: a value assigned to a temporary the same straight-line run assigns again, written into its uses (copies and constants always, the rest when read once and nothing in between stores, calls or changes an operand).
+  inlinetemps rewrites.inline_temps: a temporary set once and read in the statements right after (no store, call, label or brace between) written into its uses.
+  outargs   rewrites.drop_outargs: a store into the frame array of a call-pushed word, when nothing reads or can reach its slot.
+  trimstk   rewrites.trim_stack_args: a call through a function-pointer cast handed the caller's frame words after its register arguments keeps the register arguments.
+  stklocals rewrites.stack_locals: frame words used only as whole 4-byte slots at constant offsets become locals; a function that takes, passes or steps from any slot address is left as it is.
+  fold      rewrites.fold_offsets: `((x + 0x10) - 0x4)` as `(x + 0xC)`.
+  memberform rewrites.member_form: `*(int *)((a4 + 0x38))` as `(((struct o38_int *)(a4))->v)` (declarations written by splice).
+  mulonce   rewrites.mul_once: `(t5 * 0x38)` written at three places or more, computed once after t5's assignment.
+  addrreg   rewrites.address_registers: a fixed address dereferenced at six places or more, held in a `register` set once.
+  cseexpr   rewrites.cse_expr: a pure expression written at two places or more as one local, set where its statement dominates every use.
+  constmerge rewrites.merge_constants: a temporary whose every assignment is one literal, replaced by the literal.
+  frameorder rewrites.order_frame: the most-named temporaries `register` first, the rest plain, least-named first.
+  noregister rewrites.no_register: `register` dropped from the declarations.
+  constprop rewrites.const_prop: `t = 0xK;` and the straight-line uses of t that follow read the constant.
+  imask     rewrites.fold_imask: set_imask's own mask and shifts, written again in its argument by the generator, taken out.
+  earlyret  rewrites.early_returns: the result returned at the end of each arm of the ifs before the final return, not carried there in
+            one temporary.
+--stack (with --passes): the listed passes applied in order as ONE rewrite, measured and proven once per function. Kept only
+when the whole stack makes the function smaller and still proven: a pass that only pays after another is not lost.
 --min-size N (with --passes): only functions of at least N bytes (build/sizes.json) are rewritten, the units that hold the largest of them
 first and those with none left out, so a run can be stopped where the gains run out (Crazy Taxi: under 256 bytes, 20% of the savings).
 For each unit the changed functions are written in place (rewrites.splice), the unit compiled before and after
@@ -62,11 +84,16 @@ if '--keep' in args:
 PASSES = None                       # --passes: the rewrite strategies instead of a regeneration
 if '--passes' in args:
     k = args.index('--passes')
-    PASSES = ['narrow', 'selfcopy', 'struct', 'frame', 'globase', 'switch', 'copies', 'rebase', 'hoist', 'deadframe', 'smod', 'voidret']
+    PASSES = ['narrow', 'selfcopy', 'struct', 'frame', 'globase', 'switch', 'copies', 'rebase', 'hoist', 'deadframe', 'smod', 'voidret', 'imask', 'earlyret', 'regorder', 'unused', 'pushstores', 'rtfold', 'inlinetemps', 'outargs', 'trimstk', 'stklocals', 'fold', 'memberform', 'mulonce', 'addrreg', 'cseexpr', 'constmerge', 'frameorder', 'noregister', 'constprop']
     if k + 1 < len(args) and not args[k + 1].startswith(('src/', 'sdk/', '-')):
         PASSES = args[k + 1].split(',')
         del args[k + 1]
     del args[k]
+if '--stack' in args:                 # --stack with --passes: the listed passes as one rewrite, measured and proven once
+    args.remove('--stack')
+    if PASSES is None or 'narrow' in PASSES:
+        sys.exit('[ERROR] --stack needs --passes with a list, without narrow')
+    PASSES = ['stack:' + '+'.join(PASSES)]
 MIN_SIZE = 0                        # --min-size N with --passes: functions under N bytes are left alone
 if '--min-size' in args:
     k = args.index('--min-size')
@@ -245,15 +272,24 @@ def void_names():
     return _VOID[0]
 
 
+def pass_function(pas):
+    """The rewrite of one --passes name; `stack:a+b+c` (--stack) is those passes applied in order as one."""
+    import frame
+    import rewrites
+    if pas.startswith('stack:'):
+        return rewrites.compose_passes([pass_function(p) for p in pas[len('stack:'):].split('+')])
+    return {'selfcopy': rewrites.drop_self_copies, 'struct': rewrites.struct_access, 'globase': rewrites.global_base,
+           'switch': rewrites.chains_to_switch, 'copies': rewrites.merge_copies, 'rebase': rewrites.frame_rebase, 'hoist': rewrites.hoist_builtins, 'deadframe': rewrites.drop_dead_frame, 'pushstores': rewrites.drop_pushed_stores, 'unused': rewrites.drop_unused_locals, 'regorder': rewrites.order_registers, 'imask': rewrites.fold_imask, 'earlyret': rewrites.early_returns, 'smod': rewrites.fold_signed_mask, 'rtfold': rewrites.rt_fold, 'inlinetemps': rewrites.inline_temps, 'outargs': rewrites.drop_outargs, 'trimstk': rewrites.trim_stack_args, 'stklocals': rewrites.stack_locals, 'fold': rewrites.fold_offsets, 'memberform': rewrites.member_form, 'mulonce': rewrites.mul_once, 'addrreg': rewrites.address_registers, 'cseexpr': rewrites.cse_expr, 'constmerge': rewrites.merge_constants, 'frameorder': rewrites.order_frame, 'noregister': rewrites.no_register, 'constprop': rewrites.const_prop, 'voidret': lambda c: rewrites.void_returns(c, void_names()),
+           'frame': lambda c: frame.scalarize(c.rstrip('\n')) + '\n'}[pas]
+
+
 def rewrite_pass(f, pas, log, manual):
     """One --passes strategy on one unit: the changed functions that compile smaller and are proven stay, the rest go back."""
     if pas == 'narrow':
         return narrow_pass(f, log)
     import frame
     import rewrites
-    fn_ = {'selfcopy': rewrites.drop_self_copies, 'struct': rewrites.struct_access, 'globase': rewrites.global_base,
-           'switch': rewrites.chains_to_switch, 'copies': rewrites.merge_copies, 'rebase': rewrites.frame_rebase, 'hoist': rewrites.hoist_builtins, 'deadframe': rewrites.drop_dead_frame, 'smod': rewrites.fold_signed_mask, 'voidret': lambda c: rewrites.void_returns(c, void_names()),
-           'frame': lambda c: frame.scalarize(c.rstrip('\n')) + '\n'}[pas]
+    fn_ = pass_function(pas)
     text = open(f, errors='replace').read()
     funcs = {}
     for m in re.finditer(r'^[A-Za-z_][\w \t\*]*?\b(\w+)\s*\([^;{]*\)\s*\n\{', text, re.M):

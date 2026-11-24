@@ -112,7 +112,7 @@ class TestVoidRet(unittest.TestCase):
 
     def test_wired_in_shrink(self):
         src = open(os.path.join(TOOLS, '7-reduction', 'shrink.py')).read()
-        self.assertIn("'deadframe', 'smod', 'voidret']", src)
+        self.assertIn("'deadframe', 'smod', 'voidret', 'imask', 'earlyret', 'regorder', 'unused', 'pushstores', 'rtfold', 'inlinetemps', 'outargs', 'trimstk', 'stklocals', 'fold', 'memberform', 'mulonce', 'addrreg', 'cseexpr', 'constmerge', 'frameorder', 'noregister', 'constprop']", src)
         self.assertIn("'voidret':", src)
         self.assertIn('rewrites.void_returns(', src)
 

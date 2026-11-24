@@ -84,6 +84,20 @@ def read_batches(todo, jobs, batch, reader, on_batch):
         on_batch(done)
 
 
+def carry_over(read, noread, ledger):
+    """The cached readings kept when the tools changed: {name: [bytes key, state]}. What was readable is kept, unless a run since said it
+    cannot read it: the run's reason is kept instead (with the same bytes key, so it is not read again). The cache never learnt of those
+    runs, and functions every run refused were reported as "readable, no result" (not drawn) for good."""
+    out = {}
+    for n, v in read.items():
+        r = ledger.get(n)
+        if v[1] == 'readable' and r and r.get('outcome') == 'cannot read':
+            out[n] = [v[0], 'cannot read: ' + re.sub(r'\[.*', '', re.sub(r'[0-9a-f]{4,}', '', str(r.get('detail', '')))).strip()[:46]]
+        elif v[1] == 'readable' or noread:      # no-read mode shows the last known result even when it is from older tools
+            out[n] = v
+    return out
+
+
 def read_one(task):
     name, size = task
     if gen_core is None:
@@ -161,8 +175,8 @@ def main():
             p = l.split(None, 1)
             if len(p) == 2:
                 failed[p[0]] = p[1].strip()
+    last = {}
     if os.path.exists('state/results.jsonl'):                                         # the ledger: the latest outcome of every function, kept across runs
-        last = {}
         for l in open('state/results.jsonl'):
             try:
                 r = json.loads(l)
@@ -172,6 +186,7 @@ def main():
         for n, r in last.items():
             if r['outcome'] not in ('EQUIVALENT', 'cannot read'):
                 failed[n] = '%s %s' % (r['outcome'], r['detail'])
+    ledger = last
     # the generator's reading, cached by the function's bytes and the tools' source
     os.makedirs('state', exist_ok=True)
     cache_file = 'state/remaining.cache.json'
@@ -183,7 +198,7 @@ def main():
             if data.get('tools') == th:
                 cache = data.get('read', {})
             else:                       # the tools changed: what was readable is kept (a change nearly always widens what reads; --fresh re-reads all), what was not is read again
-                cache = {n: v for n, v in data.get('read', {}).items() if v[1] == 'readable' or noread}      # no-read mode shows the last known result even when it is from older tools
+                cache = carry_over(data.get('read', {}), noread, ledger)
         except (ValueError, IOError):
             cache = {}
     key = lambda a, sz: hashlib.sha1(exe[a - base:a - base + sz]).hexdigest()

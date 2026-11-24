@@ -3,7 +3,7 @@
 
     python3 tools/common/boundaries.py candidates.txt            report the plan
     python3 tools/common/boundaries.py candidates.txt --apply    write functions.txt (a copy is kept in build/functions.before-boundaries)
-    python3 tools/common/boundaries.py --discover               print the candidates the listed code points at: one line per address
+    python3 tools/common/boundaries.py --discover [--values]    print the candidates the listed code points at: one line per address
                                                                 (a candidates file; `> candidates.txt` and run the two lines above)
 
 --discover names the addresses to ask about: every listed entry is walked, and an address in a gap (inside no listed range) that its code
@@ -145,12 +145,15 @@ _LOAD = re.compile(r'^mov\.l @\(0x[0-9a-f]+,pc\),(r\d+)$')
 _REGJUMP = re.compile(r'^(?:jsr|jmp) @(r\d+)$')
 
 
-def discover():
+def discover(values=False):
     """{address: (kind, function name, where)}: the addresses in a gap (inside no listed range, F entries) that the code of a listed entry
     jumps or calls to: a `bra` or `bsr`, or a `jsr` / `jmp` through a register that a `mov.l` from a pool word loaded within the last
     16 bytes. A target the entry's own branches reach (a forward `bra` into the gap it then runs through) is more of that entry; a
     `bra` back before its start is a tail jump, which is what this finds. Only what the code does counts: a pool word that is read
-    through, or a pointer in a table, names nothing."""
+    through, or a pointer in a table, names nothing. values (--values): the address in a pool word a listed entry loads and does not
+    read through (no @rN, @(k,rN) or @(r0,rN) on that register before it is written again) is a candidate too, inside a gap or inside
+    another entry's range: a routine the game hands on (a callback passed to a call, or stored), which nothing jumps to (830 such on
+    Jet Set Radio, found only when the build from C refused to hand on their addresses). The checks below refuse what is data."""
     import bisect
     ents = entries()
     known = {e[0] for e in ents}
@@ -184,6 +187,28 @@ def discover():
             if t is None or t in seen or t % 2 or not BASE <= t < top or covered(t) or t in found:
                 continue
             found[t] = (kind, e[2], a)
+        if values:
+            order = sorted(seen)
+            for i, a in enumerate(order):
+                text, pool, psize, target = shdis.decode(word(a), a)
+                ld = _LOAD.match(text or '')
+                if not ld or pool is None or not 0 <= mirror(pool) - BASE <= len(BIN) - 4:
+                    continue
+                r = ld.group(1)
+                t = mirror(struct.unpack_from('<I', BIN, mirror(pool) - BASE)[0])
+                if t in known or t in seen or t % 2 or not BASE <= t < top or t in found:
+                    continue
+                through = False
+                for b in order[i + 1:i + 9]:
+                    tx = shdis.decode(word(b), b)[0] or ''
+                    ops = tx.split(None, 1)[1] if ' ' in tx else ''
+                    if re.search(r'@\(?(?:[^,()]*,)?%s\)?(?![0-9])' % r, ops) and not re.match(r'(?:jsr|jmp) @', tx):
+                        through = True
+                        break
+                    if re.search(r',%s$' % r, ops):          # written again: the value is gone
+                        break
+                if not through:
+                    found[t] = ('pool value', e[2], a)
     return found
 
 
@@ -217,7 +242,7 @@ def main(argv):
     if len(argv) < 2:
         sys.exit(__doc__)
     if argv[1] == '--discover':
-        for t, (kind, name, a) in sorted(discover().items()):
+        for t, (kind, name, a) in sorted(discover('--values' in argv).items()):
             print('%08x  # %s from %s at %08x' % (t, kind, name, a))
         return
     apply = '--apply' in argv

@@ -144,7 +144,20 @@ def scalarize(text, addr_window=None, min_uses=2):
     if k is None:
         return text
     j = k + 1
-    while j < len(lines) and (not lines[j].strip() or DECL.match(lines[j])):
+    while j < len(lines):
+        # a comment among the declarations is passed over: the scan stopped at one written above `int stk[1];` and the new local's
+        # load went before the frame's own declaration, which does not compile (Power Stone 2 FUN_0c0f26e8, and the unit's two other
+        # changed functions were then not measured either)
+        if lines[j].strip().startswith('/*'):
+            e = j
+            while e < len(lines) and '*/' not in lines[e]:
+                e += 1
+            if e < len(lines) and lines[e].rstrip().endswith('*/'):
+                j = e + 1
+                continue
+            break
+        if lines[j].strip() and not DECL.match(lines[j]):
+            break
         j += 1
     decls = ['    %s R%d;' % ('float' if c == 'f' else 'int', 1000 + n) for n, c in sorted(pick.items())]
     inits = ['    R%d = *(%s *)((int)stk + %d);' % (1000 + n, 'float' if c == 'f' else 'int', n) for n, c in sorted(pick.items())]

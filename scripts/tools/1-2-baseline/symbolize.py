@@ -120,6 +120,16 @@ def branches(P, starts, words, end):
     return out
 
 
+def end_is_bss(words, a, end):
+    """A word at `a` equal to the image end `end`: True when it is the start of the BSS, False when it is the end of a range inside the
+    image. The two are the same address when the image ends where the BSS begins (Jet Set Radio: _INITSCT clears a zero area inside the
+    image up to 8C300AE0, then the BSS from 8C300AE0), but the BSS moves by more than the image grows (it starts on a 0x1000 boundary), so
+    named as the BSS start the area's end ran past the moved image and the start-up code cleared the gap between. In SHC's section table
+    a range's end is 12 bytes after its start: the word there past the image makes this a start (the BSS), anything else an end."""
+    nxt = words.get(a + 12)
+    return nxt is not None and layout.mirror(nxt) > end
+
+
 def main():
     if len(sys.argv) != 2:
         sys.exit(__doc__)
@@ -134,10 +144,12 @@ def main():
     starts = [s for s, _, _ in P]
     words = addresses()
 
-    def name_of(v):
+    def name_of(v, a=None):
         t = layout.mirror(v)
         delta = ((v & 0xE0000000) - link_top) & M
-        if t >= bend:                                    # (pointers.py names only targets below `fixed`)
+        if t == end and a is not None and not end_is_bss(words, a, end):
+            sym, off = P[-1][1], t - P[-1][0]            # the end of the image, not the start of the BSS: it moves with the image
+        elif t >= bend:                                  # (pointers.py names only targets below `fixed`)
             sym, off = '_bss', t - bend
         else:
             i = bisect.bisect_right(starts, t) - 1
@@ -169,7 +181,7 @@ def main():
         while j < len(body):
             off = 2 * j
             if off in want:
-                sym, e = name_of(want[off])
+                sym, e = name_of(want[off], s + off)
                 if sym != label:
                     imports.add(sym)
                 out.append("          .DATA.L     %s" % e)

@@ -1419,6 +1419,141 @@ reads them from the model file. Tested on synthetic containers (`tests/test_reco
   has no word or direct branch that refers to them; at the one place read, it calls two named library functions where the C calls those
   placeholders. Not explained. Linking a running copy there is the Crazy Taxi mid-function freeze.
 
+### Step 8: a C image 376 KB over the limit, and what brought it down (2026-11-23 to 2026-11-24)
+- State at the start: every check of the build from C passes except the fit: the image ends 376,256 bytes past the `fixed` address. The C was
+  generated with the skill at v2.0 and never shrunk. The rule held throughout: the whole game from C, no function left as original assembly, no
+  buffer or heap made smaller; only smaller C.
+- The measure first: `sizes.py` compiled every file under one scratch name, so with several workers half the files failed and their functions had no
+  size. Each compile now has its own name and removes its files (`tests/test_sizes_stem`).
+- `trimdata 1` (data copies cut to the runs the C reads): 376,256 to 290,208 over.
+- The shrink passes on the generated C (`shrink.py --passes`): about 1% of the excess per batch; 200 functions in 28 units gave about 1 KB. On C of
+  this age the passes do not find their shapes: the waste is in the structure, not in the statements.
+- Hand versions of the 19 heaviest functions: 290,208 to 193,184 over. Their generated C compiled to 2 to 8 times the original (13,216 bytes for a
+  1,686-byte function; 7,050 for 1,554, by hand 1,514). The same causes came back in nearly all of them, in this order of bytes:
+  - a block that several paths reach, written once per path: the body of the next `case` copied into the arm that falls into it, a tail shared by
+    all the arms of a switch copied into each, an exit call written at every place that jumps to it (up to 12 copies of one block);
+  - arms that differ only in constants, written out in full;
+  - a result threaded through every exit of a function whose callers never read it;
+  - a signed remainder by a power of two written as its five-line sign sequence (28 times in one function, 752 bytes);
+  - one `register` temporary per intermediate value (200 in one function), and fields of one global block each read by absolute address where the
+    original keeps the block's address in a register;
+  - a tail jump to another listed function written as that function's body.
+- Coverage, the lesson of the hand work: the checker calls a function Equivalent whatever its cases ran. Several of the 19 had case files that ran
+  0 instructions of the function; one such "Equivalent" C had a wrong store index that no case had reached. The first hand draft passed at 12% of
+  the instructions with two errors in it (an inverted compare, a float constant read wrong); cases reaching 98% found both. Rule added to the
+  skill and each game's `AGENTS.md`: hand-written C and the output of a shrink pass are accepted only at 70-80% of the function's instructions or
+  more. It is not asked of C the generator writes again. To get there: `fuzzcases.py` at its default 300 rounds kept nothing on any of them; 3,000
+  rounds over several seeds took most from under 20% to 60-90%; the last branches (an exact compare constant, one call result in a sequence) took
+  hand-written cases. `casesearch.py` was the best tool on one function and far behind on the others.
+- A device region is compared on the order of its reads: moving two reads of an object into locals made the compiler load them in another order and
+  the proof failed, on C that computed the same values.
+- From the hand work to the generator (each with its test, written first, tried in a scratch copy before the game's tree):
+  - a block reached by several paths is written once, with a budget and a check that undoes the sharing when it is not safe
+    (`tests/test_gen_fallthrough`, `tests/test_gen_sharebudget`);
+  - the last passes run on what the generator writes (`tests/test_gen_lastpasses`); the signed remainder is folded (`tests/test_rewrites_smod`);
+    an unread result is dropped (`tests/test_rewrites_voidret`); calls through a cast get a prototype (`tests/test_rewrites_castcalls`,
+    `tests/test_rewrites_narrowdef`); the frame is kept as locals only when that is smaller (`GEN_FRAME=gate`, `tests/test_gen_framegate`);
+  - a tail jump passes the argument registers the named callee reads (`tests/test_gen_tailpass`); a register set in a delay slot counts as set
+    (`tests/test_gen_slotargs`); a leftover argument register is passed as it stands (`tests/test_gen_leftover`); a comment among the frame's
+    declarations no longer breaks them (`tests/test_frame`);
+  - `boundaries.py --discover` lists entries the listed code jumps into (`tests/test_boundaries_discover`): four more hidden functions here.
+- Writing functions again with that generator (`shrink.py NAME ...`: kept only when smaller and still proven):
+  - 59 functions, 32,814 bytes by the tool's measure; with the hidden functions the build went from 193,184 to 152,992 over;
+  - a scan for repeated blocks (windows of 8 lines, temporaries renamed) found them in 4,163 functions, estimated at 133 KB for exact repeats and
+    171 KB counting repeats that differ in constants. The 882 with the highest estimate, run unattended in 8.5 hours as one process at the lowest
+    priority: 644 smaller, 68,306 bytes, a little over half of their excess over the original. Each batch of 25 gave less than the one before
+    (6,892 bytes for the first, under 500 for the last);
+  - functions with no repeated block, by excess over the original: the first 25 gave 3,192 bytes, the next 18 about 400. Stopped there.
+  The estimate at the end is about 81 KB over; no build had confirmed it when this was written.
+- Also found on the way: a function whose proven C called a variable-argument routine 18 times without the arguments the original puts on the
+  stack; the C was corrected.
+- What cost time and is not a tool matter: a pass under trial was run over the whole tree and had to be taken out again; "100 functions" was read as
+  the units that hold them (thousands of functions). A trial runs in a scratch copy, and a count of functions bounds the run.
+- Open when this was written: about 81 KB still over. Not handled by the generator: a `case` that falls into the next as a real fall-through,
+  arms that differ only in constants (about 38 KB by the scan), loops. About 7% of the functions cannot be measured alone because a call's argument
+  count disagrees with the unit's prototype. The unread-result pass inside `shrink.py` loses prototypes and is kept out of its pass list. Two
+  functions have a wrong size in `functions.txt`; one is too slow to prove and was skipped; one still differs.
+
+### Step 8: what a day of studies and passes gave against 79 KB, and what was measured wrong (2026-11-24)
+- State at the start: two builds confirmed the estimate of the entry above, 79,328 and then 79,008 bytes over the limit.
+- Measured wrong for most of the day: the layout keeps everything past the game's own code (the drawing library, the SDK, the runtime, the data)
+  as the original bytes, so C for those functions is never in the console image. The repo files that C under `src/` beside the game's, and in
+  32 generated files the two are mixed (175 library functions; the build drops them from its own copy before compiling). Every tool that walks
+  `src/` (the size table, the shrink candidates, the regeneration queue) took them for game code: 121 KB of the 449 KB of excess counted was
+  library, a pass's gain was counted where it could not help (1,000 of 1,700 bytes), and four hand rewrites were started on library functions.
+  The 175 were moved to the library folders with `sdk_place.py`, adapted there to that repo's tree. A size or shrink tool should take its
+  functions from what the console build compiles, not from the folder.
+- Library code hiding in the game's own range: none. Every game function of 24 bytes or more, addresses masked, against all functions of seven
+  games by other studios: 2 matches of 28 bytes. Against the SDK's compiled libraries, all releases: 1,854 of the 3,384 kept functions are the
+  libraries' own bytes (1,556 exact, 298 after the linker's changes), none below the line. The sibling name comparison, never run on this repo,
+  proposed 146 names, all in the library.
+- A stricter checker and old passes: six functions that stood as Equivalent failed on a call's arguments when their files were checked again (a
+  kept proof key had held their old passes); regenerated, they pass. Two library drawing functions fail on the order of reads from a device
+  region: two dead words the original's paired float loads take along, seen only when a case points the vertices there.
+- Passes built from the studies below, each with its test, and what they gave on this game:
+  - `fold_imask` (`tests/test_rewrites_imask`): 148 bytes in a trial of 5 units;
+  - `early_returns` (`tests/test_rewrites_earlyret`): 248 bytes in 86 functions, 59 of them not smaller: 3 bytes a function, not the 20 the
+    library sample suggested;
+  - the loop exit that stays in the enclosing loop (`tests/test_gen_loopexitjoin`): one function 1,048 to 488 bytes; it changed 1 of the 60
+    functions with the most copies;
+  - `order_registers` (`tests/test_rewrites_regorder`): 18 functions, 1,700 bytes over 134 units, all of it in about ten large functions
+    (300 bytes each); 277 other functions it reordered did not change size;
+  - `drop_unused_locals` (`tests/test_rewrites_unused`): 4,633 such declarations in 714 game functions, 124 bytes in a trial of 20 units once
+    the order pass had run (it had already put them last).
+- Tried and taken out: a call through a pointer passes seven words of the frame in case its target reads stack arguments (30 bytes a call, 600
+  of one function's 996 excess bytes). Passing only what a function whose address is kept as data reads did not help: over 2,000 functions have
+  their address stored, hundreds of them read stack words, so the answer stayed seven.
+- Measured by small compiles: two arms that end in the same calls compile to the same bytes as the calls written once (54 and 54); a copied
+  tail in an if chain costs 4 bytes over a real fall-through and a flag costs 12 more, so a repeated straight tail is not waste and the count
+  of repeated blocks overstated the gain. The compiler writes a `bsr` for a callee in the same file; the original has 5,943 of them and the
+  generated files do not follow the original's (one original file's 20 functions sat in 12). Putting them together was not measured: the files
+  declare one callee with different argument counts, and a function's size moves with the literal pool the file shares.
+- The one large gain was by hand again: a function the author had lifted line by line from code compiled without optimisation, 34 copies of one
+  loop differing in a table offset and two constants, 9,064 bytes of C for 3,394 original. Written as one loop: 370 bytes, 293 cases, 1,554 of
+  1,560 instructions. It sat in a hand-written file, which the shrink passes and the regeneration skip.
+- Process: merging the skill's tools into a repo with the older flat tool folder left one relative path to a folder that repo does not have, and
+  a build stopped there; a function queued twice was written to two files; scratch files of stopped runs were committed (the generator now
+  removes its own, `tests/test_scratch`).
+- Where it ended: about 68 KB over by estimate, no build yet with the last changes.
+
+## Jet Set Radio
+
+### Step 5: generated C from 83% to 95% of the functions, and the generator fixes on the way (2026-11-23 to 2026-11-24)
+- State at the start: 740 functions left (83.1% done), 456,022 bytes left (41.9%), instruction coverage 32.3%. Another job shared the machine
+  throughout, so every run used 2 workers at low priority.
+- First fixes, from functions that already failed (each with its test, in the skill since):
+  - a float constant that is NaN or infinity was written as a literal SHC cannot compile; it is now an integer constant read as a float
+    (`tests/test_nanconst`);
+  - a function returning its stack pointer kept a frame placeholder in its return line, filled only before that line was added
+    (`tests/test_retframe`);
+  - a jump table of 32-bit absolute addresses (`mova; mov.l @(r0,rX),r0; jmp @r0`) was not read as a switch, only the 16-bit offset form was:
+    about 27 functions passed once it was (`tests/test_abstable`);
+  - a callee taking one structure on the stack is padded to four words, and the checker compared all four, two of them the caller's frame
+    leftovers; it now compares only the words the original reads, when that can be told (`tests/test_stackcap`).
+- The size bands, one after another (400, 600, 1000, 2000, 5000 bytes): 358, 297, 228, 206 and 46 functions written Equivalent. At the end:
+  202 functions left (95.4%), 82,890 bytes left (89.4%), coverage 60.7%.
+- Draw timeouts: 44 functions timed out while their cases were drawn, 25 of them under 200 bytes. Size was not the cause. Drawing those 25
+  again with three times the time was too slow to be worth it and was stopped; writing them by hand teaches more.
+- By hand: 4 functions Equivalent (two of them small timeouts, two from the retcheck refusal below). Where `fuzzcases.py` kept nothing, cases
+  written by hand for each branch took coverage from 40 to 70 of 70 instructions and from 167 to 198 of 201.
+- What the hand work showed, and the fixes (tested in the game's copy of the tools; not yet ported to the skill when this was written):
+  - a loop walking a list from a table entry: the argument that picks the entry appears in the address only scaled (`a << 3`), and it was drawn
+    as an address like any parameter in an address. The entry it picked lay past any filled memory, read 0, and the walk never met its end
+    word: 178 of 179 drawn runs went to the step limit. A parameter only ever scaled in an address is now drawn as an index (`tests/test_listwalk`).
+    On the ten remaining functions with such a parameter it paid little: 3 written Equivalent (one on 2 cases and 22% of its instructions),
+    3 differ, and 4 of the 5 that had timed out timed out again. Not covered: the same table indexed by a call's result (three functions,
+    still no cases);
+  - the commit was refused by retcheck: one function returning a float in fr0 was declared `int`, and five `void` functions returned a value
+    their callers read. The declarations tried after the original's register (`gen_pipe.variants`) and the retry after "differs only in the
+    return value" both accepted any register that passed, and the check compares only the declared one. Both now try only the register the
+    original returns in (`tests/test_returnreg`). Written again in the right register, two of them differed: their proof had rested on the
+    wrong register; they were written by hand;
+  - three of those five warnings, and functions missing from later runs, were scratch files of earlier runs: a run removed
+    `gen_tmp*p<pid>.c` but its files carry a letter after the id, so every run left them, and a scratch file's functions count as defined.
+    A run now removes its own scratch on exit, also when stopped, and the scratch of a process that is gone when it starts. A stopped run's
+    pool no longer outlives it (it waited for busy workers and replaced killed ones) (`tests/test_scratch`).
+- Open when this was written: 199 functions left (82,406 bytes); the last three fixes are in the game's tools only.
+
 ## Not tied to one game
 
 ### Dev kit dumps (sega-dreamcast-info.com, 11 "Set 5" Katana kits on archive.org, 2026-10-08)
@@ -1452,3 +1587,80 @@ reads them from the model file. Tested on synthetic containers (`tests/test_reco
   offsets allowed to move) shows what changed late: Jan 14 differs from the release in 58 functions
 - What changed: dev kit dumps added as extra material (link maps, ELFs with debug info, source);
   a DWARF-1 reader is worth a script if a second ELF like this turns up
+
+### The generator's C against the library's own source (63 library functions, 2026-11-24)
+- What was compared: library functions for which three things exist: the source, the original bytes in a game, and the C the generator writes
+  from those bytes. 63 functions whose source reproduces the game's bytes exactly (59 from one game, the 4 largest from a second; 16 under
+  100 bytes, the rest 100 to 474: neither pool has a function over 500 bytes). Both versions compiled with the library's flags
+  (`-optimize=1 -size`) and measured on the compiler's assembly output. Sizes only: no generated C or edited variant went through the checker.
+- The generated C is 1.27 times the original over the sample (11,768 to 14,948 bytes): 46 of 59 bigger, 2 equal, 11 smaller. The two functions
+  over 350 bytes are 2.1 and 2.7 times: the excess grows with size, and the sample has almost nothing at the size where game code costs most.
+- Where the bytes go. Each figure is one thing changed in a copy of the generated C toward the source's form, and recompiled; the counts of
+  occurrences are pattern matches, not compiles:
+  - a block reached both by a loop's `break` and by its normal exit, still written once per path: 506 bytes for four extra copies of one tail.
+    One of the copies passed the frame by value to the same call the others did not, so a scan for exact repeats misses it;
+  - an indirect call handed the caller's stack words as extra arguments: about 30 bytes a call (16 calls in 3 functions, 472 bytes). The
+    original pushes an argument right before a call and pops it after; the frame made at entry holds locals. A structure passed by value is
+    copied, not pushed, and must stay;
+  - a field of a structure written as `*(T *)(base + K)` in a loop, also at offsets within the short displacement: the compiler keeps each
+    `base + K` in a register or a stack slot. As members: 148 and 12 bytes in single functions; over the sample 15 functions smaller by 204
+    and 7 bigger by 48, so it is a variant to keep when smaller, not a rule;
+  - a result carried through nested `if`s to one `return`, where the source returns at each test: 66, 30, 6 and 6 bytes (17 to 29 functions
+    have the shape). In one function the parameter ended in the frame and was reloaded 15 times;
+  - copies that only carry what a scratch register held across a join and reach nothing: 104 and 18 bytes. The compiler keeps them, in saved
+    registers when they are `register`;
+  - the address of an array element, `(i * size + table) + off`, computed at every use where the source takes a pointer to the element once:
+    76, 18, 12 and 2 bytes (13 functions, 55 uses);
+  - `register` on every temporary cuts both ways: without it 13 functions are smaller by 162 and 13 bigger by 74;
+  - frame slots left in the frame array though their address is never taken: 48 bytes for five slots;
+  - leftover argument registers passed on, and parameters the original never reads: 10 to 44 bytes a function (a function with no parameters
+    in the source came out with 12); removing unread parameters from the definition alone saves nothing;
+  - smaller ones: the interrupt-mask builtin given its own mask and shift again (10 bytes a use, 9 uses); a call to a function of the same
+    source file is a `bsr` in the original (6 bytes a callee, a matter of which functions share a unit, not of the C); an expression written
+    out at each use (26); an arm under a constant condition (22); a multiply written as its shifts and adds (10); a signed remainder by 4 in a
+    shape the fold does not know (6 each); a `!=` chain where the source has a `switch` (8).
+  Nine functions taken through these changes one at a time ended at or near the original's size (152 to 92 against 92; 128 to 98 against 98;
+  934 to 408 against 352; 1,046 to 556 against 492).
+- Flags, on 16 functions, source and generated C: `-size` 3,608 and 4,946; no size or speed option 3,616 and 4,976; `-speed` 4,900 and 5,048;
+  `-optimize=0` 5,194 and 7,150. Speed makes the source 36% bigger and barely moves the generated C: it unrolls counted `for` loops (one
+  function 352 to 766 bytes, 7 calls become 19) and copies constant arrays inline; `for (;;)` with a `break` is not unrolled. Writing a loop as
+  a counted `for` saves a few bytes under `-size` and costs 594 in one function under `-speed`. So a game built for speed holds unrolled loops,
+  which a generator reads as separate blocks: a likely source of the repeated blocks and of the arms that differ only in constants (not
+  measured on a game).
+- How the library was written (75 files, about 28,000 lines): a pointer to the element as the first statement, then members; a `return` at
+  each test, the shared clean-up written once (a `break` out of `do { } while (0)`, or a `goto`); counted indexed `for` loops, 360 against 63
+  `while`; `switch` for state; exact-width types and narrow parameters, which the compiler homes on the stack; `register` rare and `static`
+  common; calls hidden in macros (one is a call through a table of function pointers); `volatile` on hardware words; plain `%`, `/` and `*`;
+  constant tables as `const` local arrays; almost no float.
+- Found on the way: the reader of the source's definitions counts braces inside comments, so a function's saved source can end early (the
+  byte comparison is not affected); the generator gives the same original call instruction different signatures in different copies of its
+  block; three functions were refused as running off the end of their listed size.
+- Nothing changed in the skill: the list is the input for generator rules, each to be written with its test.
+
+### The generator's C against a game's own source, read twice (98 functions, 2026-11-24)
+- What was compared: a small Dreamcast game whose C source is public, compiled here with SHC 5.1 and linked with the real libraries; the
+  generator run on the result; source, original listing and generated C side by side for all 98 functions. Two readings, the second by a
+  reader given the material and none of the first one's conclusions. Sizes only, nothing proven; some generated functions of this scratch image
+  pass the wrong arguments (a callee missing from the function list comes out as a call by address carrying leftover registers).
+- Sizes: generated C 1.46 times the original under `-size` (35,546 to 51,966), 1.88 under the sample makefile's release flags. By original
+  size: under 100 bytes 1.04, 100 to 500 1.19, 500 to 1,000 1.51, over 1,000 1.65. 14 functions were refused until their listed size was cut to
+  the last instruction (the next function's literals sat in the pool after them).
+- Both readings, the same first cause: a pointer the code steps as it writes (`p += 8; *--p = x`, the vertex macros) comes out as a fixed base
+  plus a growing constant, or a new temporary per run: 7,400 of the 16,400 excess bytes; one function 7,028 to 3,180 against 2,774. The
+  compiler stops folding the constant chain past a nesting depth. A game that does not draw through those macros does not have it (0 matches in
+  the game this was done for).
+- Declarations: the compiler hands its saved registers to `register` variables in the order declared, and in a large function a `register`
+  variable nothing names still takes part: 11 such lines cost one function 1,710 bytes, and ordering by use gave 4,138 over the sample. Dropping
+  `register` everywhere makes the sample worse by 1,282; in the flat form it is essential.
+- The compiler has two regimes: a generated loop compiled alone was smaller than the source's form of it (488 against 550) and bloated inside
+  its full function. A test on small functions says little about the large ones.
+- Smaller, measured: frame words in the array 806 net (the gate that chooses the form runs before the other passes and chose wrong where
+  unfolded chains hid the gain); an element's address once 132 net; code after a loop once per exit 76; a void function's carried result about
+  nothing; a same-file callee 58 in one function. No gain: float literals from the pool, members against casts, an index form for tables, a
+  multiply for the shift chain, constants carried through switch arms. No waste in float operations themselves: it is values and addresses
+  going through memory.
+- Eight text passes stacked took the sample from 1.46 to 1.13. The second reader's account of the rest: the generator names values where the
+  original has registers. One variable per register live range, updated in place; `register` only for what the original kept in saved
+  registers; scratch values left inside expressions; nothing declared that is not named. All of it is in the binary.
+- What changed in the skill: `order_registers` and `drop_unused_locals` as last passes (`tests/test_rewrites_regorder`,
+  `tests/test_rewrites_unused`). The walking pointer and the register-shaped variables are generator work not started.

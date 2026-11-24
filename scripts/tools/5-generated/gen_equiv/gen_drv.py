@@ -114,6 +114,8 @@ def _build(name,ret,passthru=False):
             return 'return %s;'%f
         return 'return 0;' if e=='None' else 'return %s;'%e
     text=re.sub(r'@@RET:(.*?)@\|@(.*?)@@',retfix,text)
+    if c.frame and '@@F:' in text:      # the return line is added after the frame offsets were settled: a function returning r15 kept '@@F:0@@' in its C
+        text=re.sub(r'@@F:(-?\d+)@@',lambda m:str(4*W+int(m.group(1))+(ps if int(m.group(1))<0 else 0)),text)
     # the caller's stack words by the names the parameters give them, once the body is whole (the return line included): a8.. become
     # s.w[] where the words came in as one structure, s.w[] go back to a8.. where they are plain parameters (Virtua Tennis FUN_8c07fd10
     # declared a4..a10 and read s.w[0]; a function returning *(float *)&a8 declared Stk3 s): either way it did not compile
@@ -793,7 +795,11 @@ def tests(name,c,src):
     addr_params=set()
     for kind,e in c.mem_addrs:
         if kind=='e':
-            for m in re.findall(r'\ba(\d)\b',e): addr_params.add(int(m))
+            for m in re.findall(r'\ba(\d)\b',e):
+                # a parameter that is only ever scaled in the address (a4 << 3, a4 * 12) is an index into a table, not the address: drawn
+                # as a pointer (0x0C800000), the table entry lay far past any filled memory and a list walked from it never ended
+                if all(re.match(r'\s*(?:<<|\*)',e[o.end():]) or re.search(r'\*\s*\(*$',e[:o.start()]) for o in re.finditer(r'\ba%s\b'%m,e)): continue
+                addr_params.add(int(m))
             for v_ in re.findall(r'\b([tu]\d+|R\d+)\b',e):         # a loop's pointer variable started from a parameter (t0 = a4): the
                 for m in re.findall(r'\b%s = \(*a(\d)\b'%v_,src): addr_params.add(int(m))      # parameter is an address too (vmsfs_memcpyl)
     basemap={}
@@ -972,4 +978,6 @@ def head_protos(items):
     tds=''.join('typedef struct { int w[%d]; } Stk%d;\n'%(w,w) for w in words)
     from rewrites import struct_decls
     tds+=''.join(d+'\n' for d in struct_decls(' '.join(it[1] for it in items)))      # the one-field structures of struct_access
+    for b in sorted(set(re.findall(r'\bfbits_([0-9A-F]+)\b',' '.join(it[1] for it in items)))):      # a NaN or infinity float constant (ffmt): its bits as a constant
+        tds+='static const unsigned int fbits_%s = 0x%s;\n'%(b,b)
     return tds+(out+'\n' if out else '')+'\n'.join(l+';' for l in mine if l.endswith(')'))

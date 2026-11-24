@@ -262,12 +262,24 @@ def to_assemble(d, files):
     return changed, stale, missing
 
 
-def writes_diff(wa, wb, new, limit=8):
+def heap_shrink(av, bv, shrink):
+    """True when a written value is the heap's size (or one derived from it by a power of two) made smaller by the BSS move: the BSS
+    moves up by `shrink` under a top that stays (`fixed`), so the heap between them is that much smaller (Jet Set Radio: 004A28C0 in the
+    original, 004888C0 padded, and 0x25146 / 0x24446 derived from it)."""
+    d = av - bv
+    if not shrink or d <= 0 or shrink % d:
+        return False
+    k = shrink // d
+    return k & (k - 1) == 0
+
+
+def writes_diff(wa, wb, new, limit=8, shrink=None):
     """[(k, original write, padded write)]: where the writes of the original and of the padded image differ, the first `limit`, one write
     against its own (as far as both lists go). A write is [address hex, size, value hex]. The padded one is at new(address), of the same
     size, and has the same value, or for an address value its place new(value) (a 4-byte write). A run of four byte writes to the four
     bytes of an aligned word, in ascending order in both images (a table of addresses copied a byte at a time), is compared as the word,
-    the same rule: each byte of a relocated address differs, the word is its place. Whatever one-by-one passed, this passes."""
+    the same rule: each byte of a relocated address differs, the word is its place. Whatever one-by-one passed, this passes.
+    shrink (the BSS move): a 4-byte value smaller by it, or by it over a power of two, is the heap shrinking (heap_shrink)."""
     out = []
     n = min(len(wa), len(wb))
     k = 0
@@ -288,7 +300,7 @@ def writes_diff(wa, wb, new, limit=8):
             ok = all(int(wb[k + j][0], 16) == new(ax + j) for j in range(4)) and (bv4 == av4 or bv4 == new(av4))
             step = 4
         else:
-            ok = not (bx != new(ax) or s != s2 or not (bv == av or (s == 4 and bv == new(av))))
+            ok = not (bx != new(ax) or s != s2 or not (bv == av or (s == 4 and (bv == new(av) or heap_shrink(av, bv, shrink)))))
             step = 1
         if not ok:
             out.append((k, x, y))
@@ -422,7 +434,7 @@ def main(argv):
     say('original: %s after %d steps, %d writes' % (ra['error'], ra['steps'], len(ra['writes'])), log)
     rb = simulate(os.path.join(d, 'pad.bin'), steps)
     say('padded:   %s after %d steps, %d writes' % (rb['error'], rb['steps'], len(rb['writes'])), log)
-    diff = writes_diff(ra['writes'], rb['writes'], new)
+    diff = writes_diff(ra['writes'], rb['writes'], new, shrink=bss_shift(pad, len(G), BSS_ALIGN))
     if diff:
         say('check 2: DIFFERS at write #%d of %d:' % (diff[0][0], len(ra['writes'])), log)
         for k, x, y in diff:

@@ -43,6 +43,10 @@ byte for byte too). Say which step you are in, and end it with `python3 tools/pr
 If you are the session that ran the kickoff and the user chose to continue, this file is your instructions. If you are a new session,
 you are a guided agent: read this file, run `python3 tools/progress.py` to see where the run stands, and start at the first step not done.
 
+Work you hand to another agent in steps 6 to 8 has a prompt beside that step's tools: `tools/6-agentic/PROMPT_prove.md`,
+`tools/7-reduction/PROMPT_handshrink.md`, `tools/7-reduction/PROMPT_install.md`, `tools/7-reduction/PROMPT_pass.md`, `tools/8-build/PROMPT_triage.md`. Fill in its
+placeholders and give it as it is: it carries the rules (scratch copies, the coverage bar, the game region only).
+
 *(equivalent)* A function is only as proven as its cases: `equiv.py` prints how many of the original's instructions they ran. Aim for all of them; an
 instruction no case ran is a branch nobody checked. Details: the kickoff skill's `docs/equivalent-pipeline.md` and `docs/agentic-decomp.md`.
 
