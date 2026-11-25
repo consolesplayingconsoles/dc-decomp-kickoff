@@ -151,7 +151,9 @@ def main():
         bodies = [e for e in ents if e not in stubs]
         new = {}
         for i, a, s in stubs:
-            new[i] = 'thunk_' + n if 'thunk_' + n not in names else 'thunk_%s_%08x' % (n, a)
+            cand = n if n.startswith('thunk_') else 'thunk_' + n          # not thunk_thunk_<name>
+            new[i] = cand if cand not in names else '%s_%08x' % (cand, a)
+            names.add(new[i])                                            # the next stub of this name sees it taken: a name is used once
         for i, a, s in (bodies[1:] if bodies else stubs[1:]):
             new.setdefault(i, '%s_%08x' % (n, a))
         if not bodies and stubs:                       # only stubs: the first keeps the name

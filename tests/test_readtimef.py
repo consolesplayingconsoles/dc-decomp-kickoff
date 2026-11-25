@@ -52,11 +52,13 @@ class TestReadtimef(unittest.TestCase):
 
     def test_readtimef(self):
         text = open(SRC).read()
-        m = re.search(r'def _read\(n\):\s*\n\s*signal\.alarm\((.*)\)', text)
-        if not m:
+        body = re.search(r'^def _read\(n\):\n((?:[ \t].*\n)+)', text, re.M)      # the whole function: the alarm need not be its first line
+        alarms = [a for a in re.findall(r'signal\.alarm\((.*)\)', body.group(1) if body else '') if a != '0']      # alarm(0) only clears it
+        if not alarms:
             self.fail('[ERROR] readtimef check failed:\nno read alarm found in _read()')
-        if 'TIMEF' not in m.group(1):
-            self.fail('[ERROR] readtimef check failed:\nscaled: the read alarm %s does not use TIMEF' % m.group(1))
+        for a in alarms:
+            if 'TIMEF' not in a:
+                self.fail('[ERROR] readtimef check failed:\nscaled: the read alarm %s does not use TIMEF' % a)
 
 
 if __name__ == '__main__':

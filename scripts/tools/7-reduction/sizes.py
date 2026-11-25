@@ -21,6 +21,26 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join('build', 'sizes.json')
 MARK = '\n\nvoid zz_size_end(void)\n{\n}\n'
+_SEQ = [0]
+
+
+def _next():
+    """A number for each scratch file of this process."""
+    _SEQ[0] += 1
+    return _SEQ[0]
+
+
+def _clean(f):
+    """The scratch source and every file equiv.compile_link wrote for it (build/equiv/<stem>.*)."""
+    import glob
+    if os.path.exists(f):
+        os.remove(f)
+    stem = os.path.splitext(os.path.basename(f))[0]
+    for g in glob.glob(os.path.join('build', 'equiv', stem + '.*')):
+        try:
+            os.remove(g)
+        except OSError:
+            pass
 
 
 def unit_head(text):
@@ -36,7 +56,7 @@ def c_size(name, src, protos, head=None):
     head: the declarations to put above it (a unit's own, see unit_head); without it, the ones protos give."""
     import equiv
     import gen_drv
-    f = 'src/zz_size%d.c' % os.getpid()
+    f = 'src/zz_size%d_%d.c' % (os.getpid(), _next())      # one stem per compile: compile_link names its logs and outputs after it
     open(f, 'w').write('/* scratch */\n' + (head if head is not None else gen_drv.head_protos([(name, src, None, protos)])) + '\n\n' + src + MARK)
     try:
         table = equiv.names()
@@ -55,8 +75,7 @@ def c_size(name, src, protos, head=None):
         total = sum(int(x.group(2), 16) for x in re.finditer(r"^(P|C)\s+H'[0-9A-F]{8}\s+-\s+H'[0-9A-F]{8}\s+H'([0-9A-F]{8})", m, re.M))
         return total - 4 if total else None
     finally:
-        if os.path.exists(f):
-            os.remove(f)
+        _clean(f)
 
 
 def c_size_any(name, src, protos_list, head=None):
@@ -80,7 +99,7 @@ def unit_sizes(f, text=None, table=None, funcs=None):
     import equiv
     table = table if table is not None else equiv.names()
     funcs = funcs if funcs is not None else equiv.functions()
-    tmp = 'src/zz_sizes%d.c' % os.getpid()
+    tmp = 'src/zz_sizes%d_%d.c' % (os.getpid(), _next())
     open(tmp, 'w').write((text if text is not None else open(f, errors='replace').read()) + MARK)
     try:
         defines, defined = equiv.outside_names(tmp, table)
@@ -92,8 +111,7 @@ def unit_sizes(f, text=None, table=None, funcs=None):
         except OSError as e:          # the link wrote no map (a Docker hiccup with another compile running): not measured, the run goes on
             return 'LINK ' + str(e)[:80]
     finally:
-        if os.path.exists(tmp):
-            os.remove(tmp)
+        _clean(tmp)
     if code is None:
         return 'LINK'
     addrs = sorted(set(syms.values()) | {equiv.SCRATCH + len(code)})

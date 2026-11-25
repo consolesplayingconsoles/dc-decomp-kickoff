@@ -2,6 +2,7 @@
 """Rename functions (and globals) everywhere in the repo at once. Run in the repo.
 
     python3 tools/common/rename.py <map> [--apply]
+    python3 tools/common/rename.py --stale [--apply]
 
 <map>: one rename per line, `<function address>\t<new name>`, or `name:<old>\t<new>` for a global or symbol by name.
 Lines starting with # are skipped. Without --apply it checks the map and prints what would change.
@@ -10,6 +11,12 @@ Checks: every address is a function in functions.txt; the names it gives are uni
 is already a global or symbol. Then every whole-word use in the repo's tracked and untracked text files changes in one
 pass (chains and swaps such as a->b, b->a come out right), and tests/<file>/<old>.json and state/kept/<old>.json move
 to the new name. Afterwards the asm pieces carry old labels: run setup.sh's split (tools/1-2-baseline/split_asm.py) and build.sh.
+
+--stale: no map. Every function starts as FUN_<address>; one named later in functions.txt (by hand, from a sibling decomp) leaves the C
+that already calls it, or defines it, under the placeholder, and a build from the C links nothing for it (the asm piece's label is the
+new name; the proofs found it by its address and passed). This renames each such placeholder to the name functions.txt gives, with
+the same whole-word pass and case-file moves as a map. functions.txt does not change. A placeholder and its new name both defined in
+C stop it (two definitions would result): nothing changes.
 """
 import os as _tp_os, sys as _tp_sys  # noqa: E401  every tools folder on the import path (tools/toolpath.py)
 _tp_sys.path.insert(0, _tp_os.path.normpath(_tp_os.path.join(_tp_os.path.dirname(_tp_os.path.abspath(__file__)), '..')))
@@ -21,8 +28,27 @@ import sys
 from collections import Counter
 
 
+def stale_names(byaddr):
+    """{FUN_<address>: current name} for the functions functions.txt names (anything but their placeholder)"""
+    return {'FUN_' + a: n for a, n in byaddr.items() if n != 'FUN_' + a and not n.startswith('FUN_')}
+
+
+def c_definitions(files):
+    """the names the C files define: a top-level `type name(args) {`"""
+    out = set()
+    rd = re.compile(r'^[A-Za-z_][\w \t\*]*?\b(\w+)\s*\([^;{]*\)\s*\n?\{', re.M)
+    for f in files:
+        if f.endswith('.c') and os.path.isfile(f):
+            try:
+                out.update(rd.findall(open(f, encoding='utf-8').read()))
+            except (UnicodeDecodeError, IsADirectoryError):
+                pass
+    return out
+
+
 def main(argv):
-    if len(argv) < 2:
+    stale = '--stale' in argv
+    if len(argv) < 2 or (not stale and argv[1].startswith('--')):
         sys.exit(__doc__)
     apply = '--apply' in argv
     byaddr = {}
@@ -31,7 +57,7 @@ def main(argv):
         if len(p) >= 4 and p[0] == 'F':
             byaddr[p[1].lower()] = p[3]
     want, extra = {}, {}
-    for l in open(argv[1]):
+    for l in ([] if stale else open(argv[1])):
         l = l.strip()
         if not l or l.startswith('#'):
             continue
@@ -48,6 +74,8 @@ def main(argv):
     if bad:
         sys.exit('not in functions.txt: %s' % bad)
     ren = {byaddr[a]: n for a, n in want.items() if byaddr[a] != n}
+    if stale:
+        ren = stale_names(byaddr)
     final = dict(byaddr)
     final.update(want)
     dup = [n for n, k in Counter(final.values()).items() if k > 1 and n in set(want.values())]     # names this map adds
@@ -60,8 +88,8 @@ def main(argv):
                 p = l.split()
                 if len(p) >= 2 and not l.startswith('#'):
                     other.add(p[1])
-    clash = sorted(set(ren.values()) & other - set(ren))
-    clash += sorted(n for n in extra.values() if n in other or n in final.values())
+    clash = [] if stale else sorted(set(ren.values()) & other - set(ren))
+    clash += [] if stale else sorted(n for n in extra.values() if n in other or n in final.values())
     if clash:
         sys.exit('new names already used as globals/symbols/functions: %s' % clash)
     ren.update(extra)
@@ -72,6 +100,11 @@ def main(argv):
     rx = re.compile(r'(?<![\w$])([A-Za-z_]\w*)')
     files = subprocess.check_output(['git', 'ls-files']).decode().split('\n')
     files += subprocess.check_output(['git', 'ls-files', '--others', '--exclude-standard']).decode().split('\n')
+    if stale:
+        defined = c_definitions([f for f in files if f])
+        both = sorted(o for o, n in ren.items() if o in defined and n in defined)
+        if both:
+            sys.exit('both defined in C (two definitions would result): %s' % ', '.join('%s and %s' % (o, ren[o]) for o in both[:20]))
     hits = {}
     for f in files:
         if not f or f in ('.recomp.json', 'BASE', 'KICKOFF') or not os.path.isfile(f):

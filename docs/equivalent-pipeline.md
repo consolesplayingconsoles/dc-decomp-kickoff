@@ -118,7 +118,8 @@ double precision under `-fpu=single`) are counted apart as "No C form" and leave
   Results are checked and written in **byte batches** (`GEN_BATCH`, default 8000 bytes of original code), biggest functions first, so
   one slow function never holds the rest back and an interrupted run loses only the draws in flight. The log has one line per
   function with its bytes and seconds. Give a slow machine more time with `GEN_TIME_FACTOR`, and do not start a whole-game run
-  while other work needs the machine.
+  while other work needs the machine. A draw that times out is usually CPU time, not load: the run prints at its end a second pass for
+  exactly those functions (`GEN_TIME_FACTOR=8`, one job, smallest first); a function the original never finishes on is not in it.
 - `tools/common/consistency.py [--fix]` reports and repairs C defined twice, cases without C, C without a recorded pass; run it after runs
   overlapped and before a commit.
 

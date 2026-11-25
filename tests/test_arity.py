@@ -12,6 +12,9 @@ opened from leftover registers) and the proof compared them on none.
                              says why ("pass-through"), a null rescans
                   named      a jump to a named function takes that function's arity
                   defonly    a function that is not a pass-through still takes its definition's arity when its code reads less
+                  zero       a routine that clears a register with `xor rN,rN` (or `sub rN,rN`) is not reading it as it came in: a division
+                             routine reading r4 and r5 takes 2 (Jet Set Radio FUN_8c013ca8, FUN_8c013d48, FUN_8c013de0 counted 0, so every
+                             caller was generated without its arguments and 19 failed the check)
                   delay      an argument read in the delay slot of the function's first call counts (Zombie Revenge ADXT_Stop: called with no handle)
 """
 import unittest
@@ -183,6 +186,13 @@ class TestArity(unittest.TestCase):
         got = gen_core.callee_arity('sideCall')
         if got != (2, 0):
             bad.append('side call: the arguments the code reads on some path count though a call comes first in address order, got %s, want (2, 0)' % (got,))
+        gen_core.SPANS['divRoutine'] = (0x8C1DEC00, 100)
+        text['divRoutine'] = '\n'.join(['; divRoutine', '', '8c1dec00 6153  mov r5,r1', '8c1dec02 6043  mov r4,r0', '8c1dec04 2118  tst r1,r1',
+            '8c1dec06 8905  bt 0x8c1dec12', '8c1dec08 233a  xor r3,r3', '8c1dec0a 2037  div0s r3,r0', '8c1dec0c 322a  subc r2,r2', '8c1dec0e 303a  subc r3,r0',
+            '8c1dec10 4024  rotcl r0', '8c1dec12 000b  rts', '8c1dec14 0009  nop'])
+        got = gen_core.callee_arity('divRoutine')
+        if got != (2, 0):
+            bad.append('zero: a division routine that clears r2 and r3 with xor/subc takes %s, want (2, 0)' % (got,))
         got = gen_core.callee_arity('readsLess')
         if got != (3, 0):
             bad.append('defonly: a function reading 1 register with a 3-parameter definition takes %s, want (3, 0)' % (got,))

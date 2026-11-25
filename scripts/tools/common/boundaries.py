@@ -3,6 +3,14 @@
 
     python3 tools/common/boundaries.py candidates.txt            report the plan
     python3 tools/common/boundaries.py candidates.txt --apply    write functions.txt (a copy is kept in build/functions.before-boundaries)
+    python3 tools/common/boundaries.py --discover [--values]    print the candidates the listed code points at: one line per address
+                                                                (a candidates file; `> candidates.txt` and run the two lines above)
+
+--discover names the addresses to ask about: every listed entry is walked, and an address in a gap (inside no listed range) that its code
+`bra`s or `bsr`s to, or reaches with a `jsr` or `jmp` through a register loaded from a pool word, is a candidate (Power Stone 2 0C0B819E, a
+42-byte routine after the 34-byte FUN_0c0b817c that two `bra` of FUN_0c0b857c jump to: unlisted, so the generator wrote the four
+functions it jumps to inline). A forward `bra` into a gap that the function's own branches reach is more of that function, not a candidate.
+The checks below then accept or refuse each one.
 
 candidates.txt: one address per line (hex), optionally followed by a name; # starts a comment. For each address the tool checks
 that it begins a function, by what the code can do rather than by how it looks:
@@ -133,6 +141,77 @@ def reach(start, stop_at=None, tails=(), funcs=None, bra_tails=()):
     return end, seen, flags
 
 
+_LOAD = re.compile(r'^mov\.l @\(0x[0-9a-f]+,pc\),(r\d+)$')
+_REGJUMP = re.compile(r'^(?:jsr|jmp) @(r\d+)$')
+
+
+def discover(values=False):
+    """{address: (kind, function name, where)}: the addresses in a gap (inside no listed range, F entries) that the code of a listed entry
+    jumps or calls to: a `bra` or `bsr`, or a `jsr` / `jmp` through a register that a `mov.l` from a pool word loaded within the last
+    16 bytes. A target the entry's own branches reach (a forward `bra` into the gap it then runs through) is more of that entry; a
+    `bra` back before its start is a tail jump, which is what this finds. Only what the code does counts: a pool word that is read
+    through, or a pointer in a table, names nothing. values (--values): the address in a pool word a listed entry loads and does not
+    read through (no @rN, @(k,rN) or @(r0,rN) on that register before it is written again) is a candidate too, inside a gap or inside
+    another entry's range: a routine the game hands on (a callback passed to a call, or stored), which nothing jumps to (830 such on
+    Jet Set Radio, found only when the build from C refused to hand on their addresses). The checks below refuse what is data."""
+    import bisect
+    ents = entries()
+    known = {e[0] for e in ents}
+    ranges = sorted((e[0], e[0] + e[1]) for e in ents)
+    first = [r[0] for r in ranges]
+    top = BASE + len(BIN)
+
+    def covered(a):
+        i = bisect.bisect_right(first, a) - 1
+        return i >= 0 and a < ranges[i][1]
+    found = {}
+    for e in ents:
+        end, seen, flags = reach(e[0], tails=known - {e[0]})
+        loads = {}
+        for a in sorted(seen):
+            text, pool, psize, target = shdis.decode(word(a), a)
+            if not text:
+                continue
+            kind, t = None, None
+            m = text.split()[0]
+            if m in ('bra', 'bsr') and target is not None:
+                kind, t = m, mirror(target)
+            else:
+                ld = _LOAD.match(text)
+                if ld and pool is not None and 0 <= mirror(pool) - BASE <= len(BIN) - 4:
+                    loads[ld.group(1)] = (a, struct.unpack_from('<I', BIN, mirror(pool) - BASE)[0])
+                    continue
+                rj = _REGJUMP.match(text)
+                if rj and rj.group(1) in loads and a - loads[rj.group(1)][0] <= 16:
+                    kind, t = 'pool ' + m, mirror(loads[rj.group(1)][1])
+            if t is None or t in seen or t % 2 or not BASE <= t < top or covered(t) or t in found:
+                continue
+            found[t] = (kind, e[2], a)
+        if values:
+            order = sorted(seen)
+            for i, a in enumerate(order):
+                text, pool, psize, target = shdis.decode(word(a), a)
+                ld = _LOAD.match(text or '')
+                if not ld or pool is None or not 0 <= mirror(pool) - BASE <= len(BIN) - 4:
+                    continue
+                r = ld.group(1)
+                t = mirror(struct.unpack_from('<I', BIN, mirror(pool) - BASE)[0])
+                if t in known or t in seen or t % 2 or not BASE <= t < top or t in found:
+                    continue
+                through = False
+                for b in order[i + 1:i + 9]:
+                    tx = shdis.decode(word(b), b)[0] or ''
+                    ops = tx.split(None, 1)[1] if ' ' in tx else ''
+                    if re.search(r'@\(?(?:[^,()]*,)?%s\)?(?![0-9])' % r, ops) and not re.match(r'(?:jsr|jmp) @', tx):
+                        through = True
+                        break
+                    if re.search(r',%s$' % r, ops):          # written again: the value is gone
+                        break
+                if not through:
+                    found[t] = ('pool value', e[2], a)
+    return found
+
+
 def not_an_entry(a, size):
     """Why code at a, reached by its own branches up to size bytes, is a piece of a function that starts earlier, or None (the three
     wrong Virtua Tennis entries of 2026-10-31): an undecodable word before its first branch (8c0886cc, the low half of a pointer word
@@ -162,6 +241,10 @@ def name_given(n):
 def main(argv):
     if len(argv) < 2:
         sys.exit(__doc__)
+    if argv[1] == '--discover':
+        for t, (kind, name, a) in sorted(discover('--values' in argv).items()):
+            print('%08x  # %s from %s at %08x' % (t, kind, name, a))
+        return
     apply = '--apply' in argv
     cands = []
     for l in open(argv[1]):

@@ -20,6 +20,12 @@ a listed size, tables of low pointers, byte tables that look like addresses.
                     dataref   a word inside a function that other code loads by address (its address is a pool word) and that holds
                               an address is P dataref; its neighbour of the same shape, whose address nothing loads, is no candidate
                               (Zombie Revenge 0C20B184: the end of the heap inside the C library; left a number, the heap lost 170 KB)
+                    jumptable three or more words in a row inside a function that point back into the same function (SHC's block copies:
+                              the library's _quick_mvn jumps through them) are P jumptable; two are two instructions each (Power Stone 2:
+                              33 such words stayed numbers, the library moved, and the first block copy jumped into other code)
+                    halfpool  a word past a function whose two halves are both read by mov.w @(disp,pc) is two numbers, N halfpool; one with
+                              only a half read stays an address (Power Stone 2: 07FF and 0C80 side by side read as 0C8007FF, moved, and the
+                              sound library's stream loop ran one entry past its table)
                     words     words.txt N on a word the rules take as an address makes it N words
                     arm       every word inside layout.txt's `arm <start> <end>` (code for the sound CPU, not the SH-4) is N arm, also
                               the ones the rules would take as 0c / 8c addresses
@@ -64,6 +70,15 @@ F3 = (W(0xD201, 0x000B, 0x0009, 0x0009) +             # C00 mov.l @(C08),r2 / rt
       L(0x0C010700) +                                 # C10 a variable inside f3 that other code reads by address: holds an address
       L(0x0C010704))                                  # C14 the same shape, but nothing loads its address: two instructions
 IMAGE = IMAGE[:0xC00] + F3 + IMAGE[0xC00 + len(F3):]
+F5 = (W(0x000B, 0x0009, 0x0009, 0x0009) +               # C60 rts / nops: the labels a jump table points at
+      L(0x0C010C66, 0x0C010C64, 0x0C010C62) +           # C68 the table: words that point back into f5
+      W(0x000B, 0x0009) + L(0x0C010C62, 0x0C010C64) +   # C74 rts / nop, C78 two such words only: no table
+      W(0x000B, 0x0009))
+IMAGE = IMAGE[:0xC60] + F5 + IMAGE[0xC60 + len(F5):]
+F6 = (W(0x9004, 0x9104, 0x9204, 0x000B, 0x0009, 0x0009) +   # C90 mov.w reads of C9C, C9E and CA0 / rts
+      L(0x0C0100AC) +                                       # C9C both halves read as 16-bit values: two numbers
+      L(0x0C010124))                                        # CA0 only its low half read: still an address
+IMAGE = IMAGE[:0xC90] + F6 + IMAGE[0xC90 + len(F6):]
 ARM = L(0x0C220C9A, 0, 0x8C036A84, 0)                 # 200 code for the sound CPU (layout.txt arm): words that only look like 0C / 8C addresses
 IMAGE = IMAGE[:0x200] + ARM + IMAGE[0x200 + len(ARM):]
 
@@ -107,7 +122,7 @@ class TestPointers(unittest.TestCase):
             shutil.copytree(os.path.join(SKILL, 'scripts', 'tools'), os.path.join(tmp, 'tools'), ignore=shutil.ignore_patterns('__pycache__'))
             open(os.path.join(tmp, '1ST_READ.BIN'), 'wb').write(IMAGE)
             open(os.path.join(tmp, 'BASE'), 'w').write('%08X\n' % BASE)
-            open(os.path.join(tmp, 'functions.txt'), 'w').write('F %08x 12 f1\nD %08x 0 data_10\nF %08x 56 f2\nF %08x 58 f3\nF %08x 20 f4\n' % (BASE, BASE + 0x10, BASE + 0x40, BASE + 0xC00, BASE + 0xC3A))
+            open(os.path.join(tmp, 'functions.txt'), 'w').write('F %08x 12 f1\nD %08x 0 data_10\nF %08x 56 f2\nF %08x 58 f3\nF %08x 20 f4\nF %08x 36 f5\nF %08x 12 f6\n' % (BASE, BASE + 0x10, BASE + 0x40, BASE + 0xC00, BASE + 0xC3A, BASE + 0xC60, BASE + 0xC90))
             open(os.path.join(tmp, 'layout.txt'), 'w').write('game 0C010000 0C010D00\nfixed 0C500000\narm 0C010200 0C010210\n')
             open(os.path.join(tmp, 'words.txt'), 'w').write('N 0C01002C   # a test override\n')
             r = subprocess.run([sys.executable, 'tools/1-2-baseline/pointers.py'], cwd=tmp, stdout=subprocess.PIPE,
@@ -122,12 +137,17 @@ class TestPointers(unittest.TestCase):
                     0x100: ('N', 'halves'), 0x104: ('N', 'halves'), 0x108: ('N', 'halves'), 0x10C: ('N', 'halves'), 0x110: ('N', 'halves'),
                     0x118: ('N', 'halves'), 0x124: ('P', '0c'), 0x128: ('P', '0c'), 0x130: ('P', '0c'), 0x134: ('P', '0c'),
                     0x40: ('P', 'codefn'), 0x48: ('P', 'coderun'), 0x50: ('P', 'coderun'), 0x58: ('P', 'coderun'),
-                    0xC08: ('P', 'pool'), 0xC10: ('P', 'dataref'), 0x200: ('N', 'arm'), 0x208: ('N', 'arm')}
+                    0xC08: ('P', 'pool'), 0xC10: ('P', 'dataref'),
+                    0xC9C: ('N', 'halfpool'), 0xCA0: ('P', '0c'),
+                    0xC68: ('P', 'jumptable'), 0xC6C: ('P', 'jumptable'), 0xC70: ('P', 'jumptable'), 0x200: ('N', 'arm'), 0x208: ('N', 'arm')}
             for at, w in sorted(want.items()):
                 if rows.get(at) != w:
                     bad.append('+%02X: %r, want %r' % (at, rows.get(at), w))
             if 0x08 in rows:
                 bad.append('code: the instruction pair at +08 is a candidate: %r' % (rows[0x08],))
+            for at in (0xC78, 0xC7C):
+                if at in rows:
+                    bad.append('jumptable: +%02X is one of two words only, no table: %r' % (at, rows[at]))
             if 0xC14 in rows:
                 bad.append('dataref: +C14 is inside f3 and nothing loads its address: two instructions, not a candidate: %r' % (rows[0xC14],))
             for at in (0x60, 0x68):

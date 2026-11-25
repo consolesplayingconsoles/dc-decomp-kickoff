@@ -5,6 +5,9 @@ piece, so every one looked changed. No game data, no compiler. Stdlib only.
 
     check.py      same     a second run with the same functions.txt leaves every piece untouched (its time does not move)
                   split    after one entry is split in two, the pieces it became are written and the others stay untouched
+                  unique   a report that gives one name to several functions (Ghidra allows it: a library function linked twice, its
+                           stubs) comes out as a functions.txt where every name is used once, the same names the pieces carry
+                           (Jet Set Radio: 39 names for 65 functions, every tool that maps a name to an address kept one of them)
 """
 import unittest
 from unittest import mock
@@ -77,7 +80,30 @@ class TestSplitasm(unittest.TestCase):
                 bad.append('split: want only the two halves of f2 written, got %s' % moved)
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
+        bad += self.unique_names()
         self.assertEqual(bad, [], '\n'.join(bad))
+
+    def unique_names(self):
+        bad = []
+        tmp = tempfile.mkdtemp()
+        try:
+            shutil.copytree(os.path.join(SKILL, 'scripts', 'tools'), os.path.join(tmp, 'tools'), ignore=shutil.ignore_patterns('__pycache__'))
+            open(os.path.join(tmp, '1ST_READ.BIN'), 'wb').write(bytes(range(64)))
+            os.makedirs(os.path.join(tmp, 'out'))
+            open(os.path.join(tmp, 'report.txt'), 'w').write('F 0c010000 16 f\nF 0c010010 16 f\nF 0c010020 16 g(int)\nF 0c010030 16 f\n')
+            subprocess.run([sys.executable, 'tools/1-2-baseline/split_asm.py', '1ST_READ.BIN', '0C010000', 'report.txt', 'out'], cwd=tmp,
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
+            got = [l.split() for l in open(os.path.join(tmp, 'out', 'functions.txt')).read().split('\n') if l]
+            names = [p[3] for p in got]
+            want = ['f', 'f_0c010010', 'g_int_', 'f_0c010030']
+            if names != want:
+                bad.append('unique: functions.txt names %s, want %s' % (names, want))
+            pieces = sorted(f[9:-4] for f in os.listdir(os.path.join(tmp, 'out', 'asm')))
+            if pieces != sorted(want):
+                bad.append('unique: the pieces carry %s, functions.txt %s' % (pieces, want))
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+        return bad
 
 
 if __name__ == '__main__':

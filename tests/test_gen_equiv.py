@@ -1035,7 +1035,7 @@ DEFS_C = ("typedef struct { int w[4]; } Stk4;\nint stk4fn(Stk4 s)\n{\n    return
           "void vecmk(int a4, int a5, int a6, int a7, int a8)\n{\n    *(int *)a8 = a4;\n}\n"
           "void fivefn(int a4, int a5, int a6, int a7, int a8)\n{\n    *(int *)a4 = a5 + a6 + a7 + a8;\n}\n"
           "void voidfn(int a4)\n{\n    *(int *)0xC2A0000 = a4;\n}\n"
-          "void fptrdef(float *vd, float *vs, float *vt)\n{\n    *vd = *vs;\n}\n"
+          "void fptrdef(float *vd, float *vs, float *vt)\n{\n    *vd = *vs + *vt;\n}\n"
           "int passdef(int a4)\n{\n    return a4;\n}\n"
           "int varpdef(Stk3 s)\n{\n    return s.w[0];\n}\n"
           "int twoptfn(Stk3 a, Stk3 b)\n{\n    return a.w[0] + b.w[0];\n}\n"

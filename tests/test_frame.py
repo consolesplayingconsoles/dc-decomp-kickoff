@@ -12,6 +12,7 @@ No game data, no compiler. Stdlib only.
                               int and float, and a slot used once keep their frame accesses
                     reach     a passed address reaches every slot from it to the end of the frame, not a guessed size; a slot below it still becomes a local
                     twice     a second pass changes nothing
+                    comment   a comment between the brace and the declarations: the new local's load still goes below every declaration
 """
 import unittest
 from unittest import mock
@@ -100,6 +101,15 @@ class TestFrame(unittest.TestCase):
             bad.append('reach: a slot below a passed address is out of its reach and still becomes a local: %s' % frame.scalarize(below, min_uses=1))
         if frame.scalarize(frame.scalarize(fn('*(int *)((int)stk + 32) = a4;', 't1 = *(int *)(((int)stk + 32));'))) !=frame.scalarize(fn('*(int *)((int)stk + 32) = a4;', 't1 = *(int *)(((int)stk + 32));')):
             bad.append('twice: a second pass changes the text')
+        # a comment between the brace and the declarations (Power Stone 2 FUN_0c0f26e8, gen_er.c: a note of two lines above `int stk[1];`):
+        # the local and its load went above the declarations, `R1000 = *(int *)((int)stk + 0);` before `int stk[1];`, which does not compile
+        for k, head in {'one line': ['    /* a note */'], 'two lines': ['    /* a note that', '       goes on */']}.items():
+            c = '\n'.join(['int f(int a4)', '{'] + head + ['    int stk[69];', '', '    register int t1;', '    *(int *)((int)stk + 32) = a4;',
+                           '    t1 = *(int *)(((int)stk + 32));', '    return t1;', '}'])
+            lines = frame.scalarize(c).split('\n')
+            at = {x.strip(): i for i, x in enumerate(lines)}
+            if not ('int R1032;' in at and at.get('R1032 = *(int *)((int)stk + 32);', -1) > max(at['int stk[69];'], at['register int t1;'], at['int R1032;'])):
+                bad.append('comment (%s): the load of the new local is not below every declaration:\n%s' % (k, '\n'.join(lines)))
         if bad:
             self.fail('[ERROR] frame check failed:\n' + '\n'.join(bad))
 

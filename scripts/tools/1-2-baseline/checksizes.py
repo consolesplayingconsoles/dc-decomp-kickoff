@@ -25,7 +25,8 @@ rewritten (git keeps the old one); then run split_asm.py and build.sh (MATCH), a
 function that had C (its original now runs on instead of jumping out).
 
 --merge looks at entries that are pieces of one function: an entry whose code runs off its end into the next one (no rts
-before the listed end) is the first half of a function listed twice. The entry is extended over the next one(s) until the
+before the listed end) is the first half of a function listed twice; so is a loop's entry branch listed alone (a `bra` to the next
+entry, the loop's test, which branches back into the unlisted body between them), merged under the first entry's name. The entry is extended over the next one(s) until the
 flow ends with an rts, a jump or a tail `bra`. A merge swallows the names of the later entries: the report names every one that
 was counted proven, since the merged function must be proven again. With --write, functions.txt is rewritten (git keeps the old one); then run split_asm.py and build.sh (MATCH), and equiv.py on the files of the merged functions.
 """
@@ -294,6 +295,17 @@ def merge(only, write):
             j += 1
             end += entries[j][2]
             pieces += 1
+        # a loop's entry branch listed as its own function: `bra` to the loop's test, which is the next entry, with the loop's body unlisted
+        # in between. The test branches back into the body: the three are one function, kept under the first entry's name (callers name it)
+        if j == k and k + 1 < len(entries):
+            nx_a, nx_sz = entries[k + 1][1], entries[k + 1][2]
+            if end < nx_a and nx_a + nx_sz - base <= len(exe) and any(
+                    shdis.decode(word(pc), pc)[0].split()[0] == 'bra' and shdis.decode(word(pc), pc)[3] == nx_a for pc in range(a, end, 2)) \
+                    and any(shdis.decode(word(pc), pc)[0].split()[0] in ('bra', 'bt', 'bf', 'bt/s', 'bf/s')
+                            and end <= (shdis.decode(word(pc), pc)[3] or 0) < nx_a for pc in range(nx_a, nx_a + nx_sz, 2)):
+                gap += nx_a - end
+                j, end = k + 1, nx_a + nx_sz
+                pieces += 1
         while runs_off(a, end) and j + 1 < len(entries) and j - k < 8:
             nxt_start = entries[j + 1][1]
             if nxt_start > end:                         # the code goes on into the gap before the next entry

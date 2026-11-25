@@ -18,6 +18,9 @@ listed code. Each candidate gets one decision, P (an address: becomes a name) or
     coderun  P  a word inside a listed function, not a pool word, in a run of three at a fixed stride (4, 8, 12 or 16) whose
                 4-aligned values lie within 0x100 of each other and inside the image (a table of addresses or of names:
                 Zombie Revenge 0C20A6E8, the AFS names of the partition table; instructions never repeat like that)
+    jumptable P three or more words in a row inside a listed function that point back into that same function: a jump table
+                its code jmps through (the compiler's block copies in the library: Power Stone 2 _quick_mvn, whose 33 entries
+                stayed numbers when the library moved, so the first copy jumped into other code)
     dataref  P  a word inside a listed function, not its own pool word, whose address other code loads from a pool (so it is a
                 variable, not two instructions), holding a 4-aligned address in the image: Zombie Revenge 0C20B184, the end of the
                 game's heap (0C94315C) inside the C library's FUN_0c20ad7c; left a number, the heap start moved with the data and its
@@ -25,6 +28,9 @@ listed code. Each candidate gets one decision, P (an address: becomes a name) or
                 confirmed by a build)
     bytes    N  an odd value whose bytes are all under 0x40 next to a word of the same kind (a table of small bytes:
                 Virtua Tennis 07070808 | 0b0b0c0c), unless a neighbour is an address into the image
+    halfpool N  a word, no mov.l pool of listed code, whose two halves listed code reads with mov.w @(disp,pc): two 16-bit
+                constants side by side (Power Stone 2 0C2C3E74, 07FF and 0C80, read as 0C8007FF and moved: the sound library's stream
+                table size became 0C81 and its loop ran one entry past the table)
     halves   N  a table of 16-bit numbers: two numbers side by side read as an address when both are near 0x0Cxx (Zombie Revenge
                 0C1127D8, a model-to-slot table: 0C9C 0C9B read as 0C9C0C9B and shifted to 0C9EDC5B, a slot number nothing has). Two
                 halves within 0x40 of each other, next to a word of the same shape with one among them that is not 4-aligned (a list of
@@ -100,6 +106,38 @@ def code_words(starts, ends, pools, fx):
                 if all(w in near for w in win) and max(abs(val(w) - val(at)) for w in win) <= 0x100:
                     for w in win:
                         out.setdefault(w, 'coderun')
+
+    def back(at):                       # a word pointing back into the function that holds it
+        if not shaped(at):
+            return False
+        a = layout.mirror(val(at))
+        i = bisect.bisect_right(starts, at) - 1
+        return a % 2 == 0 and starts[i] <= a < at
+    for at in cand:                     # three or more in a row: a jump table (SHC's block copies jmp through one)
+        if back(at) and not back(at - 4):
+            n = 1
+            while back(at + 4 * n):
+                n += 1
+            if n >= 3:
+                for k in range(n):
+                    out.setdefault(at + 4 * k, 'jumptable')
+    return out
+
+
+def halfword_pools(starts):
+    """{address} of every 16-bit pool entry the listed code reads with mov.w @(disp,pc)."""
+    top = B.BASE + len(B.BIN)
+    out = set()
+    for i, a in enumerate(starts):
+        try:
+            walked = B.reach(a, stop_at=starts[i + 1] if i + 1 < len(starts) else top)[1]
+        except Exception:
+            continue
+        for x in walked:
+            if x + 2 <= top:
+                w = struct.unpack_from('<H', B.BIN, x - B.BASE)[0]
+                if w >> 12 == 0x9:
+                    out.add(x + 4 + (w & 0xFF) * 2)
     return out
 
 
@@ -150,6 +188,7 @@ def classify():
         pv = word(p)
         if pv is not None and (pv >> 24) in TOPS:
             loaded.add(layout.mirror(pv))
+    half = halfword_pools(starts)
     out = []
     for at in range(B.BASE, top - 3, 4):
         v = struct.unpack_from('<I', B.BIN, at - B.BASE)[0]
@@ -161,6 +200,9 @@ def classify():
             continue
         if arm and arm[0] <= at < arm[1]:
             out.append((at, v, 'N', 'arm'))
+            continue
+        if at in half and at + 2 in half and at not in pools:      # two 16-bit constants side by side, not one address
+            out.append((at, v, 'N', 'halfpool'))
             continue
         pool = at in pools
         if not pool:

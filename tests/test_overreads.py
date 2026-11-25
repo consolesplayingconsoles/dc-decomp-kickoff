@@ -92,12 +92,8 @@ class TestOverreads(unittest.TestCase):
             bad.append('stack: read %s from an unwritten stack word, want 00000000' % got)
         if sh4sim.Memory.__name__ != 'Memory':
             bad.append('restored: sh4sim.Memory is %s' % sh4sim.Memory.__name__)
-        if bad:
-            print('FAIL\n  ' + '\n  '.join(bad))
-            return 1
-        print('ok: zeros, junk, stable, poked, stack, restored')
-        return 0
+        self.assertFalse(bad, 'FAIL\n  ' + '\n  '.join(bad))
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    unittest.main()

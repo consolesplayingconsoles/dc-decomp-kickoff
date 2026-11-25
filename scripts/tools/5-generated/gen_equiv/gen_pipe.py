@@ -35,9 +35,24 @@ def variants(name,passthru):
             out.insert(0, reg)
         elif reg in out and out[0] != reg:
             out.remove(reg); out.insert(0, reg)
+        # the C returns in the register the original does and in no other: equiv.py compares only the register the C declares, so a
+        # float function tried as `int` passed on a leftover in r0, and a `void` one handed its callers a leftover (retcheck refused)
+        if reg:
+            out = [reg]
     except Exception:
         pass
     return out
+def retry_kinds(name):
+    """The return kinds a function that differed only in its return value is tried again with, in order. The register the original
+    returns in is the only one when it is known: the C passed on a leftover in the others (a float function declared int, a function
+    whose callers read r0 declared void), which retcheck then refused."""
+    kinds=['r0','fr0','void']
+    try:
+        import retcheck
+        reg=retcheck.returns_in(*gen_core.SPANS[name])
+    except Exception:
+        reg=None
+    return [reg] if reg in kinds else kinds
 LAST={}                          # the text of the last check, for the report of what failed
 def _equiv(args):
     """tools/sim/equiv.py <args>: its lines go to the run log as they come (a big batch is minutes of checking), the whole text is returned"""

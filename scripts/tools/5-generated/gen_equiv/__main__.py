@@ -12,6 +12,7 @@ r0 / fr0, then passing the caller's registers through to the first call.
 
 The result is generated code, plain (temps t0, t1, hex stores, int prototypes) and checked on generated cases: a branch the
 cases never reach can pass by luck, so equiv.py reports the instruction coverage. Report it apart from hand-written C.
+A draw that ran out of time is named at the end with the command for a second pass at a longer limit (secondpass.py).
 `--regen <name> ...` writes functions again whose generated C exists (after a generator fix): the old C is put back unless the new is proven (regen.py).
 `--retest [gen_x ...]` draws the cases again for functions already generated (see gen_retest.py). Needs: functions.txt, tools/sim/shdis.py,
 tools/5-generated/classify.py, tools/sim/equiv.py, 1ST_READ.BIN."""
@@ -44,7 +45,15 @@ if os.path.isdir('build') and not any(a in sys.argv for a in ('--draw','--retest
     ledger.rotate(LOG,'run'); sys.stdout=_Tee(open(LOG,'w'))
 import stamp; sys.stdout=stamp.Stamp(sys.stdout)       # each line ends with the wall-clock time: the last line says how long ago it was
 def note(msg): print('[%4ds] %s'%(time.time()-T0,msg),flush=True)
-import gen_pipe,gen_drv,gen_core,rewrites
+import gen_pipe,gen_drv,gen_core,rewrites,secondpass
+TIMED=[]            # the functions whose draw timed out, for the second-pass hint at the end
+import scratch,atexit
+lock()
+try:
+    for _f in scratch.sweep(): print('removed the scratch of a run that is gone: %s'%_f,flush=True)
+finally:
+    unlock()
+if not os.environ.get('GEN_KEEP'): atexit.register(scratch.remove_own)      # a run that is stopped leaves nothing in src/ and tests/ (SIGTERM raises SystemExit)
 class Timeout(BaseException): pass      # not an Exception: the tools' own `except Exception` (gen_drv, directed) swallowed the alarm, which fires once, and drawing ran on unbounded (cpuSglAimTable: 106 min against 38)
 def _alarm(sig,frm): raise Timeout()
 signal.signal(signal.SIGALRM,_alarm)
@@ -180,7 +189,10 @@ def stream(fn,names):
     pool=multiprocessing.get_context("fork").Pool(JOBS)
     try:
         for r in pool.imap_unordered(fn,names): yield r
-    finally:
+    except BaseException:
+        pool.terminate(); pool.join()       # stopped (SIGTERM) or failed: close()+join() waited for the busy workers, the pool replaced killed ones, and the run lived on
+        raise
+    else:
         pool.close(); pool.join()
 def each(fn,names,what):
     """fn over the names, all results, with a progress line"""
@@ -256,6 +268,7 @@ def flush(items,notdrawn,ri,vi,pt,order,bn):
                     try:
                         vs_=gen_pipe.variants(it[0],pt)
                         if kind_==(vs_[vi] if vi<len(vs_) else None): continue
+                        if kind_ not in gen_pipe.retry_kinds(it[0]): continue
                         s_,c_=gen_drv.build(it[0],kind_,pt); c_.protos.pop(it[0],None)
                         again.append((it[0],s_,it[2],c_.protos)+tuple(it[4:]))
                     except Exception: pass
@@ -311,8 +324,7 @@ def flush(items,notdrawn,ri,vi,pt,order,bn):
         done.update(passed)
         final.append((stem,keep,vi,pt))
         if not known: write_batch(keep)
-        for f in ([] if os.environ.get('GEN_KEEP') else glob.glob('src/gen_tmp*p%d.c'%os.getpid())): os.remove(f)      # GEN_KEEP=1 leaves the scratch C to look at
-        for d in glob.glob('tests/gen_tmp*p%d'%os.getpid()): shutil.rmtree(d)
+        if not os.environ.get('GEN_KEEP'): scratch.remove_own()      # GEN_KEEP=1 leaves the scratch C to look at
     finally:
         unlock()
 for ri,(vi,pt) in enumerate(rounds):
@@ -327,6 +339,7 @@ for ri,(vi,pt) in enumerate(rounds):
     for r in stream(_draw,remaining):
         got+=1
         if r and r[0]=='skip':
+            TIMED.extend(secondpass.timed_out([r[:3]]))
             notdrawn.append(r[:3]); b=size(r[1]); secs=r[3]; print('  drawn %-28s %6d B %7.1f s  not drawn: %s'%(r[1],b,secs,r[2]),flush=True)
         elif r:
             b=size(r[0]); print('  drawn %-28s %6d B %7.1f s'%(r[0],b,r[4].get('secs',0)),flush=True); items.append(r)
@@ -343,3 +356,4 @@ if known:
     print('names:',' '.join(sorted(done)))
     sys.exit(0)
 print('total',len(done),'remaining',len(remaining))
+for l_ in secondpass.hint([('skip',n_,'Timeout') for n_ in TIMED if n_ not in done],size): print(l_,flush=True)      # the draws that ran out of time: a second pass with a longer limit

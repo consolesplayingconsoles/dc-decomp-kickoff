@@ -101,6 +101,7 @@ class TestDupnames(unittest.TestCase):
                 bad.append('sameaddr: two entries at one address were changed or not reported: %s / %s' % (got, dry))
             bad += source_case()
             bad += cname_case()
+            bad += stubs_case()
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
         if bad:
@@ -137,6 +138,33 @@ def source_case():
         eq = open(os.path.join(tmp, 'tests', 'equivalent.txt')).read().split()
         if 'wr' not in eq or 'thunk_wr' in eq:
             bad.append('source: tests/equivalent.txt lost the body: %s' % eq)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    return bad
+
+
+def stubs_case():
+    """Several stubs under one name (Jet Set Radio syFree: six stubs and the real function; thunk_FUN_8c059d28: nine stubs): every name is
+    unique afterwards. The body keeps the name, the first stub is thunk_<name>, the others thunk_<name>_<address>; a name that already
+    starts with thunk_ is not prefixed again, its first stub keeps it and the others take the address."""
+    bad = []
+    tmp = tempfile.mkdtemp()
+    try:
+        shutil.copytree(os.path.join(SKILL, 'scripts', 'tools'), os.path.join(tmp, 'tools'), ignore=shutil.ignore_patterns('__pycache__'))
+        body = words([0xE001, 0x000B, 0x0009, 0x0009])
+        stub = words([0xD301, 0x432B, 0x0009, 0x0009]) + struct.pack('<I', BASE)         # jumps to the body
+        open(os.path.join(tmp, '1ST_READ.BIN'), 'wb').write(body + stub * 6)
+        open(os.path.join(tmp, 'BASE'), 'w').write('%08X\n' % BASE)
+        at = lambda i: BASE + 8 + 12 * i
+        lines = ['F %08x 8 wr' % BASE] + ['F %08x 6 wr' % at(i) for i in range(3)] + ['F %08x 6 thunk_x' % at(i) for i in range(3, 6)]
+        open(os.path.join(tmp, 'functions.txt'), 'w').write('\n'.join(lines) + '\n')
+        subprocess.run([sys.executable, 'tools/1-2-baseline/dupnames.py', '--apply'], cwd=tmp, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        names = [l.split()[3] for l in open(os.path.join(tmp, 'functions.txt')).read().split('\n') if l.startswith('F ')]
+        want = ['wr', 'thunk_wr', 'thunk_wr_%08x' % at(1), 'thunk_wr_%08x' % at(2), 'thunk_x', 'thunk_x_%08x' % at(4), 'thunk_x_%08x' % at(5)]
+        if names != want:
+            bad.append('stubs: names %s, want %s' % (names, want))
+        if len(set(names)) != len(names):
+            bad.append('stubs: a name is still used twice: %s' % names)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     return bad

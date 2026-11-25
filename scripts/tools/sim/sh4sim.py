@@ -133,6 +133,7 @@ class Stop(Exception):
 class Memory:
     def __init__(self):
         self.stack_written = set()
+        self.arg_pushed = set()     # the words PUSHED (@-r15) since the last call, after the prologue: the call's pushed arguments, whatever the callee's prototype
         self.body_written = set()   # the stack words the function's body stored since the last call (pushes left out): what a frame buffer passed to a call holds
         self.pages = {}
         self.writes = []          # (addr, size, value), stack excluded
@@ -232,12 +233,15 @@ class Memory:
             self.writes.append((a, size, value))
         else:
             self.stack_written.add(a & ~3)      # the words of the stack written since the last call: what a call passes there
+            self.arg_pushed.discard(a & ~3)     # a plain store over a word is not a push (pushed() adds it back)
             self.body_written.add(a & ~3)
             self.ever_written.add(a & ~3)
 
-    def pushed(self, addr, size):
+    def pushed(self, addr, size, save=False):
         """A push (@-r15): the prologue's saved registers and a call's pushed arguments, not the contents of a frame buffer."""
         for k in range(0, size, 4):
+            if not save:
+                self.arg_pushed.add(self.phys(addr + k) & ~3)
             self.body_written.discard(self.phys(addr + k) & ~3)
             self.ever_written.discard(self.phys(addr + k) & ~3)
 
@@ -475,7 +479,7 @@ class CPU:
                 v = r[m_]
                 r[n] = (r[n] - size) & M32
                 wr(r[n], size, v)
-                if n == 15: self.m.pushed(r[n], size)
+                if n == 15: self.m.pushed(r[n], size, save=size == 4 and 8 <= m_ <= 14 and not (r.ever >> m_) & 1)      # a callee-saved register not assigned yet is the prologue's save, not an argument
                 return
             if lo4 == 7:
                 self.q, self.mq = r[n] >> 31, r[m_] >> 31; self.t = self.q ^ self.mq; return
@@ -568,7 +572,7 @@ class CPU:
                 v = {0x02: self.mach, 0x12: self.macl, 0x22: self.pr, 0x52: self.fpul,
                      0x62: self.get_fpscr(), 0x13: self.gbr, 0x23: self.vbr}[lo8]
                 r[n] = (x - 4) & M32; wr(r[n], 4, v)
-                if n == 15: self.m.pushed(r[n], 4)
+                if n == 15: self.m.pushed(r[n], 4, save=True)
                 if lo8 == 0x22 and n == 15:                                 # the prologue's save of the return address: never a call's
                     self.m.stack_written.discard(Memory.phys(r[n]) & ~3)    # argument, though it sits where a fifth one would (cpuDblThink)
                 return
@@ -781,7 +785,7 @@ class CPU:
             if lo4 == 7: wr(r[n] + r[0], 4, self.fr[m_]); return
             if lo4 == 0xb:
                 r[n] = (r[n] - 4) & M32; wr(r[n], 4, self.fr[m_])
-                if n == 15: self.m.pushed(r[n], 4)
+                if n == 15: self.m.pushed(r[n], 4, save=m_ >= 12)      # fr12-fr15 are callee-saved: the prologue's
                 return
 
         def get(k):                      # pair k: (high word, low word)
@@ -986,8 +990,10 @@ def run(case, case_dir='.', code=None, deep=False, entry=None, end=None, argc=No
                       'stackw': ['%08X' % mem.read((c.r[15] + 4 * k) & M32, 4, True) for k in range(16)],
                       # which of those words this function stored since its last call: the others are leftovers, not arguments
                       'stackchg': [Memory.phys((c.r[15] + 4 * k) & M32) & ~3 in mem.stack_written for k in range(16)],
+                      'stackpush': [Memory.phys((c.r[15] + 4 * k) & M32) & ~3 in mem.arg_pushed for k in range(16)],
                       'bufs': frame_bufs(c), 'reach': frame_reach(c, target)})
         mem.body_written.clear()
+        mem.arg_pushed.clear()
         mem.stack_written.clear()   # words passed on the stack (a 5th argument on)   # the word on top of the stack: the first argument of a variadic call
         if not returns:
             c.r[0] = 0                           # a call the case gives no answer for returns 0 (r0 and fr0): a leftover register is not a result, on the original or on the compiled C

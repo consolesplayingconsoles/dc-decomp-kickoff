@@ -9,6 +9,14 @@ import gen_core as G
 import unpoke_code
 Skip=G.Skip
 def build(name,ret,passthru=False):
+    """The generator's C for one function: gen_drv._build, behind the size gate on `frame` (GEN_FRAME=gate builds it with and without
+    frame.scalarize, compiles both and keeps the smaller; 0 or 1 build once, see framegate.py)."""
+    import framegate
+    def size(n,text,c):
+        import sizes
+        return sizes.c_size(n,text,c.protos)
+    return framegate.build_gated(_build,size,name,ret,passthru)
+def _build(name,ret,passthru=False):
     c=G.run(name,passthru)
     ip=sorted(c.iuse); fp=sorted(c.fuse)
     params=[]
@@ -106,6 +114,8 @@ def build(name,ret,passthru=False):
             return 'return %s;'%f
         return 'return 0;' if e=='None' else 'return %s;'%e
     text=re.sub(r'@@RET:(.*?)@\|@(.*?)@@',retfix,text)
+    if c.frame and '@@F:' in text:      # the return line is added after the frame offsets were settled: a function returning r15 kept '@@F:0@@' in its C
+        text=re.sub(r'@@F:(-?\d+)@@',lambda m:str(4*W+int(m.group(1))+(ps if int(m.group(1))<0 else 0)),text)
     # the caller's stack words by the names the parameters give them, once the body is whole (the return line included): a8.. become
     # s.w[] where the words came in as one structure, s.w[] go back to a8.. where they are plain parameters (Virtua Tennis FUN_8c07fd10
     # declared a4..a10 and read s.w[0]; a function returning *(float *)&a8 declared Stk3 s): either way it did not compile
@@ -195,14 +205,7 @@ def build(name,ret,passthru=False):
     src=splitflat.split(src.rstrip('\n'),int(os.environ.get('GEN_MAX_LABELS','500')))+'\n'
     if os.environ.get('GEN_REGISTER','1')!='0': src=register_locals(src.rstrip('\n'))+'\n'
     import rewrites
-    if os.environ.get('GEN_SELFCOPY','1')!='0': src=rewrites.drop_self_copies(src)      # frame slots stored back unchanged
-    if os.environ.get('GEN_STRUCT','1')!='0': src=rewrites.struct_access(src)      # far field accesses as members (head_protos declares the structures)
-    if os.environ.get('GEN_GLOBASE','1')!='0': src=rewrites.global_base(src)      # nearby fixed addresses off one base
-    if os.environ.get('GEN_SWITCH','1')!='0': src=rewrites.chains_to_switch(src)      # a state chain of ifs as a switch
-    if os.environ.get('GEN_COPIES','1')!='0': src=rewrites.merge_copies(src)      # a result threaded through nesting levels by copies
-    if os.environ.get('GEN_DEADFRAME','1')!='0': src=rewrites.drop_dead_frame(src)      # a stack array nothing reads goes (after the self-copies are gone)
-    if os.environ.get('GEN_HOIST','1')!='0': src=rewrites.hoist_builtins(src)      # a pure builtin called more than once with the same variable: once
-    if os.environ.get('GEN_REBASE','1')!='0': src=rewrites.frame_rebase(src)      # the stack array based at its first used word (last: other passes read the old offsets)
+    src=rewrites.last_passes(src)      # the size rewrites of rewrites.LAST_PASSES (each behind its GEN_<NAME> switch; head_protos declares the structures struct_access needs)
     # the structure of stack words covers every word the body reads: a word read on one path only (Zombie Revenge FUN_0c0a6928 reads
     # s.w[4] under an if) was left out of the count, the function was declared Stk4, and its callers, generated against that, never
     # passed the fifth word the original's caller stores (consistency.py: args outside)
@@ -792,7 +795,11 @@ def tests(name,c,src):
     addr_params=set()
     for kind,e in c.mem_addrs:
         if kind=='e':
-            for m in re.findall(r'\ba(\d)\b',e): addr_params.add(int(m))
+            for m in re.findall(r'\ba(\d)\b',e):
+                # a parameter that is only ever scaled in the address (a4 << 3, a4 * 12) is an index into a table, not the address: drawn
+                # as a pointer (0x0C800000), the table entry lay far past any filled memory and a list walked from it never ended
+                if all(re.match(r'\s*(?:<<|\*)',e[o.end():]) or re.search(r'\*\s*\(*$',e[:o.start()]) for o in re.finditer(r'\ba%s\b'%m,e)): continue
+                addr_params.add(int(m))
             for v_ in re.findall(r'\b([tu]\d+|R\d+)\b',e):         # a loop's pointer variable started from a parameter (t0 = a4): the
                 for m in re.findall(r'\b%s = \(*a(\d)\b'%v_,src): addr_params.add(int(m))      # parameter is an address too (vmsfs_memcpyl)
     basemap={}
@@ -971,4 +978,6 @@ def head_protos(items):
     tds=''.join('typedef struct { int w[%d]; } Stk%d;\n'%(w,w) for w in words)
     from rewrites import struct_decls
     tds+=''.join(d+'\n' for d in struct_decls(' '.join(it[1] for it in items)))      # the one-field structures of struct_access
+    for b in sorted(set(re.findall(r'\bfbits_([0-9A-F]+)\b',' '.join(it[1] for it in items)))):      # a NaN or infinity float constant (ffmt): its bits as a constant
+        tds+='static const unsigned int fbits_%s = 0x%s;\n'%(b,b)
     return tds+(out+'\n' if out else '')+'\n'.join(l+';' for l in mine if l.endswith(')'))

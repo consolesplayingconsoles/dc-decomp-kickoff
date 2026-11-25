@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """List code the analysis did not make into functions. Stdlib only.
 
-    missed_funcs.py <1ST_READ.BIN> <base hex> <functions.txt>
+    missed_funcs.py [--targets] <1ST_READ.BIN> <base hex> <functions.txt>
+
+--targets lists only the addresses listed code calls, branches or tail-jumps to (a pool word loaded into the register of a jsr/jmp
+counts) where no entry starts: short, and each one is reached for certain. Review each like the others before adding it.
 
 Every function in functions.txt owns its bytes up to the next entry, but its analysed size (column
 3) usually ends earlier: the rest is its literal pool and padding. Sometimes it is another function
@@ -25,8 +28,11 @@ import os as _tp_os, sys as _tp_sys  # noqa: E401  every tools folder on the imp
 _tp_sys.path.insert(0, _tp_os.path.normpath(_tp_os.path.join(_tp_os.path.dirname(_tp_os.path.abspath(__file__)), '..')))
 import toolpath  # noqa: E402,F401
 import layout  # noqa: E402
-import struct, sys
+import os, struct, sys
 
+TARGETS = '--targets' in sys.argv
+if TARGETS:
+    sys.argv.remove('--targets')
 if len(sys.argv) != 4:
     sys.exit(__doc__)
 exe = open(sys.argv[1], 'rb').read()
@@ -49,6 +55,38 @@ def in_gap(x):
     return gaps[lo] if lo < len(gaps) and gaps[lo][0] <= x < gaps[lo][1] else None
 
 starts = [a for a, s, n in funcs]
+if TARGETS:
+    # --targets: only the addresses listed code calls, branches or tail-jumps to (bsr, bra, bt, bf, or jsr/jmp through a pool word loaded
+    # just before) where no entry starts: a function the analysis never listed but listed code plainly reaches
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'sim'))
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import shdis
+    import classify
+    entry = set(starts)
+    CODE = layout.region('code') or (0, 0)
+    reach = {}
+    for a, size, name in funcs:
+        if a + size > end:
+            continue
+        loads = {}                                 # register -> the pool word a mov.l @(disp,pc) just put there
+        for pc in sorted(classify.reachable(exe, base, a, size)):      # only the code control flow reaches: pool words are not branches
+            w = struct.unpack_from('<H', exe, pc - base)[0]
+            text, pool, psize, target = shdis.decode(w, pc)
+            op = text.split()[0] if text else ''
+            if pool is not None and psize == 4 and op == 'mov.l' and base <= pool < end - 3:
+                loads[w >> 8 & 15] = (struct.unpack_from('<I', exe, pool - base)[0] & 0x1fffffff) | (base & 0xe0000000)
+            elif op in ('jsr', 'jmp') and (w >> 8 & 15) in loads:
+                target = loads[w >> 8 & 15]
+            elif w >> 12 not in (0x8, 0x9, 0xa, 0xb, 0xc, 0xd, 0xf):      # any other use of the register in the Rn field may change it (an
+                loads.pop(w >> 8 & 15, None)                                    # index or offset added to a table's base): what was loaded is gone
+            if op in ('bsr', 'bra', 'bt', 'bf', 'bt/s', 'bf/s', 'jsr', 'jmp') and target is not None and base <= target < end \
+                    and target not in entry and not (a <= target < a + size) and in_gap(target) \
+                    and (not CODE[1] or CODE[0] <= (0x0C000000 | (target & 0x1FFFFFFF)) < CODE[1]):      # into code no entry owns
+                reach.setdefault(target, set()).add('%s from %s' % (op, name))
+    for t in sorted(reach):
+        print('%08x  %s' % (t, '; '.join(sorted(reach[t]))[:110]))
+    print('%d targets with no entry' % len(reach), file=sys.stderr)
+    sys.exit(0)
 sizes_all = {a: s_ for a, s_, n in funcs}
 import bisect
 def owner(x):

@@ -55,6 +55,16 @@ _FLOATRET=set()
 class Conflict(Exception):         # two call sites give one callee different argument types: it is called through a cast at every site
     def __init__(self,fname): Exception.__init__(self,fname); self.fname=fname
 _CONFLICTS=set()
+_SHARE=[os.environ.get('GEN_SHARE','1')!='0',0,0,0]     # [a node several paths reach before their join is written once (share_join), failed tries in this reading, nodes written once in it, statements written in it (kept or thrown away)]
+def share_spent(written,limit):
+    """No more tries at writing a node once in this reading: it has already written, kept or thrown away, as many statements as the
+    function may hold (its emit limit, or GEN_SHARE_WORK). Without sharing a function whose paths multiply reaches that limit and
+    is written flat; with it the nodes written once keep the text under the limit while the paths still multiply, each try
+    snapshots the whole reading, and the reading does not end: Power Stone 2 FUN_0c0bc420 stopped after 154 s without sharing
+    (13,009 statements, then flat) and ran over 11 minutes with it (tests/test_gen_sharebudget.py). Past the limit the branches
+    are written the old way, and the reading ends as it did."""
+    w=os.environ.get('GEN_SHARE_WORK')
+    return written>(int(w) if w else limit)
 _IJOIN=[False]       # the nearest common node as the join when no node is on every path: tried when the plain post-dominator join takes too many steps
 DIRTY=('x',)          # a register the two arms of an if left different and unreadable
 FUNCS={}; SPANS={}
@@ -90,7 +100,7 @@ for _i,_a in enumerate(_STARTS):
 def fbits(f): return struct.unpack('<I',struct.pack('<f',f))[0]
 def ffmt(bits):
     f=struct.unpack('<f',struct.pack('<I',bits))[0]
-    if f!=f or abs(f)==float('inf'): return '(*(float*)&(unsigned int){0x%X})'%bits
+    if f!=f or abs(f)==float('inf'): return '(*(float*)&fbits_%X)'%bits      # the bits are a constant the file declares (head_protos): the address of a compound literal does not compile
     s='%.9g'%f
     if '.' not in s and 'e' not in s and 'n' not in s: s+='.0'
     return s+'f'
@@ -276,7 +286,7 @@ def reg_liveness(ins,addr2idx,jumps=None,call_reads=None):
                                                  # Zombie Revenge: fr2 and fr4-fr6 loaded for an ftrv and a fipr were taken for dead in the flat form)
             else: out.add(r_)
         return out
-    UD=[]
+    UD=[]; CA={}
     def call_args(i):
         # the argument registers a call really reads: the block copy and division helpers their own registers, a named callee its
         # known arity (callee_arity: its code or its proven definition), anything else all of r4-r7 and fr4-fr11
@@ -284,9 +294,9 @@ def reg_liveness(ins,addr2idx,jumps=None,call_reads=None):
         nm=None
         m_=re.search(r';\s*(?:=\s*[0-9a-fA-F]+\s+)?([A-Za-z_]\w*)\s*$',ops or '')
         if m_ and mn in ('bsr',): nm=m_.group(1)
-        if mn=='jsr':
+        if mn in ('jsr','jmp'):
             rr=re.search(r'@(r\d+)',ops or '')
-            for j in range(i-1,max(-1,i-(64 if call_reads else 8)),-1):     # entry_reads looks further back (cpuShotRange loads nlRand 9 before)
+            for j in range(i-1,max(-1,i-(64 if call_reads else 24 if mn=='jmp' else 8)),-1):     # entry_reads looks further back (cpuShotRange loads nlRand 9 before); a tail call's target is loaded ahead of the epilogue's pops (FUN_0c151cae, Power Stone 2: 8 before)
                 mj,oj,_=ins[j]
                 if rr and re.search(r',\s*%s\s*(?:;|$)'%rr.group(1),(oj or '')):
                     m2=re.search(r';\s*=\s*[0-9a-fA-F]+\s+([A-Za-z_]\w*)',oj or '')
@@ -303,7 +313,7 @@ def reg_liveness(ins,addr2idx,jumps=None,call_reads=None):
             try: ar=callee_arity(nm)
             except Exception: ar=None
         if ar: return {'r%d'%k for k in range(4,4+min(ar[0],4))}|{'fr%d'%k for k in range(4,4+min(ar[1],8))}
-        if _SURE: return set()               # entry_reads_sure: a call whose target is not known reads nothing for certain
+        if _SURE or mn=='jmp': return set()  # entry_reads_sure: a call whose target is not known reads nothing for certain (a jmp: only a named callee of known arity)
         return {'r4','r5','r6','r7'}|{'fr%d'%k for k in range(4,12)}
     for i_ud,(mn,ops,pc) in enumerate(ins):
         raw=(ops or '').split(';')[0].strip(); a=[x.strip() for x in re.split(r',(?![^(]*\))',raw)] if raw else []
@@ -314,12 +324,12 @@ def reg_liveness(ins,addr2idx,jumps=None,call_reads=None):
                 use|=expand(x)
                 if x.endswith('+') or x.startswith('@-'): dfn|=expand(x)
         if mn in ('jsr','bsr','bsrf'):
-            ca=call_args(i_ud); use|=expand(raw)|ca
+            ca=call_args(i_ud); use|=expand(raw); CA[i_ud]=ca      # the callee's reads are added below, once the delay slot's writes are known
             if ca in ({'r0','r1','r2'},{'r0','r1'}): dfn|={'r0','r1','r2','r3'}       # a block mover or division helper: r0-r3 only (stageSelNameDraw:
             else: dfn|={'r%d'%k for k in range(8)}|{'fr%d'%k for k in range(12)}     # r6 set before a structure copy, passed after it)
         elif mn in ('rts','rte'):
             use|={'r0','fr0','fr1'}|{'r%d'%k for k in range(8,15)}
-        elif mn in ('nop','bra','bt','bf','bt/s','bf/s','clrt','sett','clrmac','fschg','frchg'):
+        elif mn in ('nop','bra','bt','bf','bt/s','bf/s','clrt','sett','clrmac','fschg','frchg','div0u'):      # no operand: reads no register
             pass
         elif base in _READ_ONLY or mn.startswith(_READ_ONLY):
             for x in a: use|=expand(x)
@@ -345,14 +355,27 @@ def reg_liveness(ins,addr2idx,jumps=None,call_reads=None):
         UD.append((use,dfn))
     # a call's delay slot runs before the call transfers: what the slot reads (an argument moved into r4 there) is read by the
     # call, ahead of the clobbering of r0-r7 that the call node stands for
+    # The callee reads its arguments after the slot: one the slot writes is the slot's value, not what the register held before the
+    # call (`jsr @r3 / mov #7,r4` does not read the incoming r4: Power Stone 2 FUN_0c101b30 was taken to read r4 and its caller
+    # FUN_0c101000 compared on it; tests/test_gen_slotargs.py). A slot that reads the register to make the value (`add #1,r4`) has
+    # it in its own reads
     for i_,(mn_,_o,_p) in enumerate(ins):
-        if mn_ in ('jsr','bsr','bsrf') and i_+1<n:
-            UD[i_]=(UD[i_][0]|UD[i_+1][0],UD[i_][1])
+        if mn_ in ('jsr','bsr','bsrf'):
+            slot_=UD[i_+1] if i_+1<n else (set(),set())
+            UD[i_]=(UD[i_][0]|slot_[0]|(CA.get(i_,set())-slot_[1]),UD[i_][1])
+    # a tail call (`jmp @rN` out of the function, rN a named callee of known arity) reads the callee's argument registers, less what its
+    # delay slot sets: one the function has not written on that path is its own incoming argument, live at the entry. The flat form
+    # copies only those into its register variables, and passed a variable never set (Power Stone 2 FUN_0c0ed33c -> FUN_0c03f346,
+    # `FUN_0c03f346(v0_0, R5, a6, a7)`: r5 named on another path only; tests/test_gen_tailpass.py). A call before it on the path
+    # writes r4-r7 (the jsr node), so nothing is carried across a call
+    for i_,(mn_,_o,_p) in enumerate(ins):
+        if mn_=='jmp' and i_ not in (jumps or {}) and i_+1<n:
+            UD[i_]=(UD[i_][0]|(call_args(i_)-UD[i_+1][1]),UD[i_][1])
     succ={}
     for i,(mn,ops,pc) in enumerate(ins):
         t=gen_cfg.target_of(ops) if ops else None; ti=addr2idx.get(t) if t is not None else None
         if mn in ('bra',): succ[i]=[i+1]; succ[i+1]=[ti] if ti is not None else []
-        elif mn in ('jmp','braf','rts','rte'): succ[i]=[i+1]; succ[i+1]=list((jumps or {}).get(i,[])) if mn=='jmp' else ([] if mn!='braf' else list(range(n)))
+        elif mn in ('jmp','braf','rts','rte'): succ[i]=[i+1]; succ[i+1]=list((jumps or {}).get(i,[])) if mn=='jmp' else ([] if mn!='braf' else list((jumps or {}).get(i) or range(n)))
         elif mn in ('bt/s','bf/s'): succ[i]=[i+1]; succ[i+1]=[i+2]+([ti] if ti is not None else [])
         elif mn in ('bt','bf'): succ.setdefault(i,[i+1]+([ti] if ti is not None else []))
         else: succ.setdefault(i,[i+1])
@@ -368,6 +391,30 @@ def reg_liveness(ins,addr2idx,jumps=None,call_reads=None):
             if new!=LIN[i]: LIN[i]=new; changed=True
     return {i:LIN[i] for i in range(n)}
 _ARGREGS=frozenset(['r4','r5','r6','r7']+['fr%d'%k for k in range(4,12)])
+def braf_targets(ins,i,addr2idx):
+    """The instruction indexes a jump table's braf at node i reaches (`mova table,r0; mov.w @(r0,rX),r0; braf r0`, 16-bit offsets from
+    the braf + 4, the count from the `cmp/hs` bound before it), or None when it is not that form."""
+    if i<2 or ins[i-2][0]!='mova' or ins[i-1][0]!='mov.w' or (ins[i][1] or '').strip()!='r0': return None
+    m=re.match(r'@\((0x[0-9a-f]+),pc\),r0$',(ins[i-2][1] or '').strip())
+    if not m: return None
+    tbl=int(m.group(1),16); base=ins[i][2]+4
+    limit=None
+    for j in range(i-3,max(i-16,-1),-1):
+        if ins[j][0]=='cmp/hs':
+            lr=(ins[j][1] or '').split(',')[0].strip()
+            for k in range(j-1,max(j-14,-1),-1):
+                mm=re.match(r'#(-?\d+),%s$'%lr,(ins[k][1] or '').strip()) if ins[k][0]=='mov' else None
+                if mm: limit=int(mm.group(1)); break
+                mw=re.search(r'=(-?\d+)',ins[k][1] or '') if ins[k][0]=='mov.w' and (ins[k][1] or '').strip().endswith(','+lr) else None
+                if mw: limit=int(mw.group(1)); break
+            break
+    if limit is None: return None
+    tg=[]
+    for k in range(limit):
+        t=base+int.from_bytes(BIN[tbl+2*k-BASE:tbl+2*k-BASE+2],'little',signed=True)
+        if t not in addr2idx: return None
+        tg.append(addr2idx[t])
+    return tg or None
 def entry_reads_of(ins,call_reads=None):
     """The argument registers (r4-r7, fr4-fr11) that the code ins (a function's own instructions, as _run reads them) reads before
     it writes them on some path: its register liveness at the entry. None when that cannot be told from the code alone: a jmp out
@@ -377,6 +424,9 @@ def entry_reads_of(ins,call_reads=None):
     goto={}
     for i_,x_ in enumerate(ins):
         if x_[0] in ('frchg','fschg'): return None
+        if x_[0]=='braf':
+            tg_=braf_targets(ins,i_,addr2idx)
+            if tg_: goto[i_]=tg_       # without them the braf is taken to reach any instruction, the table's own words among them
         if x_[0]=='jmp':
             reg_=(x_[1] or '').strip().lstrip('@')
             for j_ in range(i_-1,max(i_-5,-1),-1):
@@ -433,12 +483,27 @@ _WRITE_ONLY=('mov','mov.b','mov.w','mov.l','extu.b','extu.w','exts.b','exts.w','
 _COMPARE=('cmp','tst','fcmp')
 class _PassThrough(Exception): pass
 _SCAN_FILE=os.path.join('state','arity_scan.json')
-_SCAN_VER=5          # 2: a call to a runtime helper no longer hides the arguments read after it; 3: a register-saving routine counts only its buffer register. An older file is scanned again
+_SCAN_VER=6          # 6: xor/sub/subc rN,rN clear the register, they do not read it (a division routine counted no arguments); 2: a call to a runtime helper no longer hides the arguments read after it; 3: a register-saving routine counts only its buffer register. An older file is scanned again
+def _scan_key():
+    """A hash of the scanner's own source (callee_arity and the helpers it reads with): the cache is read again whenever it changes. A
+    version number changed by hand was forgotten, and entries an older scanner wrote stayed (four arguments for a function that reads none)."""
+    import hashlib
+    try:
+        txt=open(os.path.abspath(__file__),errors='replace').read()
+    except Exception:
+        return None
+    parts=[]
+    for fn in ('callee_arity','entry_reads','keeps_args','_combine_def','def_arity','def_used_arity','sdk_arity'):
+        m=re.search(r'^def %s\(.*?(?=^\S)'%fn,txt,re.M|re.S)
+        parts.append(m.group(0) if m else '')
+    return hashlib.sha1('\n'.join(parts).encode()).hexdigest()[:12]
+_SCAN_KEY=_scan_key()
 try:
     _raw=json.load(open(_SCAN_FILE))
-    _SCAN={k:v for k,v in _raw.items() if v is not None} if _raw.get('__scan')==_SCAN_VER else {}      # a null is rescanned: it did not say why it was unknown
+    _SCAN={k:v for k,v in _raw.items() if v is not None} if _raw.get('__scan')==_SCAN_VER and _raw.get('__code')==_SCAN_KEY else {}      # a null is rescanned: it did not say why it was unknown
 except Exception: _SCAN={}
 _SCAN['__scan']=_SCAN_VER
+_SCAN['__code']=_SCAN_KEY
 UNRESOLVED_PT='pass-through'     # arity_scan.json value of a pass-through trampoline whose target arity is not known (a table jump)
 _STACKW={}
 def callee_stack_words(fname):
@@ -470,6 +535,35 @@ def callee_stack_words(fname):
         n=0
     _STACKW[fname]=n
     return n
+
+_STACKADDR={}
+def callee_takes_stack_address(fname):
+    """True when a function makes a pointer into the stack words its caller pushed (`mov r15,r0` / `add #8,r0`, past its own frame): a
+    variadic print walks its arguments through it, so it reads more words than its code loads (Power Stone 2 FUN_0c187cac reads one,
+    its callers push two or three). Every word pushed for a call to it is an argument."""
+    if fname in _STACKADDR: return _STACKADDR[fname]
+    r=False
+    try:
+        out=subprocess.run(['python3','tools/sim/shdis.py','--func',fname],capture_output=True,text=True).stdout.splitlines()[2:]
+        delta=0; ptr={}
+        for l in out:
+            m=re.match(r'([0-9a-f]{8}) ([0-9a-f]{4})\s+(\S+)\s*(.*)',l)
+            if not m: continue
+            mn=m.group(3); ops=m.group(4).split(';')[0].strip()
+            if mn in ('rts','rte'): break
+            a=[x.strip() for x in re.split(r',(?![^(]*\))',ops)] if ops else []
+            if len(a)==2 and a[1]=='@-r15' and mn in ('mov.l','sts.l','fmov.s','stc.l'): delta+=4; continue
+            if mn=='add' and len(a)==2 and a[1]=='r15' and a[0].startswith('#'): delta-=int(a[0][1:],0); continue
+            if mn=='mov' and len(a)==2 and a[0]=='r15' and re.fullmatch(r'r\d+',a[1]): ptr[a[1]]=-delta; continue
+            if mn=='add' and len(a)==2 and a[0].startswith('#') and a[1] in ptr:
+                ptr[a[1]]+=int(a[0][1:],0)
+                if ptr[a[1]]>=0: r=True; break
+                continue
+            if len(a)==2 and a[1] in ptr: del ptr[a[1]]      # the register holds something else now
+    except Exception:
+        r=False
+    _STACKADDR[fname]=r
+    return r
 
 _POPS={}
 def callee_pops(fname):
@@ -602,6 +696,8 @@ def callee_arity(fname):
                 for t in a[:-1]: reads+=regs(t)
             else:
                 for t in a: reads+=regs(t)
+            if mn in ('xor','sub','subc') and len(a)==2 and a[0]==a[1] and re.fullmatch(r'r\d+',a[0]):
+                dest=a[1]; reads=[]                  # xor rN,rN / sub rN,rN / subc rN,rN: the result does not depend on rN (a division routine clears r2/r3 this way)
             if mn=='fmac': reads.append('fr0')
             if mn=='frchg': banked=not banked      # the other float bank: its registers are the saved matrix, not arguments
             for r in reads:
@@ -674,17 +770,76 @@ def callee_arity(fname):
     except Exception: pass
     return _combine_def(fname,res,unresolved)
 
+_SDKAR={}
+def sdk_arity(fname):
+    """(integer, float) parameters the SDK's own source declares for a library function (sdk-source/<name>.c), or None. The library's
+    declaration is what the function takes: the scan of its code also counts registers it only passes on (a `(void)` server was counted
+    as taking three, and its callers passed three registers they never set)."""
+    if fname in _SDKAR: return _SDKAR[fname]
+    res=None
+    try:
+        txt=open(os.path.join('sdk-source',fname+'.c'),errors='replace').read()
+        m=re.search(r'^[A-Za-z_][\w \t\*]*?\b%s\s*\(([^;{)]*)\)\s*\{?\s*$'%re.escape(fname),txt,re.M)
+        if m:
+            ps=[x.strip() for x in m.group(1).split(',') if x.strip() and x.strip()!='void']
+            isf=lambda x:'*' not in x and re.match(r'(?:const\s+)?(?:float|Float|Float32|double)\b',x) is not None
+            res=(sum(1 for x in ps if not isf(x)),sum(1 for x in ps if isf(x)))
+            if res[0]>4 or res[1]>8: res=None                  # stack arguments: the scan's count is kept
+    except (IOError,OSError):
+        res=None
+    _SDKAR[fname]=res
+    return res
 def _combine_def(fname,res,unresolved=False):
+    s=sdk_arity(fname)
+    if s is not None:                       # the library's own declaration
+        _ARITY[fname]=s
+        return s
     if unresolved and not res:              # a pass-through of unknown arity stays unknown: its own definition in src/ is a (void) the
         _ARITY[fname]=None                  # generator wrote for the same reason, and taking it as the arity drops the caller's arguments
         return None                         # (gdFsEntryErrFuncAll, gdFsOpenRange: jmp through the file system's table)
-    d=def_arity(fname)                      # the function's own proven definition: what it reads on every path
+    d=def_used_arity(fname)                 # the function's own definition: the parameters its body uses (placeholders it never uses are not arguments)
     if d and res:
         res=(max(res[0],d[0]),max(res[1],d[1]))
     elif d:
         res=d
     _ARITY[fname]=res
     return res
+
+_USED=None
+def def_used_arity(fname):
+    """(integer, float) parameters of the function's definition in src/ up to the last one its body uses, by position (a4 unused and a5
+    used is still two), or None. A generated definition keeps placeholder parameters the body never uses (`void lock(int a4, int a5)`
+    that reads neither): taken as arguments, every caller passed registers it never set, and the scan passed them on to the callers'
+    callers."""
+    global _USED
+    if _USED is None:
+        _USED={}
+        for f in layout.c_files():
+            txt=open(f,errors='replace').read()
+            structs=set(re.findall(r'typedef\s+struct\s*\w*\s*\{[^{}]*\}\s*(\w+)\s*;',txt))|{'Stk%d'%k for k in range(1,65)}
+            for m in re.finditer(r'^[A-Za-z_][\w \*]*?\b(\w+)\s*\(([^;{)]*)\)\s*\n\{',txt,re.M):
+                if m.group(1) in _USED: continue
+                depth=0; j=m.end()-1
+                for j in range(m.end()-1,len(txt)):
+                    if txt[j]=='{': depth+=1
+                    elif txt[j]=='}':
+                        depth-=1
+                        if not depth: break
+                body=txt[m.end():j]
+                ps=[x.strip() for x in m.group(2).split(',') if x.strip() and x.strip()!='void' and not (x.split()[0] in structs and '*' not in x)]
+                ni=nf=0; ki=kf=0
+                for x in ps:
+                    isf=x.startswith('float') and '*' not in x
+                    nm=re.findall(r'(\w+)\s*(?:\[[^\]]*\])?$',x)
+                    used=bool(nm) and re.search(r'\b%s\b'%re.escape(nm[0]),body) is not None
+                    if isf:
+                        kf+=1
+                        if used: nf=kf
+                    else:
+                        ki+=1
+                        if used: ni=ki
+                _USED[m.group(1)]=(ni,nf)
+    return _USED[fname] if fname in _USED else def_arity(fname)      # no body read (a definition known only by its parameters): all of them
 
 _DEFS=None
 def def_arity(fname):
@@ -802,12 +957,23 @@ def run(name,passthru=False):
         try:
             c_=_run_structured(name,passthru)
             if form=='structured': return c_
+            shared=_SHARE[2]
             # arms that meet at different joins are written once per path: when that makes the text much longer than the
             # flat form (each block once), the flat form compiles far smaller (pedSpawn: 26,328 bytes structured, 676 flat)
             try:
                 f_=_run(name,passthru,True,True)
                 if len('\n'.join(map(str,c_.stmts)))>2*len('\n'.join(map(str,f_.stmts))): return f_
-            except Exception: pass
+            except Exception: f_=None
+            if shared and f_ is not None:
+                # the nodes written once (share_join) made the structured text shorter: the choice of form stays the one the text
+                # with every path written out gives (the flat form is the original's own blocks, the flags of the shared nodes cost more)
+                on_=_SHARE[0]; _SHARE[0]=False
+                try:
+                    try: c0=_run_structured(name,passthru)
+                    except Skip: return f_
+                    except (Restart,RecursionError): return f_
+                    if len('\n'.join(map(str,c0.stmts)))>2*len('\n'.join(map(str,f_.stmts))): return f_
+                finally: _SHARE[0]=on_
             return c_
         except Restart: continue
         except RecursionError: break
@@ -1007,6 +1173,43 @@ def _run(name,passthru=False,frame=False,flat=False):
             c.protos['_builtin_get_gbr']=()
             return ('expr','((int)_builtin_get_gbr() + %d)'%mm[1])
         raise Skip('memaddr')
+    def div1_lines(rv,dv,tv,mv,qv):
+        """The C of one divide step on the architecture's state: rv the remainder register, dv the divisor, tv the T bit, mv and qv the M and Q
+        variables. Q is the carry of the add or subtract xor the new Q xor M (the manual's four cases are that one rule)"""
+        o_=fresh(False); t0_=fresh(False); t1_=fresh(False)
+        return ['int %s = %s;'%(o_,qv),
+                '%s = (int)((unsigned int)%s >> 31);'%(qv,rv),
+                '%s = (int)(((unsigned int)%s << 1) | (unsigned int)%s);'%(rv,rv,tv),
+                'int %s = %s;'%(t0_,rv),
+                'int %s;'%t1_,
+                'if (%s == %s) { %s = (int)((unsigned int)%s - (unsigned int)(%s)); %s = ((unsigned int)%s > (unsigned int)%s); }'%(o_,mv,rv,rv,dv,t1_,rv,t0_),
+                'else { %s = (int)((unsigned int)%s + (unsigned int)(%s)); %s = ((unsigned int)%s < (unsigned int)%s); }'%(rv,rv,dv,t1_,rv,t0_),
+                '%s = %s ^ %s ^ %s;'%(qv,t1_,qv,mv),
+                '%s = (%s == %s);'%(tv,qv,mv)]
+
+    def divrun(i):
+        """How many instructions the run of `rotcl X` / `div1 D,R` pairs starting at i takes (four pairs or more, the same registers), 0 when
+        there is none: the 32 steps of a division as one loop (tests/test_gen_div1). The text of 32 unrolled steps is 32 times the C."""
+        if i+1>=len(ins) or ins[i][0]!='rotcl' or ins[i+1][0]!='div1': return 0
+        X=parse_ops(ins[i][1])[0]; dr=parse_ops(ins[i+1][1])
+        n=0; j=i
+        while j+1<len(ins) and ins[j][0]=='rotcl' and parse_ops(ins[j][1])==[X] and ins[j+1][0]=='div1' and parse_ops(ins[j+1][1])==dr:
+            n+=1; j+=2
+        if n<4 or len(dr)!=2 or len({X,dr[0],dr[1]})<3: return 0
+        if getattr(c,'Mv',None) is None: raise Skip('div1 without div0')
+        if c.T is None: raise Skip('no T')
+        D_,R_=dr
+        xv_=fresh(False); rv_=fresh(False); dv_=fresh(False); tv_=fresh(False); k_=fresh(False)
+        emit('int %s = %s;'%(xv_,ex(c.gi(X)))); emit('int %s = %s;'%(rv_,ex(c.gi(R_)))); emit('int %s = %s;'%(dv_,ex(c.gi(D_))))
+        emit('int %s = ((%s) ? 1 : 0);'%(tv_,c.T)); emit('int %s;'%k_)
+        o_=fresh(False)
+        body=['int %s = (int)((unsigned int)%s >> 31);'%(o_,xv_),
+              '%s = (int)(((unsigned int)%s << 1) | (unsigned int)%s);'%(xv_,xv_,tv_),
+              '%s = %s;'%(tv_,o_)]+div1_lines(rv_,dv_,tv_,c.Mv,c.Qv)
+        emit('for (%s = 0; %s < %d; %s++) {\n%s\n}'%(k_,k_,n,k_,'\n'.join('    '+l for l in body)))
+        c.R[X]=('e',xv_); c.R[R_]=('e',rv_); setT('(%s != 0)'%tv_,'(%s == 0)'%tv_)
+        return 2*n
+
     def exec1(mn,rawops):
         ops=rawops; com=''
         if ';' in rawops: ops,com=rawops.split(';',1); ops=ops.strip(); com=com.strip()
@@ -1232,6 +1435,15 @@ def _run(name,passthru=False,frame=False,flat=False):
             c.blocks[-1].append('_builtin_set_imask(%s);'%arg); c.sr_epoch=getattr(c,'sr_epoch',0)+1; return
         if mn=='mov' and a[0].startswith('#'): c.R[a[1]]=int(a[0][1:])&M; return
         if mn=='mov' and a[0].startswith('r'): c.R[a[1]]=c.gi(a[0]); return
+        if mn in ('xor','sub','subc') and len(a)==2 and a[0]==a[1] and re.fullmatch(r'r\d+',a[0]):
+            # a register combined with itself: 0, or -T for subc (SHC's `subc r0,r0; add #1,r0` is 1 - T), whatever it held. The register
+            # is not read: a function ending that way stopped on "read r0" (tests/test_gen_selfclear). subc leaves T as it was
+            if mn=='subc':
+                if c.T is None: raise Skip('no T')
+                t_=fresh(False); emit('int %s = (%s) ? -1 : 0;'%(t_,c.T)); c.R[a[1]]=('e',t_)
+            else:
+                c.R[a[1]]=0
+            return
         if mn=='add' and a[0].startswith('#'):
             v=c.gi(a[1])
             if isinstance(v,tuple) and v[0]=='addr': raise Skip('addr')
@@ -1315,6 +1527,20 @@ def _run(name,passthru=False,frame=False,flat=False):
                 c.R[a[1]]=load(sz,memaddr(mm)); return
         if mn=='sett': setT('1','0'); return
         if mn=='clrt': setT('0','1'); return
+        if mn=='div0u':
+            # division set-up (SHC's division sequence, tests/test_gen_div1): M, Q and T cleared. M and Q are variables of the C
+            mv_=fresh(False); qv_=fresh(False); emit('int %s = 0;'%mv_); emit('int %s = 0;'%qv_); c.Mv=mv_; c.Qv=qv_; setT('0','1'); return
+        if mn=='div0s':
+            mv_=fresh(False); qv_=fresh(False); tv_=fresh(False)
+            emit('int %s = (int)((unsigned int)%s >> 31);'%(mv_,ex(c.gi(a[0])))); emit('int %s = (int)((unsigned int)%s >> 31);'%(qv_,ex(c.gi(a[1]))))
+            emit('int %s = %s ^ %s;'%(tv_,mv_,qv_)); c.Mv=mv_; c.Qv=qv_; setT('(%s != 0)'%tv_,'(%s == 0)'%tv_); return
+        if mn=='div1':
+            if getattr(c,'Mv',None) is None: raise Skip('div1 without div0')
+            if c.T is None: raise Skip('no T')
+            rv_=fresh(False); tv_=fresh(False)
+            emit('int %s = %s;'%(rv_,ex(c.gi(a[1])))); emit('int %s = ((%s) ? 1 : 0);'%(tv_,c.T))
+            for l_ in div1_lines(rv_,ex(c.gi(a[0])),tv_,c.Mv,c.Qv): emit(l_)
+            c.R[a[1]]=('e',rv_); setT('(%s != 0)'%tv_,'(%s == 0)'%tv_); return
         if mn in ('addc','subc','rotcl','rotcr','rotr','rotl','cmp/str'):
             U=lambda e:'(unsigned int)%s'%e
             if mn in ('addc','subc','rotcl','rotcr'):
@@ -1650,7 +1876,7 @@ def _run(name,passthru=False,frame=False,flat=False):
                                                  # a variadic print reads only its format directly (ADXERR_CallErrFunc's Stk3: three words pushed);
                                                  # integers it takes and never reads count too (kmiGetVertexBasePointer: seven integers, one read)
         own_stack=bool(nsw) and len(c.pend)>=nsw
-        if own_stack: c.pend=c.pend[-nsw:]      # the words below this callee's own are earlier calls': their stack adjustment was deferred to this one
+        if own_stack and not (not ind and callee_takes_stack_address(fname) and not def_stack_words(fname)): c.pend=c.pend[-nsw:]      # (a callee that takes the address of its stack words is variadic: every word pushed for it is an argument)      # the words below this callee's own are earlier calls': their stack adjustment was deferred to this one
         # a callee whose definition returns a structure by value, called with one word pushed: the word is SHC's hidden return pointer,
         # whatever holds it (a local's address, the caller's own pointer, a register variable in the flat form: cameraExec), and the call
         # is an assignment of the structure (vecMake's callers, Virtua Tennis)
@@ -1782,6 +2008,17 @@ def _run(name,passthru=False,frame=False,flat=False):
                     args.append('*(int *)((int)stk + @@F:%d@@%s)'%(-c.D,' + %d'%(4*j_) if j_ else '')); types.append('int')
                 elif isfp(v): args.append(fx(v[1])); types.append('float')
                 else: args.append(ex(v)); types.append('int')
+            if (not ind and not hidden and c.frame and callee_takes_stack_address(fname)
+                    and not any(isfp(v) for v in c.pend)):
+                # a variadic print given a pointer to the words after the ones pushed: those the function stored in its frame before the
+                # pushes (up to the pointer) are its arguments too (Power Stone 2 FUN_0c03e46a: a4 stored at @r15, two words pushed, r15+12
+                # passed; the print reads three stack words)
+                for a_ in args[:len(ia)]:
+                    mp_=re.fullmatch(r'\(\(\(int\)stk \+ @@F:%d@@\) \+ (0x[0-9A-Fa-f]+|\d+)\)'%(-c.D),a_)
+                    if mp_:
+                        for off_ in range(4*len(c.pend),int(mp_.group(1),0),4):
+                            args.append('*(int *)((int)stk + @@F:%d@@ + %d)'%(-c.D,off_)); types.append('int')
+                        break
             if variadic: types=['int','...']
             c.pend=[]
         sa=getattr(c,'sarg',None); c.sarg=None
@@ -1944,7 +2181,7 @@ def _run(name,passthru=False,frame=False,flat=False):
     def emit(s):
         if s:
             c.blocks[-1].append(s)
-            c.nemit+=1
+            c.nemit+=1; _SHARE[3]+=1          # c.nemit goes back with a restore, the count of the work done does not (share_spent)
             if c.nemit>c.emit_limit: raise Skip('bloat: arms that meet at different joins were written out once per path (%d statements)'%c.nemit)      # the flat form is linear in the function's size
 
     # ---- machine state ----
@@ -1955,12 +2192,14 @@ def _run(name,passthru=False,frame=False,flat=False):
         if len(st)>8: c.pcalls=st[8]
     # a snapshot keeps the statement lists themselves (their callers hold them) and restores their contents
     def snap():
-        d={k:v for k,v in c.__dict__.items() if k not in ('blocks','stmts','sr_marks')}
+        d={k:v for k,v in c.__dict__.items() if k not in ('blocks','stmts','sr_marks','live')}
         marks=[list(m) for m in c.__dict__.get('sr_marks',[])]       # each mark holds its statement list itself: a deep copy would hold another list
-        return copy.deepcopy(d),[(b,list(b)) for b in c.blocks],marks
+        d=copy.deepcopy(d); d['live']=c.__dict__.get('live')        # the liveness is computed once and never changed: kept as it is (the largest part of a snapshot, FUN_0c0bc420: 117 of 250 KB)
+        return d,[(b,list(b)) for b in c.blocks],marks
     def restore(s):
         d,bl,marks=s
-        c.__dict__.clear(); c.__dict__.update(copy.deepcopy(d))
+        live_=d.get('live')
+        c.__dict__.clear(); c.__dict__.update(copy.deepcopy({k:v for k,v in d.items() if k!='live'})); c.live=live_
         if marks: c.sr_marks=[list(m) for m in marks]
         for b,saved in bl: b[:]=saved
         c.blocks=[b for b,_ in bl]; c.stmts=c.blocks[0]
@@ -2263,7 +2502,7 @@ def _run(name,passthru=False,frame=False,flat=False):
         c._tends=[]; c._tvar=None
         j,f,cond,sA,sB,_w,folded,_n=fold(j,f,cond,None,0,frozenset([i]))
         if folded: tA=None
-        c._fold=(sA,sB)
+        c._fold=(sA,sB); c._foldn=_n
         r=branch0(i,j,f,cond,stops,tA)
         ends=c._tends
         # after the join the flag is what it was before the branch if neither arm changed it (the compiler reuses it: movt after the
@@ -2273,21 +2512,333 @@ def _run(name,passthru=False,frame=False,flat=False):
         elif c._tvar: c.T=c._tvar
         else: c.T=None
         return r
-    def branch0(i,j,f,cond,stops,tA=None):
-        """cond holds when the fall-through arm (starting at f) runs; j is where the branch goes. tA: the T flag on the fall-through
-        arm (True for a bf that fell through, False for a bt), the opposite on the taken arm: a second branch there may use it."""
-        c._bi=i
-        _KT=getattr(c,'_keepT',None); c._keepT=None       # T at the start of each arm: the delay slot's, when it set T (the slot ran before the branch on both arms)
-        sA0,sB0=getattr(c,'_fold',(None,None)); c._fold=(None,None)       # the arms' start states when fold() ran their tests
-        J=outer_join(G.ijoin(i) if _IJOIN[0] else G.ipdom(i))
+    def share_entry(i,j,f,cond,stops2,J,tA,_KT,stops=None,own=frozenset()):
+        """A body the original enters from two places is written once. The taken arm of the branch at i is a straight run of code R that
+        FALLS INTO the node X (an init, then the body), and the fall-through arm starts with a test whose taken side is X itself (a
+        later state, jumping straight to the body) and whose other side goes on to J without X. The arms meet only at J, so each was
+        walked on its own and X written once per arm. Written as `if (cond) {D} else {R}` (D: what merging the two ways into X
+        needs) and then `if (!cond || taken) {X} else {the way past it}`. Returns what branch0 returns, or None (nothing changed)
+        when the code is not that shape or reading it this way fails. J is where the arms meet (EXIT when they end at separate
+        returns). cond is read twice, so it must name only variables R does not assign."""
+        if getattr(c,'flat',False) or getattr(c,'live',None) is None or c.loopstack: return None
+        if re.search(r'\*|\w\(|\[|->|@@',cond): return None
+        before=snap()
+        def undo(): restore(before); return None
+        pre=regs_state(); T0=c.T
+        try:
+            r=test_at(f,pre,0,frozenset([i]),frozenset([j]))
+        except Skip: return undo()
+        if r is None: return undo()
+        X,tf,tc,sa,sb,_w,nodes=r
+        k=max(nodes)
+        if not isinstance(X,int) or X in (j,J,tf) or X not in G.succ or tf==J and False: return undo()
+        if X in G.reach(tf) or X in G.loops or j in G.loops or i in G.loops: return undo()
+        seq=[]; n=j
+        for _ in range(400):
+            if n==X: break
+            if n in seq or n not in G.succ or len(G.succ[n])!=1 or len(G.pred[n])!=1: return undo()
+            seq.append(n); n=G.succ[n][0]
+        else: return undo()
+        if not seq or G.pred[j]!=[i] or sorted(G.pred[X])!=sorted([seq[-1],k]): return undo()
+        try:
+            # the way into X from the taken arm: R, then X
+            set_regs(pre); c.T=_KT
+            if tA is not None: setT('0','1') if tA else setT('1','0')
+            stopsR=dict(stops2); stopsR[X]='join'
+            R=[]; c.blocks.append(R); oR=exec_from(j,stopsR,False); stR=regs_state(); c.blocks.pop()
+            if oR!=('reach',X): return undo()
+            names=set(re.findall(r'\b[A-Za-z_]\w*\b',cond))-{'int','unsigned','signed','char','short','float','long'}
+            if any(re.search(r'\b%s\s*=(?!=)'%re.escape(v),x) for x in R for v in names): return undo()
+            D=[]
+            merge_arms(stR,sa,R,D)                     # both ways into X leave the registers one way: a variable assigned on each
+            emit(mkif(cond,D,R))
+            c.T=None
+            stopsX=stops2
+            if isinstance(stops2.get(X),tuple):        # X is also a shared node of this branch (share_join): written here, by this form
+                stopsX=dict(stops2); del stopsX[X]
+            Xl=[]; c.blocks.append(Xl); oX=exec_from(X,stopsX,False); stX=regs_state(); c.blocks.pop()
+            set_regs(sb); c.T=None
+            S=[]; c.blocks.append(S); oS=exec_from(tf,stops2,False); stS=regs_state(); c.blocks.pop()
+            K=logic('||',negate(cond),negate(tc))
+            if c.shr_open:                              # a path inside ends at a shared node (share_join): nothing may run after it on that path
+                if softs(R) or softs(D): return undo()
+                sf_=(softs(Xl)|softs(S))-own
+                if sf_ and not (oX[0]=='end' and oS[0]=='end') and not (oX[0]=='reach' and oX[1] in share_safe(sf_)): return undo()
+            if oX[0]=='end' and oS[0]=='end':          # both leave the function (return, break or continue): nothing to merge
+                emit(mkif(K,Xl,S))
+                c._tends=[]
+                return ('end',)
+            if oX[0]!='reach' or oS[0]!='reach' or oX[1]!=oS[1]: return undo()
+            merge_arms(stX,stS,Xl,S)
+            emit(mkif(K,Xl,S))
+        except Skip: return undo()
+        c._tends=[]
+        return oX
+
+    # ---- a node several paths reach before the place where all of them meet is written once ----
+    # The arms of a branch (or of a jump table) are read up to their join J. A node X that two of those paths reach and a third skips
+    # is not J, so each path ran on through X by itself and X was written once per path (a state's body that the state before falls
+    # into, a tail several arms share, the fail code of a ladder of tests). X belongs to the branch that is the last node every way
+    # into X passes (its immediate dominator): while that branch's arms are read, a path that reaches X ENDS there (a mark is left in
+    # its place), and X is written once after the branch:
+    #       int g = 0;  if (..) { ..; g = 1; } else { .. }      the mark: what the paths into X leave different, and which node
+    #       if (g == 1) { X }                                    no test when every path that goes on goes to X
+    # (under a flag only when X holds a branch and is long enough: share_join1). Any failure of this reading leaves the branch written
+    # the old way. GEN_SHARE=0 switches it off; GEN_SHARE_LOG=1 lists on stderr each node written once and each try given up.
+    # A path that ended at a mark must run nothing more before X: a statement holding a mark is always the last of its block. So an
+    # if with a mark inside keeps its other arm in the else (never after it), and an arm that goes on reads on, inside the arm, to a
+    # join the owning branch itself stops at (share_safe): the code after any join nearer than that would run on the marked path too.
+    _SHRP=re.compile(r'@@SHR(\d+)\.(\d+)@@')
+    _SHARE_MIN=4          # instructions from the node to the join: fewer cost less written twice than a flag set and tested
+    def softs(lst):
+        """The shared nodes (their numbers) that marks inside these statements wait for."""
+        return {int(m_.group(1)) for x in lst if isinstance(x,str) and '@@SHR' in x for m_ in _SHRP.finditer(x)}
+    def share_check(n,stops):
+        """The reading is about to go on at node n in the current block: no statement of that block may hold a mark (the path that
+        ended there would run what follows). A last check behind the rules that keep it so."""
+        if c.shr_open and stops.get(n)!='join' and softs(c.blocks[-1]): raise Skip('shared node: code would follow a path that waits for it')
+    def share_safe(ids):
+        """The joins a path may stop at while marks of these shared nodes wait: the ones their owning branches stop at."""
+        return frozenset.intersection(*[c.shr_safe[k] for k in ids])
+    def share_stops(stops,safe):
+        """stops without the joins that are not safe: the reading goes on through them."""
+        return {n:k for n,k in stops.items() if k!='join' or n in safe}
+    _SKIDS={}
+    def share_kids(d):
+        if not _SKIDS:
+            _SKIDS[None]=[]
+            for n in G.nodes:
+                if len(G.pred[n])>=2 and G.idom.get(n) is not None: _SKIDS.setdefault(G.idom[n],[]).append(n)
+        return _SKIDS.get(d,[])
+    def join_of(i,stops,J):
+        """The join of the branch at i as its arms see it, and the stops with it."""
+        J=outer_join(J)
         if c.loopstack and J!=gen_cfg.EXIT and J not in G.loops[c.loopstack[-1]]:
             J2=G.ijoin_in(i,G.loops[c.loopstack[-1]])           # the real join is outside the loop (the arms leave it): meet inside it instead
             if J2!=gen_cfg.EXIT: J=J2
-        c._bj=J
         stops2=dict(stops)
         if J!=gen_cfg.EXIT and (J not in stops2 or stops2[J]=='cont'):
             if not c.loopstack or J in G.loops[c.loopstack[-1]]: stops2[J]='join'
+        return J,stops2
+    _SAFE=re.compile(r'^\w+ = [^*/%\[]*;$')
+    def safe_sets(lines):
+        """Assignments that read no memory and call nothing: harmless on a path that does not need them."""
+        return all(_SAFE.match(l) and not re.search(r'\w\(|->|@@',l) for l in lines)
+    def merge_many(sts,lists,live):
+        """The state at a node several paths reach (sts: the state each leaves, lists: where each one's assignments go): what all
+        agree on stays, a register they leave different that the code from the node on reads (live) becomes a variable assigned on
+        each path, the others are unknown from there on. As merge_arms, for any number of paths."""
+        s0=sts[0]
+        if any(st[5]!=s0[5] or st[6]!=s0[6] for st in sts): raise Skip('shared node: stack pointer differs')
+        if any(st[7]!=s0[7] for st in sts): raise Skip('shared node: FPU bank or size mode differs')
+        bad=lambda v: v is not None and (v==DIRTY or (isinstance(v,tuple) and v[0] in ('addr','srx')))
+        R={}; FR={}
+        for k,isf,out in ((0,False,R),(1,True,FR)):
+            for r in sorted(set().union(*[set(st[k]) for st in sts])):
+                vs=[st[k].get(r) for st in sts]
+                if all(v==vs[0] for v in vs):
+                    if vs[0] is not None: out[r]=vs[0]
+                    continue
+                if any(bad(v) for v in vs):
+                    out[r]=DIRTY; c.dwhy[r]='paths into a shared node differ'; continue
+                own=('s','a%d'%int(r[1:])) if not isf and r[1:].isdigit() and 4<=int(r[1:])<=7 else ('s','f%d'%int(r[2:])) if isf and r[2:].isdigit() and 4<=int(r[2:])<=11 else None
+                if own:         # an argument register a path never touched, with no call made yet, still holds the function's own argument
+                    vs=[own if v is None and st[8]==0 else v for v,st in zip(vs,sts)]
+                    if all(v==vs[0] for v in vs):
+                        (c.fuse if isf else c.iuse).add(int(own[1][1:])); out[r]=vs[0]; continue
+                elif live is not None and r not in live:
+                    out[r]=DIRTY; c.dwhy[r]='not read after the shared node'; continue
+                if isf and r=='fr0' and any(v is None and st[8] for v,st in zip(vs,sts)):
+                    out[r]=DIRTY; c.dwhy[r]='fr0 left by a call on one path'; continue
+                if own and own in vs: (c.fuse if isf else c.iuse).add(int(own[1][1:]))
+                var=fresh(isf); emit('%s %s;'%('float' if isf else 'int',var))
+                for v,l in zip(vs,lists):
+                    if v is not None: l.append('%s = %s;'%(var,(fx if isf else ex)(v)))
+                out[r]=('e',var)
+        if 'fr0' not in FR and any(st[8] for st in sts):
+            FR['fr0']=DIRTY; c.dwhy['fr0']='left by a call on a path into a shared node'      # a callee's float result, which only the code right after that call can name
+        stack={k:v for k,v in s0[3].items() if all(st[3].get(k)==v for st in sts)}
+        for k in sorted(set().union(*[set(st[3]) for st in sts])):
+            if k[0]>=0 and any(st[3].get(k)!=s0[3].get(k) for st in sts):          # a stack argument slot the paths left different: a variable carries it
+                nslot=8+k[0]//4; isf=k[1]=='f'
+                tv=fresh(isf); emit('float %s;'%tv if isf else 'int %s = 0;'%tv)
+                for st,l in zip(sts,lists):
+                    v_=st[3].get(k)
+                    if v_ is None: c.iuse.add(nslot); v_=('e','*(float *)&a%d'%nslot) if isf else ('s','a%d'%nslot)
+                    l.append('%s = %s;'%(tv,(fx if isf else ex)(v_)))
+                stack[k]=('e',tv)
+        def special(k):
+            vs=[st[k] for st in sts]
+            if all(v==vs[0] for v in vs): return vs[0]
+            if any(v is None or bad(v) for v in vs): return None
+            v_=fresh(False); emit('int %s;'%v_)
+            for v,l in zip(vs,lists): l.append('%s = %s;'%(v_,ex(v)))
+            return ('e',v_)
+        set_regs((R,FR,special(2),stack,special(4),s0[5],list(s0[6]),s0[7])); c.pcalls=max(st[8] for st in sts)
+
+    def share_join(doms,stops,J,stops2,runner):
+        skip=set()
+        for _ in range(4):
+            r=share_join1(doms,stops,J,stops2,runner,skip)
+            if not isinstance(r,set): return r
+            skip|=r                 # nodes only one path reached: nothing to share, read again without them
+        return None
+    def share_size(X,cut):
+        """Instructions from X to the next join or shared node, the function's ending left out (the pops and the return: C writes
+        `return` for them at no cost, wherever it stands)."""
+        def ending(k):
+            mn,ops,pc=ins[k]
+            return mn in ('rts','nop','bra') or '@r15+' in (ops or '') or (mn=='add' and (ops or '').split(';')[0].strip().endswith(',r15'))
+        return sum(1 for k in G.reach_cut(X,cut-{X}) if not ending(k))
+    def share_join1(doms,stops,J,stops2,runner,skip):
+        """Reads the branch (runner) with the nodes it owns as shared nodes, then writes each once. doms: the branch's nodes (its
+        folded tests included). Returns what the branch returns, or None (nothing changed) when it owns no such node or the reading
+        fails: the caller then writes it the old way."""
+        if not _SHARE[0] or _SHARE[1]>=48 or getattr(c,'flat',False): return None
+        if share_spent(_SHARE[3],c.emit_limit):
+            if os.environ.get('GEN_SHARE_LOG') and _SHARE[0] is True: _SHARE[0]=1; _tp_sys.stderr.write('share_join: no more tries, %d statements written\n'%_SHARE[3])
+            return None
+        cur_loop=c.loopstack[-1] if c.loopstack else None
+        Xs=[]
+        for d in doms:
+            for X in share_kids(d):
+                if X==J or X in stops or X in G.loops or X in Xs or X in skip or G.innermost(X)!=cur_loop: continue
+                Xs.append(X)
+        cut=set(stops2)|set(Xs)
+        Xs=[X for X in Xs if share_size(X,cut)>=_SHARE_MIN]
+        if not Xs or len(Xs)>24: return None
+        Xs.sort(key=lambda X:(-len(G.reach(X)),X))
+        if any(Xs[a] in G.reach(Xs[b]) for a in range(len(Xs)) for b in range(a+1,len(Xs))): return None
+        before=snap()
+        try:
+            ids=[]; stopsX=dict(stops)
+            for X in Xs:
+                c.nshr+=1; c.shr[c.nshr]=[]; stopsX[X]=('share',c.nshr); ids.append(c.nshr)
+                c.shr_safe[c.nshr]=frozenset(n_ for n_,k_ in stops2.items() if k_=='join')
+            c.shr_open+=1
+            out=[]; c.blocks.append(out)
+            try: o=runner(stopsX,frozenset(ids))
+            finally: c.blocks.pop()
+            if not any(c.shr[k] for k in ids):          # no path reached one: as before
+                for k in ids: del c.shr[k]; del c.shr_safe[k]
+                c.shr_open-=1; c.blocks[-1].extend(out); return o
+            cur=regs_state() if o[0]!='end' else None; Z=o[1] if o[0]!='end' else None
+            pre=[]; g=None; sub={}; once=set(); tested=[]
+            base=stops2
+            if softs(out)-set(ids): base=share_stops(stops2,share_safe(softs(out)-set(ids)))      # a path waits for a node of an outer branch: the code here reads on to a join that branch stops at, as the arms did
+            for n,(X,k) in enumerate(zip(Xs,ids)):
+                arr=c.shr[k]
+                if not arr: continue
+                if len(arr)==1: once.add(X)
+                later=any(c.shr[k2] for k2 in ids[n+1:])
+                foreign=bool(softs(out)-set(ids))
+                guarded=cur is not None or later or foreign
+                if guarded:
+                    # under a flag only where that is smaller than the code written again: not for a few instructions (the flag is set
+                    # on each way in and tested once), and not for code with no branch in it, which the compiler itself merges when
+                    # it ends two arms (shc: one copy of a tail both arms end with, but two of a tail that holds an if)
+                    if (len(arr)-1)*share_size(X,cut)<len(arr)+4 or all(len(G.succ[k_])==1 for k_ in G.reach_cut(X,cut-{X})): once.add(X)      # the flag (set on each way in, tested once) costs more than the code written again
+                # the state at X: what every way in agrees on, a variable (assigned at each mark) for what they leave different
+                lists=[['@'] for _ in arr]
+                c.blocks.append(pre)
+                try:
+                    merge_many([a_[0] for a_ in arr],lists,c.live.get(X) if c.live is not None else None)
+                    if guarded and g is None:
+                        g=fresh(False); emit('int %s = 0;'%g)
+                finally: c.blocks.pop()
+                for h,l in enumerate(lists): sub[(k,h)]=l[1:]+(['%s = %d;'%(g,n+1)] if guarded else [])
+                c.T=None; c.lastcall=None          # the flag and a call's float result do not carry over from one of the ways in
+                c.lvconst={}; c.lvk={}             # nor does what one of them knew a loop variable to hold
+                stopsB=dict(base)
+                for X2,k2 in list(zip(Xs,ids))[n+1:]: stopsB[X2]=('share',k2)
+                Xl=[]; c.blocks.append(Xl)
+                try: oX=exec_from(X,stopsB,False); stX=regs_state()
+                finally: c.blocks.pop()
+                if oX[0]!='end' and Z is not None and oX[1]!=Z: raise Skip('shared node: its code and the paths past it meet at different joins')
+                if not guarded:
+                    out.extend(Xl)
+                    if oX[0]!='end': cur=stX; Z=oX[1]
+                    continue
+                E=['@']
+                if oX[0]!='end' and cur is not None:
+                    n0=len(Xl)
+                    if not Xl: Xl.append('@')
+                    c.blocks.append(pre)
+                    try: merge_many([stX,cur],[Xl,E],c.live.get(Z) if c.live is not None else None); cur=regs_state()
+                    finally: c.blocks.pop()
+                    if Xl and Xl[0]=='@': del Xl[0]
+                    # what the merge added runs after every path of X's code and of the code before it: where a path waits for a later
+                    # node (its flag is higher) only harmless ones may run, the others go under a test of the flag
+                    q='(%s == %d)'%(g,n+1); nq='(%s != %d)'%(g,n+1); c.neg[q]=nq; c.neg[nq]=q
+                    if softs(Xl[:n0]) and not safe_sets(Xl[n0:]):
+                        if softs(Xl[:n0])-set(ids): raise Skip('shared node: a value set after a path that waits for a node of an outer branch')
+                        Xl[n0:]=[mkif(q,Xl[n0:],[])]
+                    if not safe_sets(E[1:]):
+                        if foreign: raise Skip('shared node: a value set on a path that waits for a node of an outer branch')
+                        if later:
+                            q2='(%s < %d)'%(g,n+1); nq2='(%s >= %d)'%(g,n+1); c.neg[q2]=nq2; c.neg[nq2]=q2
+                            E[1:]=[mkif(q2,E[1:],[])]; tested.append((-1,0))
+                elif oX[0]!='end': cur=stX; Z=oX[1]
+                q='(%s == %d)'%(g,n+1); nq='(%s != %d)'%(g,n+1); c.neg[q]=nq; c.neg[nq]=q
+                s_=mkif(q,Xl,E[1:])
+                if s_: out.append(s_)
+                tested.append((len(out)-1 if s_ else -1,n+1))
+            if once:
+                restore(before); return once
+            if len(tested)==1:          # one flag value only: tested as a flag
+                at_,n_=tested[0]
+                if at_>=0 and out[at_].startswith('if (%s == %d) {'%(g,n_)): out[at_]='if (%s) {'%g+out[at_][len('if (%s == %d) {'%(g,n_)):]
+            # the marks: what each way into the node sets
+            def fill(x):
+                res=[]
+                for l in x.split('\n'):
+                    m_=re.match(r'^(\s*)@@SHR(\d+)\.(\d+)@@$',l)
+                    if m_ and int(m_.group(2)) in ids:
+                        if (int(m_.group(2)),int(m_.group(3))) not in sub: raise Skip('shared node: reached again from the code after it')
+                        res.extend(m_.group(1)+a_ for a_ in sub[(int(m_.group(2)),int(m_.group(3)))])
+                    else: res.append(l)
+                return '\n'.join(res) if res else None
+            out=[y for y in (fill(x) if isinstance(x,str) and '@@SHR' in x else x for x in out) if y is not None]
+            left=softs(out)
+            if left & set(ids): raise Skip('shared node: a mark was not filled')
+            if left and cur is not None and Z not in share_safe(left): raise Skip('shared node: the code goes on after a path that waits for a node of an outer branch')
+            _SHARE[2]+=1
+            if os.environ.get('GEN_SHARE_LOG'):
+                for X,k in zip(Xs,ids):
+                    if c.shr[k]:
+                        nt=sum(1 for p_ in G.pred[X] if ins[p_][0] in ('bt','bf','bt/s','bf/s')); nc=len(G.pred[X])-nt
+                        _tp_sys.stderr.write('shared %x at %x: %s, %d ways in, %s\n'%(ins[X][2],ins[doms[0]][2],'tests only' if not nc else 'code only' if not nt else 'code and tests',len(c.shr[k]),'switch' if ins[doms[0]][0]=='braf' else 'branch'))
+            for k in ids: del c.shr[k]; del c.shr_safe[k]
+            c.shr_open-=1
+            c.blocks[-1].extend(pre+out)
+            c._tends=[]; c._tvar=None; c.T=None; c.lastcall=None; c.lvconst={}; c.lvk={}
+            if cur is None: return ('end',)
+            set_regs(cur); return ('reach',Z)
+        except (Restart,Conflict,RecursionError): raise
+        except Exception as e:          # a Skip, or anything this reading tripped over: written the old way
+            # (not the function's own emit limit: the old way writes more, not less, and each enclosing try would catch it in turn and
+            # read its whole branch again up to the same limit, FUN_0c0bc420 ten levels deep)
+            if isinstance(e,Skip) and str(e).startswith('bloat'): raise
+            if os.environ.get('GEN_SHARE_LOG'): _tp_sys.stderr.write('share_join %x: %s%s\n'%(ins[doms[0]][2],'' if isinstance(e,Skip) else 'ERROR %s '%type(e).__name__,e))
+            restore(before); _SHARE[1]+=1; return None
+
+    def branch0(i,j,f,cond,stops,tA=None):
+        """cond holds when the fall-through arm (starting at f) runs; j is where the branch goes. tA: the T flag on the fall-through
+        arm (True for a bf that fell through, False for a bt), the opposite on the taken arm: a second branch there may use it."""
+        J,stops2=join_of(i,stops,G.ijoin(i) if _IJOIN[0] else G.ipdom(i))
+        r=share_join([i]+sorted(getattr(c,'_foldn',None) or ()),stops,J,stops2,lambda stopsX,own:branch1(i,j,f,cond,stopsX,tA,own))
+        if r is not None: return r
+        return branch1(i,j,f,cond,stops,tA)
+    def branch1(i,j,f,cond,stops,tA=None,own=frozenset()):
+        c._bi=i
+        _KT=getattr(c,'_keepT',None); c._keepT=None       # T at the start of each arm: the delay slot's, when it set T (the slot ran before the branch on both arms)
+        sA0,sB0=getattr(c,'_fold',(None,None)); c._fold=(None,None)       # the arms' start states when fold() ran their tests
+        J,stops2=join_of(i,stops,G.ijoin(i) if _IJOIN[0] else G.ipdom(i))
+        c._bj=J
         c.T=_KT
+        if not sA0 and not sB0:
+            shared=share_entry(i,j,f,cond,stops2,J,tA,_KT,stops,own)
+            if shared is not None: return shared
         pre=regs_state()
         if sA0: set_regs(sA0)
         if tA is not None: setT('1','0') if tA else setT('0','1')
@@ -2303,20 +2854,39 @@ def _run(name,passthru=False,frame=False,flat=False):
         else: oB=exec_from(j,stops2,False)
         stB=regs_state(); c.blocks.pop()
         endB=c.T
+        mA=mB=False
+        if c.shr_open:
+            sf_=(softs(A)|softs(B))-own
+            if sf_:
+                # a path inside ends at a shared node of an outer branch: nothing may run after this if on that path, so each arm that
+                # goes on reads on to a join that branch stops at (the code after this branch's own join is then inside the arms)
+                safe=share_safe(sf_); ext=share_stops(stops,safe)
+                if oA[0]!='end' and oA[1] not in safe:
+                    if softs(A): raise Skip('shared node: an arm with a path that waits for it goes on past a join')
+                    set_regs(stA); c.T=endA; c.blocks.append(A); oA=exec_from(oA[1],ext,False); stA=regs_state(); endA=c.T; c.blocks.pop()
+                if oB[0]!='end' and oB[1] not in safe:
+                    if softs(B): raise Skip('shared node: an arm with a path that waits for it goes on past a join')
+                    set_regs(stB); c.T=endB; c.blocks.append(B); oB=exec_from(oB[1],ext,False); stB=regs_state(); endB=c.T; c.blocks.pop()
+                if (oA[0]!='end' and oA[1] not in safe) or (oB[0]!='end' and oB[1] not in safe): raise Skip('shared node: an arm stops short of the owning branch\'s joins')
+            mA=bool(softs(A)); mB=bool(softs(B))
         ta=oA[0]=='end'; tb=oB[0]=='end'
         c._tends=([endA] if not ta else [])+([endB] if not tb else [])
         if not ta and not tb: c._tends=[endA,endB]
         if ta and tb:
+            if mA: emit(mkif(cond,A,B)); return ('end',)       # a path of A ends at a mark, not at a return: B is the else, not the code after
             emit(mkif(cond,A,[])); c.blocks[-1].extend(B); return ('end',)
         if ta:
+            if mA: emit(mkif(cond,A,B)); set_regs(stB); return oB
             emit(mkif(cond,A,[])); c.blocks[-1].extend(B); set_regs(stB); return oB
         if tb:
+            if mB: emit(mkif(cond,A,B)); set_regs(stA); return oA
             emit(mkif(negate(cond),B,[])); c.blocks[-1].extend(A); set_regs(stA); return oA
         oA0,oB0=oA,oB
         for _ext in range(4):
             if oA[0]=='end' or oB[0]=='end' or oA[1]==oB[1]: break
             # one arm stopped at a join that leads on to the other arm's: that arm goes on to it (its code stays inside its arm)
             X,Y=oA[1],oB[1]
+            if (mA or mB) and c.shr_open: raise Skip('shared node: arms with a path that waits for it meet at different joins')
             if X in G.reach(Y) and Y!=X and Y not in G.reach(X):          # B stopped first: B goes on to X
                 set_regs(stB); c.T=_KT
                 stops3=dict(stops2); stops3.pop(Y,None)
@@ -2328,6 +2898,7 @@ def _run(name,passthru=False,frame=False,flat=False):
             else: break
         if oA[0]!='end' and oB[0]!='end' and oA[1]!=oB[1]:
             if True: raise Skip('unstructured %x %s %s'%(ins[i][2],oA[1] if len(oA)>1 else '-',oB[1] if len(oB)>1 else '-'))
+        nA,nB=len(A),len(B)
         merge_arms(stA,stB,A,B)
         if oA is oA0 and oB is oB0 and endA is not None and endB is not None and endA!=endB:
             # the two arms leave T as different things (1 here, a compare there): the code after the join may read it (rotcr, movt, a branch);
@@ -2335,10 +2906,20 @@ def _run(name,passthru=False,frame=False,flat=False):
             tv=fresh(False); emit('int %s = 0;'%tv)
             A.append('%s = (%s);'%(tv,endA)); B.append('%s = (%s);'%(tv,endB))
             c._tvar=tv; c.neg[tv]='!'+tv; c.neg['!'+tv]=tv
+        if (mA and not safe_sets(A[nA:])) or (mB and not safe_sets(B[nB:])):       # what the merge set runs on the path that ended at a mark too
+            raise Skip('shared node: a value set after a path that waits for it')
         emit(mkif(cond,A,B))
         return oA
 
     def switch_at(b,rx,tg,stops):
+        J=G.ipdom(b)
+        stops2=dict(stops)
+        if J!=gen_cfg.EXIT and (J not in stops2 or stops2[J]=='cont'):
+            if not c.loopstack or J in G.loops[c.loopstack[-1]]: stops2[J]='join'
+        r=share_join([b],stops,J,stops2,lambda stopsX,own:switch1(b,rx,tg,stopsX,own))
+        if r is not None: return r
+        return switch1(b,rx,tg,stops)
+    def switch1(b,rx,tg,stops,own=frozenset()):
         """A jump table at node b: a C switch on the index register (twice the index), one case group per distinct target, the last
         one the default; the arms that reach the same place merge their states like the two arms of a branch."""
         J=G.ipdom(b)
@@ -2347,7 +2928,7 @@ def _run(name,passthru=False,frame=False,flat=False):
             if not c.loopstack or J in G.loops[c.loopstack[-1]]: stops2[J]='join'
         idx=ex(c.gi(rx))
         groups={}
-        for k,t in enumerate(tg): groups.setdefault(t,[]).append(2*k)
+        for k,t in enumerate(tg): groups.setdefault(t,[]).append(SWSC.get(b,2)*k)
         order=sorted(groups.items(),key=lambda kv:kv[1][0])
         c.R['r0']=DIRTY; c.T=None
         pre=regs_state(); arms=[]
@@ -2356,6 +2937,9 @@ def _run(name,passthru=False,frame=False,flat=False):
             A=[]; c.blocks.append(A); o=exec_from(t,stops2,False); st=regs_state(); c.blocks.pop()
             arms.append((ks,A,st,o))
         live=[(st,A,o) for ks,A,st,o in arms if o[0]!='end']
+        marked=[bool(c.shr_open and softs(A)) for ks,A,st,o in arms]      # an arm with a path that ends at a shared node: it leaves the switch there
+        if live and c.shr_open and set().union(*[softs(A) for ks,A,st,o in arms])-own:
+            raise Skip('shared node: reached from a switch arm while other arms go on')
         if live:
             if any(o[1]!=live[0][2][1] for st,A,o in live): raise Skip('unstructured')
             if any(st[5]!=live[0][0][5] or st[6]!=live[0][0][6] for st,A,o in live): raise Skip('stack pointer differs')
@@ -2373,7 +2957,9 @@ def _run(name,passthru=False,frame=False,flat=False):
                     var=fresh(isf); ty='float' if isf else 'int'; f=fx if isf else ex
                     emit('%s %s;'%(ty,var))
                     for (st,A,o),v in zip(live,vs):
-                        if v is not None: A.append('%s = %s;'%(var,f(v)))
+                        if v is not None:
+                            A.append('%s = %s;'%(var,f(v)))
+                            if c.shr_open and softs(A) and not safe_sets(A[-1:]): raise Skip('shared node: a value set after a path that waits for it')
                     out[r]=('e',var)
             st0=live[0][0]
             stack={k2:v for k2,v in st0[3].items() if all(st[3].get(k2)==v for st,A,o in live)}
@@ -2386,7 +2972,7 @@ def _run(name,passthru=False,frame=False,flat=False):
         for n,(ks,A,st,o) in enumerate(arms):
             last=n==len(arms)-1
             labels=['default:'] if last else ['case %d:'%v for v in ks]
-            txt+='\n'.join('    '+l for l in labels)+'\n'+ind([blk(A)])+'\n'+('' if o[0]=='end' else '        break;\n')
+            txt+='\n'.join('    '+l for l in labels)+'\n'+ind([blk(A)])+'\n'+('' if o[0]=='end' and not marked[n] else '        break;\n')
         txt+='}'
         emit(txt)
         if not live: return ('end',)
@@ -2530,6 +3116,9 @@ def _run(name,passthru=False,frame=False,flat=False):
             if i in stops and not first:
                 k=stops[i]
                 if k=='join': return ('reach',i)
+                if isinstance(k,tuple):         # a shared node (share_join): this path ends here, the node's code is written once after the branch that owns it
+                    c.shr[k[1]].append((regs_state(),c.T)); emit('@@SHR%d.%d@@'%(k[1],len(c.shr[k[1]])-1))
+                    return ('end',)
                 if k=='break':
                     c.exits.append(regs_state()); c.nbreak[-1]+=1; emit('@@BRK%d@@break;'%(len(c.exits)-1))
                 else:
@@ -2543,6 +3132,7 @@ def _run(name,passthru=False,frame=False,flat=False):
             if i in SW0:
                 b=SW0[i]; r=switch_at(b,SWV[b][1],SWV[b][2],stops)
                 if r[0]=='end': return r
+                share_check(r[1],stops)
                 i=r[1]; continue
             mn,ops,pc=ins[i]
             if mn in ('jsr','bsr','bsrf'):
@@ -2643,12 +3233,32 @@ def _run(name,passthru=False,frame=False,flat=False):
                 cond=cond0
                 r=branch(i,addr2idx.get(tgt,tgt),i+(2 if delay else 1),cond,stops,None if slotT else mn.startswith('bf'))
                 if r[0]=='end': return r
+                share_check(r[1],stops)
                 i=r[1]; continue
+            k_=divrun(i)
+            if k_: commit(); i+=k_; continue
             step(i); i+=1
 
     c.D=0; c.maxD=0; c.spans=[]; c.pend=[]; c.frame_regs=set(); c.frame=bool(frame) or any(x[0]=='mov' and x[1].startswith('r15,') for x in ins)
+    c.shr={}; c.shr_safe={}; c.nshr=0; c.shr_open=0; _SHARE[1]=0; _SHARE[2]=0; _SHARE[3]=0
     c.rets=[]; c.lvk={}; c.lvconst={}; c.lv={}; c.exits=[]; c.conts=[]; c.nbreak=[]; c.ncont=[]; c.active=[]; c.loopstack=[]; c.steps=0; c.macl=None; c.direct=False; c.has_loop=False
     # jump tables: `mova table,r0; mov.w @(r0,rX),r0; braf r0` and a table of 16-bit offsets from the braf + 4; rX holds twice the index
+    SWSC={}          # a jump table's node -> the index register's scale: 2 for a table of 16-bit offsets, 4 for one of absolute addresses
+    def find_switches_abs():
+        """`mova table,r0; mov.l @(r0,rX),r0; jmp @r0` over a table of 32-bit addresses (rX holds four times the index): the same switch"""
+        sw={}
+        for i in range(len(ins)-2):
+            if ins[i][0]!='mova' or ins[i+1][0]!='mov.l' or ins[i+2][0]!='jmp': continue
+            m=re.match(r'@\((0x[0-9a-f]+),pc\),r0$',(ins[i][1] or '').strip()); m2=re.match(r'@\(r0,(r\d+)\),r0$',(ins[i+1][1] or '').strip())
+            if not m or not m2 or (ins[i+2][1] or '').strip()!='@r0': continue
+            tbl=int(m.group(1),16); tg=[]
+            for k in range(256):
+                v=int.from_bytes(BIN[tbl+4*k-BASE:tbl+4*k-BASE+4],'little')
+                if v not in addr2idx: break
+                tg.append(addr2idx[v])
+            if not tg: continue
+            sw[i+2]=(i,m2.group(1),tg); SWSC[i+2]=4
+        return sw
     def find_switches():
         sw={}
         for i in range(len(ins)-2):
@@ -2675,6 +3285,7 @@ def _run(name,passthru=False,frame=False,flat=False):
             sw[i+2]=(i,m2.group(1),tg)
         return sw
     SWV=find_switches()
+    SWV.update(find_switches_abs())
     SW0={v[0]:b for b,v in SWV.items()}                  # the mova node -> its braf node
     # long-range gotos: `mov.l @(pc),rN ; jmp @rN` with the pool constant an address inside this function: an edge in the graph
     GOTO={}
@@ -2794,7 +3405,7 @@ def _run(name,passthru=False,frame=False,flat=False):
                     step(b+1)                                    # the delay slot of the braf runs before the jump
                     sw_=fresh(False); emit('int %s = %s;'%(sw_,ex(idx)))      # taken before the registers are written back: idx is in terms of their values at the block's start
                     spill(list(tg))
-                    emit('switch (%s) { %s }'%(sw_,' '.join('case %d: goto %s;'%(2*k,label(t)) for k,t in enumerate(tg))))
+                    emit('switch (%s) { %s }'%(sw_,' '.join('case %d: goto %s;'%(SWSC.get(b,2)*k,label(t)) for k,t in enumerate(tg))))
                     return [(t,c.D) for t in sorted(set(tg))]
                 mn,ops,pc=ins[i]
                 if mn in ('jsr','bsr','bsrf'):

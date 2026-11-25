@@ -391,6 +391,19 @@ def used_definitions():
     return _USED
 
 
+def _orig_stack_words(name):
+    """The stack words the original code of a function reads (gen_core.callee_stack_words), or 0 when they cannot be told: its code takes the
+    address of the stack (mov r15,rN: a structure copy or a pointer into the arguments reads words a direct load does not show)."""
+    try:
+        import gen_core
+        out = subprocess.run(['python3', 'tools/sim/shdis.py', '--func', name], capture_output=True, text=True).stdout
+        if re.search(r'\bmov\s+r15,r\d+', out):
+            return 0
+        return gen_core.callee_stack_words(name)
+    except Exception:
+        return 0
+
+
 def compared_arity(cfile, table):
     """What each call out is compared on: ({address: (integer, float) register arguments}, {address: arguments on the stack}).
     A callee defined in src/ is compared on the registers its definition takes (the build links every caller against that one
@@ -405,6 +418,10 @@ def compared_arity(cfile, table):
             continue
         if sw:                                # the stack words the callee reads are compared whatever the caller's file declares
             stackn[key] = max(stackn.get(key, 0), min(sw, STACK_CAP))
+            if ni == 0:      # a callee that takes one structure (the generator pads it to four words so it goes on the stack): the words
+                k = _orig_stack_words(n)                      # its original code never reads are the caller's frame leftovers, not arguments
+                if 0 < k < stackn[key]:
+                    stackn[key] = k
         a = arity.get(key)
         if a is None or len(a) <= 2:          # the definition says which registers the callee reads: the others are leftovers, whatever the
             arity[key] = (min(ni, 4), min(nf, 8))      # caller's file declares (more, or no prototype: Virtua Tennis effFootDust -> vecSub(Stk5),
@@ -561,7 +578,17 @@ def fmt_words(ptr):
     return n
 
 
-def callview(to, r, f, arity, stack=None, chg=None, ind=None, fchg=None, indmap=None, stackw=None, stackchg=None):
+def pushed_words(call):
+    """How many words from SP the original pushed (after its prologue) for one call: the run of pushed words at the top of the stack."""
+    n = 0
+    for v in call.get('stackpush') or []:
+        if not v:
+            break
+        n += 1
+    return n
+
+
+def callview(to, r, f, arity, stack=None, chg=None, ind=None, fchg=None, indmap=None, stackw=None, stackchg=None, pushed=0):
     """What a call must agree on: its target and the registers its callee takes (arity: {address: (ints,
     floats)}; none known: all of them), a stack address as "STACK"."""
     to = '%08X' % (0x0C000000 | (int(to, 16) & 0x1FFFFFFF)) if 0x0C000000 <= (int(to, 16) & 0x1FFFFFFF) < 0x0D000000 else to   # the cached, uncached and plain addresses of the same RAM word
@@ -591,7 +618,7 @@ def callview(to, r, f, arity, stack=None, chg=None, ind=None, fchg=None, indmap=
     if rd is not None:                       # registers the callee's original code never reads are leftovers, not arguments
         r = [v if 4 + k in rd[0] else '*' for k, v in enumerate(r)]
         f = [v if 4 + k in rd[1] else '*' for k, v in enumerate(f)]
-    nstack = STACKN.get(int(to, 16), 0)
+    nstack = max(STACKN.get(int(to, 16), 0), pushed)      # the words the original pushed for this call are compared past the caller's prototype
     if stackw and READS_NAME.get(int(to, 16)) in PRINTF_NAMES:        # a printf: the format string and the words its conversions consume
         nf = fmt_words(stackw[0])
         if nf is not None:
@@ -684,10 +711,11 @@ def same(a, b, outs, back, arity=None, ind=None, indmap=None):
             x, y = [stackish(x[r]) for r in outs], [stackish(y[r]) for r in outs]      # a returned address in the stack is the frame layout's, as an argument's is
         if k == 'calls':
             xs = x
-            x = [callview(c['to'], c['r4-r7'], c['fr4-fr11'], arity, c.get('stack'), c.get('chg'), ind, c.get('fchg'), indmap, c.get('stackw'), c.get('stackchg')) for c in xs]
+            x = [callview(c['to'], c['r4-r7'], c['fr4-fr11'], arity, c.get('stack'), c.get('chg'), ind, c.get('fchg'), indmap, c.get('stackw'), c.get('stackchg'), pushed_words(c)) for c in xs]
             y = [callview(fix(c['to']), [fix(v) for v in c['r4-r7']], c['fr4-fr11'], arity, fix(c['stack']) if c.get('stack') else None,
                           xs[i].get('chg') if i < len(xs) else None, ind, xs[i].get('fchg') if i < len(xs) else None, indmap,
-                          [fix(v) for v in c.get('stackw', [])], xs[i].get('stackchg') if i < len(xs) else None) for i, c in enumerate(y)]
+                          [fix(v) for v in c.get('stackw', [])], xs[i].get('stackchg') if i < len(xs) else None,
+                          pushed_words(xs[i]) if i < len(xs) else 0) for i, c in enumerate(y)]
         if k == 'writes':                 # the final value at each address: the order of plain stores
             x = final(x)                 # is the compiler's business (devices keep their order)
             y = final([[fix(w[0])] + w[1:] for w in y])

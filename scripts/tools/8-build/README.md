@@ -9,3 +9,14 @@
 | [relocptr.py](relocptr.py) | Pointers to game functions, in the pieces that stay where they are, follow the functions. |
 | [codeconsts.py](codeconsts.py) | C that reads a constant from the original's code by its address (a literal pool the build overwrites): lists them, `--write` puts the values in. |
 | [retcheck.py](retcheck.py) | Each function's result register, from the original's code before its `rts`, against its C declaration; `make c` and the pre-commit hook run it. |
+
+## Prompts
+
+Work to hand to another agent, with its placeholders filled in; each carries the rules it needs.
+
+A prompt may use another prompt one level deep, by naming it; a prompt that another one uses is a leaf (it names none) and has a
+fixed effort limit, so no chain of prompts can recurse or run without end.
+
+| prompt | what it hands over |
+|---|---|
+| [PROMPT_triage.md](PROMPT_triage.md) | A build from C that stopped: its own message read, the cause found, the step that fixes it named; nothing changed. |
