@@ -148,6 +148,7 @@ class Memory:
         self.seq_reads = {}       # RAM addr -> what each read returns, in order (the last value stays): a word an interrupt changes
         self.seq_used = {}        # RAM addr -> how many reads took one of those values
         self.ever_written = set() # the stack words the function's body stored at any time (pushes left out): set by it, not a leftover
+        self.ever_bytes = set()   # the same by byte: which bytes of a word of ever_written were stored
         self.watch = None         # (lo, hi): the callee probe's range, the caller's frame (frame_reach)
         self.watched = set()      # the words of it the probe read before writing them
         self.watch_wrote = set()  # the words of it the probe wrote
@@ -236,6 +237,7 @@ class Memory:
             self.arg_pushed.discard(a & ~3)     # a plain store over a word is not a push (pushed() adds it back)
             self.body_written.add(a & ~3)
             self.ever_written.add(a & ~3)
+            self.ever_bytes.update(range(a, a + size))
 
     def pushed(self, addr, size, save=False):
         """A push (@-r15): the prologue's saved registers and a call's pushed arguments, not the contents of a frame buffer."""
@@ -244,6 +246,12 @@ class Memory:
                 self.arg_pushed.add(self.phys(addr + k) & ~3)
             self.body_written.discard(self.phys(addr + k) & ~3)
             self.ever_written.discard(self.phys(addr + k) & ~3)
+            self.ever_bytes.difference_update(range(self.phys(addr + k) & ~3, (self.phys(addr + k) & ~3) + 4))
+
+    def byte_mask(self, addr):
+        """0xFF for each byte of the stack word at addr that was stored at some time (little-endian)."""
+        a = self.phys(addr) & ~3
+        return sum(0xFF << (8 * k) for k in range(4) if a + k in self.ever_bytes)
 
 
 class _CowPages(dict):
@@ -936,6 +944,10 @@ def run(case, case_dir='.', code=None, deep=False, entry=None, end=None, argc=No
             out['r%d' % i] = run
         return out
 
+    def frame_masks(bufs, c):
+        """For each word of frame_bufs, the bytes of it stored at some time."""
+        return {r: [mem.byte_mask((c.r[int(r[1:])] & M32) + 4 * k) for k in range(len(run))] for r, run in bufs.items()}
+
     def frame_reach(c, target):
         """{argument register: [[offset, word, stored], ...]} for each of r4-r7 that points into this function's frame: the words the
         callee itself reads through it before writing them, found by running the callee (its code in the run's memory, every call it
@@ -981,6 +993,7 @@ def run(case, case_dir='.', code=None, deep=False, entry=None, end=None, argc=No
                 c.inside.append(c.pr)            # runs until it returns here (a tail jump: to our caller); not a call out
             return False
         wrote = c.r.written                      # the registers the function wrote since the last call
+        bufs = frame_bufs(c)
         calls.append({'to': '%08X' % (target & M32), 'kind': kind,
                       'r4-r7': ['%08X' % c.r[i] for i in range(4, 8)],
                       'fr4-fr11': ['%08X' % c.fr[i] for i in range(4, 12)],
@@ -991,7 +1004,7 @@ def run(case, case_dir='.', code=None, deep=False, entry=None, end=None, argc=No
                       # which of those words this function stored since its last call: the others are leftovers, not arguments
                       'stackchg': [Memory.phys((c.r[15] + 4 * k) & M32) & ~3 in mem.stack_written for k in range(16)],
                       'stackpush': [Memory.phys((c.r[15] + 4 * k) & M32) & ~3 in mem.arg_pushed for k in range(16)],
-                      'bufs': frame_bufs(c), 'reach': frame_reach(c, target)})
+                      'bufs': bufs, 'bufmask': frame_masks(bufs, c), 'reach': frame_reach(c, target)})
         mem.body_written.clear()
         mem.arg_pushed.clear()
         mem.stack_written.clear()   # words passed on the stack (a 5th argument on)   # the word on top of the stack: the first argument of a variadic call

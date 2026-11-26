@@ -261,7 +261,7 @@ The ten steps, in order. Each one is announced and closed as the section above s
    data words, exported labels, `objects.txt` in link order.
 - **Make the repo publishable and build it.** A pushed repo holds no game bytes, so it must be
    able to regenerate them from each user's own disc. Into the repo:
-   - copy `template/` (`build.sh`, `setup.sh`, `disc.sh`, `textures.sh`, `Makefile`, `models.txt`, `README.md`, `AGENTS.md`, `KICKOFF`, `status.txt`, `port/` (the native port's runtime, experimental: its README)),
+   - copy `template/` (`build.sh`, `setup.sh`, `disc.sh`, `textures.sh`, `Makefile`, `models.txt`, `symbols.txt`, `README.md`, `AGENTS.md`, `KICKOFF`, `status.txt`, `port/` (the native port's runtime, experimental: its README)),
      and `template/gitignore` as **`.gitignore`** (shipped without the dot: some installs drop
      dotfiles);
    - copy `scripts/tools/` whole as **`tools/`** (without `__pycache__` and without `1-2-baseline/setup/`, the kickoff's own
@@ -620,6 +620,7 @@ Grouped by the step that first needs them (scripts, then templates, then docs wi
 | `scripts/tools/3-assets/text_dump.py`               | copies the disc files `models.txt` lists as `text <path>` into `text-dump/`                                                                                                                                                                                                                      |
 | `scripts/tools/3-assets/textures.py`                | every standard texture to PNG + a contact sheet (`index.html`)                                                                                                                                                                                                                                   |
 | `scripts/tools/3-assets/find_extras.py`             | in the repo: the `extra` rules of a character draw function, found by running its branches per character (draws behind state the run cannot know are listed as gated, not as rules)                                                                                                              |
+| `template/symbols.txt`               | in the repo: names the C uses that no file defines yet, empty but for the format line                                                                                                                                                                                                           |
 | `template/textures.sh`               | in the repo: the texture contact sheet, as its own step                                                                                                                                                                                                                                          |
 
 ### Tools for step 4: Opportunity-driven optional boosts

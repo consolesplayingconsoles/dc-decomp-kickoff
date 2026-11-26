@@ -1636,6 +1636,96 @@ reads them from the model file. Tested on synthetic containers (`tests/test_reco
   (`secondpass.py`, `tests/test_gen_secondpass.py`).
 
 
+### Step 5: hand-written functions from 199 left to none, and what the checker got wrong on the way (2026-11-25)
+- State at the start: 199 functions left (82,406 bytes). State at the end: 0 of 5217 left, total test coverage 71.4%; 8 functions with
+  no C form are counted apart, and 4 of the 5217 are inline assembly. Written by hand, in the session and by agents given one cause each.
+- What stopped it -> cause -> change:
+  - arguments of a call left over after a table jump were compared -> entry reads did not follow `braf` tables
+    (`tests/test_entryreads_braf`); `div0u` counted as reading a register (`tests/test_entryreads_div0u`);
+  - names starting with `_` were treated as ordinary calls for a game function so named -> older proofs, whose cases had been drawn with
+    those calls running, no longer held -> reverted;
+  - one function listed as proven was wrong: declared `int`, it returned a leftover address where the original returns a float in fr0 (the
+    check compares only the declared register);
+  - retcheck warned that a caller used a `void` result when the file only had its prototype (`tests/test_retcheck_prototype`);
+  - a call was compared on four stack words when the callee reads one, through `@(r0,r15)` -> the stack word count follows an index set by
+    `mov #k,r0` (`tests/test_stackwords_indexed`);
+  - a 9-byte frame buffer differed on bytes 9 to 11 of its third word, which nobody writes -> words of a buffer are compared on the bytes
+    either side stored (`tests/test_stackbuf_bytes`);
+  - a runtime helper that runs for real clears and copies its locals through `memset` / `memcpy`, mocked, so it worked on stack leftovers
+    -> a case may name callees to run on both sides, `"real": [...]` (`tests/test_realcallees`).
+- Entries: three of `functions.txt` were fixed and re-split: one size 10 bytes short of its epilogue; one 4716-byte entry that is a
+  40-byte table dispatcher and two functions of 3584 and 1716 bytes; one 4-byte "function" that is a table of integers (now `D`).
+- Generated against hand: on the two split functions the generator wrote C called Equivalent that ran 13% and 27% of the instructions;
+  it was not kept. Written by hand they ran 97% (1501 of 1546, 1200 cases) and 89% (696 of 786, 600 cases).
+- A bare `rte` is C with `#pragma interrupt` (as on Virtua Tennis).
+- Cache range routines (`ocbi` / `ocbp` / `ocbwb`; four of them): C with `_builtin_set_imask` and an `ocbi` wrapper agreed on ranges
+  walked line by line and differed on large ones, where the original jumps into the uncached mirror of its own code and the check records
+  a call out. Looking in the other games for the same bytes found them proven three ways: C that calls the original's fixed uncached
+  address for large ranges (Crazy Taxi, Zombie Revenge, Power Stone 2), C whose large path only saves and restores the interrupt mask
+  (Virtua Tennis), and the whole routine as inline assembly (Power Stone). Taken: inline assembly, the original words with its own
+  addresses as labels, and `.ALIGN 4` plus a `nop` so the code sits 2 past a multiple of 4 as it did, for the pc-relative loads.
+- The checker observes nothing for those four (the simulator runs the cache instructions as no-ops; small ranges only, 9 cases each,
+  "nothing compared"). What shows them right: the compiled bytes equal the original's, 536 to 584 bytes each, and the 5 own addresses in
+  each pool moved with the code.
+- SHC rejects a definition named `_slow_strcmp1` (error 2020) under every signature tried; the same body compiles under another name. The
+  function is `_c_strcmp1` in `functions.txt` and its two callers (both still Equivalent), as Power Stone and Power Stone 2 renamed theirs.
+  A leading underscore keeps it running for real in the check.
+- An interrupt entry stub (a nop slide, then a jump with a register left pushed) is now `D` in `functions.txt`, kept as words: the other
+  games do not list it as a function.
+
+### Step 8: the build from C refused routines that were never listed (2026-11-25 to 2026-11-26)
+- State at the start: 5550 entries, 0 functions left to write. `make c` stopped: 85 addresses the C passes on were the entry of a routine
+  `functions.txt` did not list, inside a piece the C replaces. They are routines only passed around as pointers (callbacks, task and
+  state functions). The step 2 `missed.txt` had them (the 12 printed ones all as "function start; pointed to from ..."); the entry
+  review used `missed_funcs.py --targets`, which lists only what code calls or jumps to.
+- `boundaries.py --discover --values` found them: 1,171 candidates, most refused as data. What it got wrong here:
+  - it does not follow jump-table arms, so an address loaded inside one was added by hand;
+  - it cut the four inline-assembly cache routines at their own internal jump targets; those entries were taken out again;
+  - it listed two `D` entries (the table of integers, the interrupt entry stub) as functions; the `F` lines were removed.
+- One pass is not enough: the C written for a batch hands on further routines. The build's own test (`mbuild.unlisted_entries` over the
+  values `passed_values` reads from `src/`, no build needed) was run after each batch until it found none: batches of 127, 23, 13, 14 and
+  then chains of one to six, most of them a task's state functions, each handing on the next.
+- Where it ended: 5767 entries, 217 more; 0 of 5434 functions left, total test coverage 71.6%; retcheck clean; the 81 addresses code
+  calls or jumps to without an entry are all data. No build was run on this state.
+- Of the 217, the generator wrote 202. By hand, 15: its draw timeouts (small task set-up functions that copy a table to the frame, quick
+  by hand), a 15-state and a 24-state task it could not read, and ones that differed. Two were proven only by matching what the original
+  leaves behind: one stores the address of a frame table in its object (the frame was padded to the original's size), one calls through a
+  table with three registers still holding addresses (passed as arguments).
+- -> the skill: a note in `template/AGENTS.md` to run the discover step for pointer-only routines in step 2.
+
+### Step 9: from a first build that quit to the BIOS at "Now Loading" to the next loading screen (2026-11-26)
+- State at the start: all 5434 functions with C, no build from C yet.
+- Build stops on the way, in the order met:
+  - a pointer into a C function's piece needed a running copy of a group with parts without C -> data after 95 C functions was part of
+    their pieces and library code read it -> `D` entries where each piece's data starts (126: splitting exposes data pointing into other
+    data, two more passes), `functions.txt` only;
+  - `make c` opened a `symbols.txt` the repo never had -> `cbuild.py` skips a missing one and the template ships it (`tests/test_namedaddr`).
+- The first disc: licence screen, the game's loading screen, then the BIOS menu, in the user's emulator.
+- Cause: `jtSndLibInit`, the sound start-up, called `gdFsChangeDir()` with nothing. The routine is 6 bytes that set r5 and jump to the
+  library's directory load with r4 as it came; counted as taking no argument, so the C dropped the directory name and the check compared
+  none. It returned -8 and the game called its own exit routine. This is the class of "file opens that passed nothing" (Zombie Revenge,
+  2026-11-15) and of the table-jump trampolines (Crazy Taxi and Virtua Tennis, 2026-11-01): met again because the earlier fixes were in
+  each game's trampolines.
+- Fix, no tool changed: the game thunks over `syFree` and two other routines take and forward their arguments, after which the check
+  failed 35 generated callers that had dropped them (`gen_equiv --regen` wrote all 35 again, proven); the callers of library routines with
+  no C (`gdFsChangeDir`, `syFree`, one thunk) were given the original's arguments by hand. The next build passed the sound start-up and
+  reached the following loading screen.
+- How it was traced, and what cost time (a debug Flycast, no input needed):
+  - its log showed no reset or fatal line;
+  - the BIOS menu runs from the same addresses as the game and loads its own program at 8C010000, so the build's map names BIOS code as
+    game functions: forty samples read as "in the game" were the BIOS. Check memory against the built image, or the vector base and
+    stack, before naming anything;
+  - frames dumped from video memory (`rend.EmulateFramebuffer` on the command line) showed where it left: licence screen, "Now Loading",
+    menu; the game lived about 3 s;
+  - breakpoints placed before the game was loaded were overwritten; one on an address the BIOS also runs stopped there for ever and
+    spoiled the others; sampling every 5 ms left the emulated CPU too little time to reach the game;
+  - what named the cause: the reset routine's registers still held the address of the game's exit routine, one breakpoint on it gave the
+    caller, and the error code was still in r4.
+- The next build hung at the anti-graffiti warning, in a search routine's own "id not found" loop, with an address as the id. One-line
+  record getters hand their r4 to the search and were written `(void)`, so their callers passed no id. All were Equivalent: the checker's
+  stand-in calls leave r4-r7 as they were, so a value an earlier call was given still shows at the next one. The getters took the id and
+  the 37 calls in seven functions were given the original's by hand. The build after that got further and restarted.
+
 ## Not tied to one game
 
 ### Dev kit dumps (sega-dreamcast-info.com, 11 "Set 5" Katana kits on archive.org, 2026-10-08)

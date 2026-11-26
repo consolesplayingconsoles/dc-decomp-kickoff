@@ -40,6 +40,10 @@ byte for byte too). Say which step you are in, and end it with `python3 tools/pr
 | 9 | Runtime repairs | Traces each stop to its function and the step that caused it, fixes it there and builds again until the game is stable; Flycast GDB is the last resort when reading does not settle it. `status.txt` records how far it gets: `[x]` reached, `[ ]` tested and not reached, `[?]` not tested yet |
 | 10 | Native port | Runs the game on a host from the proven C (experimental). The steps are in `port/README.md`; `port/runtime/game.h` is the only per-game file. The console build and the decomp are complete without the SDK as C; for a port, every SDK function needs C except the hardware drivers (`sdk.txt`'s `hardware` lines); how to debug it is in "Debugging the native port" below. It needs nothing from steps 7 to 9; what it finds goes back to steps 2, 5 and 6 |
 
+**Step 2, a note on missed routines:** a routine that is only passed around as a pointer (a callback, a task) is called by nothing.
+Run `python3 tools/common/boundaries.py --discover --values` and list what it finds before step 5: left unlisted it is missing from the
+progress figures, and `make c` (step 8) refuses it once the C around it replaces its piece.
+
 If you are the session that ran the kickoff and the user chose to continue, this file is your instructions. If you are a new session,
 you are a guided agent: read this file, run `python3 tools/progress.py` to see where the run stands, and start at the first step not done.
 

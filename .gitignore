@@ -5,3 +5,6 @@ __pycache__/
 
 # C test builds (tests/c/Makefile)
 tests/c/build/
+
+# The author's backlog for the next version: local only
+3.1_backlog.md

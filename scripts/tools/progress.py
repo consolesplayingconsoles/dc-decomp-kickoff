@@ -317,7 +317,9 @@ def write_badge(rows, label, path='badges/progress.svg', extra=()):
     cols = ''
     heads, grid = extra if extra else ((), [])
     if heads and grid:
-        xs = (170, 231, W - M - 19)[3 - len(heads):]    # the shown columns' centres, kept to the right: the last one ends on the right margin
+        # the shown columns' centres, kept to the right: the last one leaves half of its own heading and M
+        last_centre = W - M - {'FLYCAST': 26, 'DREAMCAST': 31, 'NATIVE': 19}.get(str(heads[-1]).upper(), 31)
+        xs = [last_centre - 60 * (len(heads) - 1 - i) for i in range(len(heads))]
         yh = last + 28                                  # the columns' headings
         cols = ('<g font-size="10" fill="#b8c4d9">%s</g>' % ''.join('<text x="%d" y="%d">%s</text>' % (x, yh, h) for x, h in zip(xs, heads))
                 ) + ''.join('<text x="%d" y="%d" text-anchor="start">%s</text>' % (M, yh + 20 + 18 * k, n) +

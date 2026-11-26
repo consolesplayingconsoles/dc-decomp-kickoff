@@ -812,6 +812,8 @@ def named_addresses():
     """{name: address} of globals.txt and symbols.txt: names the C uses that no object defines."""
     out = {}
     for f in ('globals.txt', 'symbols.txt'):
+        if not os.path.exists(f):
+            continue                    # a repo that has named nothing there yet
         for l in open(f):
             p = l.split()
             if p and not l.startswith('#') and len(p) >= 2:

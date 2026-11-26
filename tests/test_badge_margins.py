@@ -9,7 +9,7 @@ a badge with only the metrics, and one with the status grid below them.
                   right     every right-aligned text (the percentages, the matching figure) ends at x = width - M
                   top       the first bar's top edge is at y = M
                   bottom    the last text's baseline is 15 (3 of descender, then M) above the bottom edge
-                  columns   the last status column's centre leaves half of its heading (19) and M to the right edge
+                  columns   the last status column's centre leaves half of its own heading and M to the right edge, whichever column is last
 """
 import os
 import re
@@ -97,6 +97,13 @@ class TestBadgeMargins(unittest.TestCase):
         heads = [(x, t) for x, y, a, t in ts if t in ('FLYCAST', 'DREAMCAST', 'NATIVE')]
         self.assertEqual(len(heads), 3)
         self.assertEqual(max(x for x, t in heads), w - M - 19, 'the last column leaves half its heading and M')
+
+
+    def test_grid_without_the_last_column(self):
+        w, ts = self.check(badge(GRID.replace('[x] [x] [x] BUILDS', '[x] [x] [ ] BUILDS')))
+        heads = dict((t, x) for x, y, a, t in ts if t in ('FLYCAST', 'DREAMCAST', 'NATIVE'))
+        self.assertEqual(sorted(heads), ['DREAMCAST', 'FLYCAST'])
+        self.assertEqual(heads['DREAMCAST'], w - M - 31, 'a wider last heading sits further in')
 
 
 if __name__ == '__main__':

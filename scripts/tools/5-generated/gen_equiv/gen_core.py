@@ -515,13 +515,20 @@ def callee_stack_words(fname):
     n=0
     try:
         out=subprocess.run(['python3','tools/sim/shdis.py','--func',fname],capture_output=True,text=True).stdout.splitlines()[2:]
-        delta=0; seen=set()
+        delta=0; seen=set(); const={}      # registers holding a known index: `mov #k,r0` then `@(r0,r15)`
         for l in out:
             m=re.match(r'([0-9a-f]{8}) ([0-9a-f]{4})\s+(\S+)\s*(.*)',l)
             if not m: continue
             mn=m.group(3); ops=m.group(4).split(';')[0].strip()
             if mn in ('rts','rte'): break
             a=[x.strip() for x in re.split(r',(?![^(]*\))',ops)] if ops else []
+            if mn=='mov' and len(a)==2 and a[0].startswith('#'): const[a[1]]=int(a[0][1:],0); continue
+            if mn=='add' and len(a)==2 and a[0].startswith('#') and a[1] in const: const[a[1]]+=int(a[0][1:],0); continue
+            if len(a)==2 and mn in ('mov.l','fmov.s') and a[0]=='@(r0,r15)':
+                k=const.get('r0')
+                if k is not None and k-delta>=0 and (k-delta)%4==0: seen.add((k-delta)//4)
+                const.pop(a[1],None); continue
+            if a and not mn.startswith(('cmp','tst','bt','bf')): const.pop(a[-1],None)
             if len(a)==2 and a[1]=='@-r15' and mn in ('mov.l','sts.l','fmov.s','stc.l'): delta+=4; continue
             if mn=='add' and len(a)==2 and a[1]=='r15' and a[0].startswith('#'): delta-=int(a[0][1:],0); continue
             if len(a)==2 and a[0]=='@r15+' and mn in ('mov.l','lds.l','ldc.l','fmov.s'):

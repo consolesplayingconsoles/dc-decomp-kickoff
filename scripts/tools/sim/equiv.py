@@ -24,7 +24,7 @@ agree, and a struct copy is compared by what it writes.
 Calls out are compared by target and by the arguments the callee takes, read from the prototype the C
 file declares for it, raised to the callee's own definition in src/ when that takes more (an int or pointer
 takes the next of r4-r7, a float the next of fr4-fr11, past the fourth int the stack): registers a
-call merely leaves over are not arguments. A callee with no prototype in the file is compared on all of
+call merely leaves over are not arguments. A case may name callees to run on both sides ("real": ["memcpy"]). A callee with no prototype in the file is compared on all of
 r4-r7 and fr4-fr11, as before. An argument that points into the simulator's stack is compared as "the
 stack": a local's address depends on the frame layout, which is the compiler's business.
 What such an argument points at is compared too: the words from it on that each side's body stored since its last call, without
@@ -404,6 +404,18 @@ def _orig_stack_words(name):
         return 0
 
 
+def with_real(deep, case, table):
+    """deep, plus the callees the case names in "real": they run on both sides instead of being mocked and compared."""
+    names_ = case.get('real')
+    if not names_:
+        return deep
+    unknown = [n for n in names_ if n not in table]
+    if unknown:
+        sys.exit('[ERROR] a case names "real" callees that functions.txt does not list: %s' % ', '.join(unknown))
+    run = {table[n] & 0x1FFFFFFF for n in names_}
+    return lambda t: (t & 0x1FFFFFFF) in run or deep(t)
+
+
 def compared_arity(cfile, table):
     """What each call out is compared on: ({address: (integer, float) register arguments}, {address: arguments on the stack}).
     A callee defined in src/ is compared on the registers its definition takes (the build links every caller against that one
@@ -774,12 +786,15 @@ def same_bufs(xs, ys, xv, yv):
     (sh4sim reach), wherever they lie. Only an argument the call is compared on as the stack."""
     for i, (cx, cy) in enumerate(zip(xs, ys)):
         bx, by = cx.get('bufs') or {}, cy.get('bufs') or {}
+        mx, my = cx.get('bufmask') or {}, cy.get('bufmask') or {}
         for r in sorted(set(bx) & set(by)):
             k = int(r[1:]) - 4
             if k >= len(xv[i][1]) or xv[i][1][k] != 'STACK' or k >= len(yv[i][1]) or yv[i][1][k] != 'STACK':
                 continue
             for o, (vx, vy) in enumerate(zip(bx[r], by[r])):
-                if vx != vy and not (stackish('%08X' % vx) == 'STACK' == stackish('%08X' % vy)):    # a stack address: the frames differ
+                # only the bytes either side stored: the rest of the word is what the frame held (a 9-byte buffer's third word)
+                mask = (mx[r][o] | my[r][o]) if r in mx and r in my else 0xFFFFFFFF
+                if (vx ^ vy) & mask and not (stackish('%08X' % vx) == 'STACK' == stackish('%08X' % vy)):    # a stack address: the frames differ
                     # (nlSetBackColorZ -> kmSetBackGroundPlane, Virtua Tennis), as for an argument
                     return 'calls: call %d (%s) buffer %s+%d: original %08X / C %08X' % (i + 1, xv[i][0], r, 4 * o, vx, vy)
         # and what the callee itself reads through it (sh4sim frame_reach: the callee run on a copy), gaps and all: a word either
@@ -981,7 +996,7 @@ def main(argv):
                 pk = dict(case.get('poke', {}))
                 pk['0DFFFF00'] = b''.join(w.to_bytes(4, 'little') for w in words).hex()
                 case['poke'] = pk
-            orig = sh4sim.run(case, '.', deep=helpers_orig, argc=argc, stackfill=stackfill)
+            orig = sh4sim.run(case, '.', deep=with_real(helpers_orig, case, table), argc=argc, stackfill=stackfill)
             if fuzz and orig['error']:
                 continue                      # words the original takes for pointers can fault it: no verdict from such a case
             if alias_unusable(case, orig):
@@ -990,7 +1005,7 @@ def main(argv):
             srs.add(orig.get('sr'))
             observed = observed or bool(orig.get('calls') or orig.get('writes') or orig.get('devices') or orig.get('seq_used') or orig.get('xf_changed')) or len(srs) > 1
             budget = max(case.get('steps', 2000000), 10 * orig.get('steps', 0) + 100000) if not orig['error'] else case.get('steps', 2000000)
-            mine = sh4sim.run(dict(case, steps=budget), '.', code=(SCRATCH, code), entry=c_at, end=c_end, deep=helpers, argc=argc, stackfill=stackfill)      # compiled C may take more instructions than the original: its budget follows what the original used
+            mine = sh4sim.run(dict(case, steps=budget), '.', code=(SCRATCH, code), entry=c_at, end=c_end, deep=with_real(helpers, case, table), argc=argc, stackfill=stackfill)      # compiled C may take more instructions than the original: its budget follows what the original used
             n += 1
             endless = case.get('endless') and str(orig['error']).startswith('more than') and str(mine['error']).startswith('more than')
             if endless:      # a function that never returns, cut at the step limit: the calls both sides made, in order, up to the shorter run

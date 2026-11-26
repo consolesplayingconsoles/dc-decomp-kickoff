@@ -161,13 +161,20 @@ def returns_cached(d, name, addr, size):
 
 
 
-def used_value(n, text):
-    """Does this file use the value of a call to n: a call that is not a bare statement (assigned, compared, returned, passed)."""
+DECLARES = re.compile(r'^\s*(?:extern\s+)?(?:int|float|void|unsigned int|short|char|unsigned char|double)\b[\s*]*$')
+
+
+def uses(n, text):
+    """The positions where a call to n has its value read: not a bare statement and not n's own declaration."""
     for m in re.finditer(r'\b%s\s*\(' % re.escape(n), text):
         line = text[text.rfind('\n', 0, m.start()) + 1:m.start()]
-        if line.strip():
-            return True
-    return False
+        if line.strip() and not DECLARES.match(line):
+            yield m.start()
+
+
+def used_value(n, text):
+    """Does this file use the value of a call to n: assigned, compared, returned or passed."""
+    return any(True for _ in uses(n, text))
 
 def scan(srcdir='src'):
     """(definitions, callers): [(name, declared type, file, original register)] for definitions whose type names the other
@@ -204,11 +211,7 @@ def scan(srcdir='src'):
         for cf, ct in sorted(decl.get(n, {}).items()):
             if ct == 'void' or cls(ct.rstrip('*'), ct[len(ct.rstrip('*')):]) == cls(rt.rstrip('*'), rt[len(rt.rstrip('*')):]) or cf == f:
                 continue
-            lines = []
-            for m in re.finditer(r'\b%s\s*\(' % re.escape(n), text[cf]):
-                line = text[cf][text[cf].rfind('\n', 0, m.start()) + 1:m.start()]
-                if line.strip():                        # not a bare statement: the value is used (assigned, compared, returned, passed)
-                    lines.append(text[cf].count('\n', 0, m.start()) + 1)
+            lines = [text[cf].count('\n', 0, at) + 1 for at in uses(n, text[cf])]
             if lines:
                 callers.append((n, ct, cf, lines))
     save_cache(cache)
