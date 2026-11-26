@@ -1726,6 +1726,34 @@ reads them from the model file. Tested on synthetic containers (`tests/test_reco
   stand-in calls leave r4-r7 as they were, so a value an earlier call was given still shows at the next one. The getters took the id and
   the 37 calls in seven functions were given the original's by hand. The build after that got further and restarted.
 
+### Step 9: looking at a restart at a loading screen, and the debug script moved into the skill (2026-11-26)
+Movable build from C, a debug Flycast, no input.
+- The emulator's log said `System reset requested`. Frames dumped from video memory placed it at the loading screen after the
+  anti-graffiti warning.
+- Breakpoints: 13 hits in 3 s on an `8C` address, none on the same place given as `0C`, with the recompiler on and off. The script
+  compared the CPU's `8C` program counter with the `0C` address it was given, so each earlier "0 hits" said nothing.
+- A breakpoint set while the file was still loading was overwritten: the memory check used had read an early part of the image.
+- The reset register's write and its key value are not in the game. The BIOS has them, and the boot ROM's start code branches there
+  when the CPU's exception code is not a power-on (read from the ROM's bytes).
+- Pointer scan of the built data and kept code against the original: 32,569 moved correctly, no stale one.
+- Two of the 126 `D` entries added at step 8 were functions; their built bytes matched the original apart from moved addresses.
+- A new stop condition, the vector base leaving the game's, kept the last 60 states before the reset, in a texture load; counted with
+  breakpoints, that load had returned.
+- One breakpoint on each of 5,766 functions, each taken out at its first hit: 1,120 first calls logged in order, the last about a
+  second before the reset. 80 s and 653 calls were too short; 260 s reached it.
+- Dense sampling with the boot ROM as the range to stop on saw no stop there, in two runs.
+
+### Step 9: a restart traced to two generator bugs around a table switch (2026-11-26)
+- One breakpoint on the table call showed a target of 0; the pointer came from a loaded file whose offset table had never been turned
+  into pointers (160 of 160 entries read from a RAM snapshot). The function that converts it was generated C, Equivalent on 6 + 6
+  cases.
+- Bug 1: the register liveness pass was not given the edges of a table of addresses (`jmp @r0`), so a value read only in an arm was never
+  written back (`tests/test_abstable`, `tests/test_jmplive`).
+- Bug 2: the pass that shares one variable between registers read only a `goto` at the end of a line, none on a switch line, so two
+  registers live together took one name (`tests/test_abstable`).
+- After both, the function written again is Equivalent on 249 of 266 instructions with four hand cases holding a real-shaped file. The
+  regeneration before the second fix was Equivalent on 13 of 263 instructions with random cases, and DIFFERS on the hand cases.
+
 ## Not tied to one game
 
 ### Dev kit dumps (sega-dreamcast-info.com, 11 "Set 5" Katana kits on archive.org, 2026-10-08)

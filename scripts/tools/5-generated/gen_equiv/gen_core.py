@@ -3319,9 +3319,13 @@ def _run(name,passthru=False,frame=False,flat=False):
     swg.update(GOTO)
     G=gen_cfg.Graph(ins,addr2idx,swg) if ins else None
     if G is None: raise Skip('empty')
+    # the liveness passes follow a table of addresses too (`jmp @r0`): without its edges a register read only in an arm was dead before
+    # the table, never written back, and the arm read a variable nothing set. A `braf` table without an edge reaches everything already
+    JUMPS=dict(GOTO)
+    JUMPS.update({b_:sorted(set(v_[2])) for b_,v_ in SWV.items() if ins[b_][0]=='jmp'})
     c.live=None; c.cond_tmps=set()
     if os.environ.get('GEN_FOLD','1')!='0':
-        try: c.live=reg_liveness(ins,addr2idx,GOTO)
+        try: c.live=reg_liveness(ins,addr2idx,JUMPS)
         except Exception: c.live=None
 
     def exec_flat():
@@ -3353,7 +3357,7 @@ def _run(name,passthru=False,frame=False,flat=False):
         for v_ in GOTO.values(): lead.update(v_)
         lead={x for x in lead if x<len(ins)}
         CARRY={}                 # stack depth -> the words pushed for a call that a later block makes: (depth, float?)
-        try: LIVE=reg_liveness(ins,addr2idx,GOTO)
+        try: LIVE=reg_liveness(ins,addr2idx,JUMPS)
         except Exception: LIVE=None
         def fresh_state(D):
             c.R={'r%d'%n:('e','R%d'%n) for n in ints}; c.FR={'fr%d'%n:('e','F%d'%n) for n in flts}

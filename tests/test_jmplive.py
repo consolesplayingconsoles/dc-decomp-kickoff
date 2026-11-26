@@ -10,7 +10,7 @@ tests the same r0 against 2; the C folded the load into the first test and the s
     check.py      mov.l @r3,r0 / cmp/eq #4,r0 / bt / mov.l @(pool),r2 / jmp @r2 / nop / ... / T: cmp/eq #2,r0:
                     without   with no jump edges r0 is dead at the jmp (as it was)
                     with      with the jmp's edge to T, r0 is live at the jmp and at the cmp/eq #4 (it must be kept)
-                    wired     gen_core passes the flat form's jump edges (GOTO) to both liveness passes
+                    wired     gen_core passes the jump edges (JUMPS: gotos and address tables) to both liveness passes
                   mov.l @(pool),r6 / jsr _quick_odd_mvn / mov r6,r7: the block mover writes r0-r3 only, so r6 stays live across it
                   (stageSelNameDraw, Virtua Tennis: r6 set in one arm before a structure copy and passed after it; the C dropped the
                   arm's store and passed a stale R6):
@@ -88,8 +88,8 @@ class TestJmplive(unittest.TestCase):
         if 'r6' not in live2.get(2, set()):
             bad.append('mover: r6 not live at the jsr to _quick_odd_mvn (%s)' % sorted(live2.get(2, set())))
         src = open(os.path.join(GEN, 'gen_core.py')).read()
-        if len(re.findall(r'reg_liveness\(ins,addr2idx,GOTO\)', src)) < 2:
-            bad.append('wired: gen_core does not pass GOTO to both liveness passes')
+        if len(re.findall(r'reg_liveness\(ins,addr2idx,JUMPS\)', src)) < 2:
+            bad.append('wired: gen_core does not pass JUMPS to both liveness passes')
         if bad:
             self.fail('[ERROR] jmplive check failed:\n' + '\n'.join(bad))
 

@@ -8,9 +8,12 @@ table, and the C called a table entry as a function. Only the table of 16-bit of
     check.py      a three-arm table, the arms return 1, 2 and 3:
                     switch    the C is a switch, not a call
                     four      the cases are four apart (0 and 4, the last arm is the default), not two
+    carried       a value set in the block before the switch's own block and read only in an arm is written: the register
+                  liveness did not follow the table, took it for dead and dropped it, and the arm read a variable never set
 """
 import unittest
 import os
+import re
 import shutil
 import struct
 import subprocess
@@ -39,18 +42,42 @@ def run_in_repo(code, script):
         shutil.rmtree(tmp, ignore_errors=True)
 
 
-def build(code, ret):
+def build(code, ret, form=''):
     """The C the generator writes for the function, or the text 'SKIPPED reason'."""
-    return run_in_repo(code, "import sys; sys.path.insert(0, 'tools'); import toolpath, gen_core, gen_drv\n"
+    return run_in_repo(code, "import os, sys; os.environ['GEN_FORM'] = %r; sys.path.insert(0, 'tools'); import toolpath, gen_core, gen_drv\n"
                              "try:\n"
                              "    print(gen_drv.build('fn', %r, False)[0])\n"
                              "except gen_core.Skip as e:\n"
-                             "    print('SKIPPED ' + str(e))\n" % ret)
+                             "    print('SKIPPED ' + str(e))\n" % (form, ret))
 
 
 # mov r4,r2 / shll2 r2 / mova table,r0 / mov.l @(r0,r2),r0 / jmp @r0 / nop, then three addresses, then three arms returning 1, 2 and 3
 TABLE_FN = (W([0x6243, 0x4208, 0xC701, 0x002E, 0x402B, 0x0009]) + L(BASE + 0x18) + L(BASE + 0x1E) + L(BASE + 0x24)
             + W([0xE001, 0x000B, 0x0009, 0xE002, 0x000B, 0x0009, 0xE003, 0x000B, 0x0009]))
+
+
+SWITCHED = """int fn(int a4)
+{
+    int R5;
+    int R6;
+
+    R5 = 7;
+    L_C010000:;
+    R6 = a4;
+    switch (R6) { case 0: goto L_C010010; case 4: goto L_C010020; }
+    return R6;
+    L_C010020:;
+    return 2;
+    L_C010010:;
+    return R5;
+}"""
+
+
+# mov #7,r5 / bra D / nop / D: mov r4,r2 / shll2 r2 / mova table,r0 / mov.l @(r0,r2),r0 / jmp @r0 / nop / nop, the table, then
+# arms returning r5, 2 and 3
+CARRIED_FN = (W([0xE507, 0xA000, 0x0009, 0x6243, 0x4208, 0xC702, 0x002E, 0x402B, 0x0009, 0x0009])
+              + L(BASE + 0x20) + L(BASE + 0x26) + L(BASE + 0x2C)
+              + W([0x6053, 0x000B, 0x0009, 0xE002, 0x000B, 0x0009, 0xE003, 0x000B, 0x0009]))
 
 
 class TestAbsTable(unittest.TestCase):
@@ -63,6 +90,19 @@ class TestAbsTable(unittest.TestCase):
             bad.append('four: the cases are not four apart:\n%s' % out)
         if bad:
             self.fail('[ERROR] abstable check failed:\n' + '\n'.join(bad))
+
+    def test_names_not_shared_across_arms(self):
+        out = run_in_repo(b'\x09\x00' * 4, "import sys; sys.path.insert(0, 'tools'); import toolpath, splitflat\n"
+                                           "print(splitflat.recolor(%r))\n" % SWITCHED)
+        first = re.search(r'(\w+) = 7;', out)
+        index = re.search(r'(\w+) = a4;', out)
+        self.assertTrue(first and index, out)
+        self.assertNotEqual(first.group(1), index.group(1), 'one name for the value an arm returns and the index:\n%s' % out)
+
+    def test_carried_into_an_arm(self):
+        out = build(CARRIED_FN, 'r0', 'flat')
+        self.assertIn('switch', out)
+        self.assertRegex(out, r'\b(0x7|7)\b', 'the 7 an arm returns is never written:\n%s' % out)
 
 
 if __name__ == '__main__':

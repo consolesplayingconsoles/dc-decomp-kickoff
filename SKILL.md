@@ -546,7 +546,10 @@ code had, so the build of step 8 leaves every other address of the executable wh
   one function and to the step whose output caused it (a function cut wrong in `functions.txt` from step 2, generated C or a
   declaration from step 5), and fixed there, proven again, built again. Nothing is guessed from the symptom: the frame it stops in,
   its call graph from the original, the built image against the original (stale addresses, second copies, result registers), then
-  the one function. Flycast's GDB server (program counter samples, memory reads) is the last resort when reading does not settle it.
+  the one function.
+- **When reading does not settle it**: `tools/9-runtime/flycast_gdb.py` on a Flycast with the GDB server, in the order the repo's
+  `AGENTS.md` gives under "Runtime repairs": the emulator's log, the screen, then the script. Never an ad hoc capture script: a thing it
+  cannot do is added to it, with a test.
 - **Known classes** (Crazy Taxi, 2026-10-24; `docs/evidence.md`): constants read from the original's literal pools by address
   (`tools/8-build/codeconsts.py --write` puts the values in); a C call into another function's middle from a wrong cut (`cbuild.py`
   refuses it); a result type declared on the wrong register (`tools/8-build/retcheck.py` refuses it).
@@ -661,6 +664,7 @@ Grouped by the step that first needs them (scripts, then templates, then docs wi
 | `scripts/tools/5-generated/classify.py`                | in the repo: which functions can have C at all (FPU banks, `fsrra`, control registers other than SR: blocked)                                                                                                                                                                                    |
 | `scripts/tools/6-agentic/poollist.py`                | in the repo: a function's literal pool as functions, RAM addresses (named, or MISSING) and numbers                                                                                                                                                                                               |
 | `scripts/tools/sim/shdis.py`                   | in the repo: SH-4 disassembly with FPU, pool values and names (stdlib)                                                                                                                                                                                                                           |
+| `scripts/tools/9-runtime/flycast_gdb.py` | in the repo, step 9: the running game over Flycast's GDB server: wait for it, sample, the states before a reset, which code ran first and last, calls counted, memory (stdlib) |
 | `scripts/tools/6-agentic/live.py`                    | in the repo, optional: read, watch and write the running game by address or name, screenshots, pad input (RetroArch + Flycast core over its network ports, stdlib)                                                                                                                               |
 | `scripts/tools/6-agentic/gdbsnap.py` | in the repo, optional: RAM snapshots of the running game over Flycast's GDB server (a build with `ENABLE_GDB_SERVER`), timelines, and what changed between two snapshots with the nearest global names; live data in `docs/agentic-decomp.md` (stdlib)                                              |
 | `scripts/tools/6-agentic/parts.py`                     | in the repo, step 6: an outlier function in parts: `map` cuts it along its dominator tree (`state/parts/<name>/parts.txt`), `read` has the generator read each part in a scratch copy (`<part>.c`, the material for the join by hand) |

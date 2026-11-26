@@ -206,6 +206,33 @@ that still passes fewer than the original sets before its `jsr` (delay slot incl
 a trampoline that jumps through a table (its target is read from memory): its arity is unknown, not zero, so list those too and
 check each caller against the registers the original sets before the call.
 
+## Runtime repairs (step 9) *(equivalent)*
+The disc from C stops, hangs or restarts. `tools/9-runtime/flycast_gdb.py` (its docstring has every command) talks to a Flycast
+built with the GDB server, started from a terminal with its output in a file, on a copy of the emulator that is not the user's.
+Never write another capture script: add what is missing to this one, with a test.
+
+In this order:
+1. **Read the emulator's log.** `SB/HOLLY: System reset requested` is a reset the code asked for: the game's exit routine, or the
+   CPU reaching the boot ROM (its start code resets when it is not a power-on). A fault with interrupts blocked prints its own line.
+2. **See where it stops**: start with `-config config:rend.EmulateFramebuffer=yes` and `dump A5200000 96000 <out>` every few seconds
+   (640x480, 16 bits a pixel).
+3. **Check the built image for stale addresses** before running anything more: pointers moved by the build against the original.
+4. **`running 120` before anything else on the CPU.** Until the game's vector base shows, the loader is still writing: breakpoints
+   and patches are overwritten and report nothing. The boot ROM and the BIOS menu run at the game's own addresses, so a program
+   counter names game code only with the game's vector base.
+5. **A restart**: `trail <s> 0.02 0 0 <out> 192 --vbr` keeps the last 60 states, with their stacks, before the game's vector base goes.
+6. **What ran last**: `bp <s> <out> @all.txt` with every function's built address (from `build/mbuild/game.map`) logs each first
+   call in order. Each costs a stop: give it several times the time the game needs to get there, and check the last entry is near
+   the stop.
+7. **One suspect**: `hook` counts its calls and returns; `write <address> feaf0900` holds the CPU at an entry; `snap` takes registers
+   and RAM there.
+
+Facts that cost a day each:
+- Breakpoints are matched on `8C...`, the address the CPU reports; the script takes either mirror.
+- The boot ROM cannot be patched or take a breakpoint, and sampling does not catch the CPU in it.
+- Sampling slows the game several times over: a state a few seconds in takes minutes to reach.
+- Stack words are leftovers as much as they are callers: confirm a suspect with `hook` before reading its C.
+
 ## Debugging the native port (step 10) *(equivalent)*
 The port is an ordinary host program with symbols. Ask the running program; do not rebuild to ask.
 

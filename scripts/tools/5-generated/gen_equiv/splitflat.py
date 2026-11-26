@@ -19,7 +19,7 @@ LABEL = re.compile(r'^[ \t]*(L_[0-9A-Fa-f]+):;')
 DECL = re.compile(r'^[ \t]*(int|float|unsigned int|short|unsigned short|char|unsigned char)\s+(\w+)(?:\[(\d+)\])?(?:\s*=\s*\{0\})?;\s*$')
 HEAD = re.compile(r'^(void|int|float)\s+(\w+)\((.*)\)\s*$')
 
-GOTO_END = re.compile(r'\bgoto (L_[0-9A-Fa-f]+);\s*$')
+GOTOS = re.compile(r'\bgoto (L_[0-9A-Fa-f]+);')     # every one on a line: a switch is one line with a goto per case
 CAND = re.compile(r'^(?:[tu]\d+|R\d+|F\d+|T_)$')
 
 
@@ -67,11 +67,9 @@ def _flow(decls, pnames, pre, blocks, parts):
                 use[i] |= 1 << idx[v]
         if lhs:
             dfn[i] = 1 << idx[lhs]
-        g = GOTO_END.search(l)
-        if g and g.group(1) in first_of:
-            succ[i].append(first_of[g.group(1)])
-        stripped = l.strip()
-        plain = g and stripped.startswith('goto ')
+        targets = GOTOS.findall(l)
+        succ[i] += [first_of[t] for t in targets if t in first_of]
+        plain = targets and l.strip().startswith('goto ')
         if re.match(r'^\s*return\b', l) or plain:
             pass
         elif i + 1 < n:
@@ -93,9 +91,9 @@ def _flow(decls, pnames, pre, blocks, parts):
     for p in range(1, len(parts)):
         entries[p].add(first_of[parts[p][0][0]])
     for i, (p, l) in enumerate(nodes):
-        g = GOTO_END.search(l)
-        if g and g.group(1) in first_of and part_of_block[g.group(1)] != p:
-            entries[part_of_block[g.group(1)]].add(first_of[g.group(1)])
+        for t in GOTOS.findall(l):
+            if t in first_of and part_of_block[t] != p:
+                entries[part_of_block[t]].add(first_of[t])
     out = {}
     for v, ps in mention.items():
         if len(ps) != 1 or v in addr:
